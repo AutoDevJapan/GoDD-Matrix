@@ -57,6 +57,19 @@ export interface HttpHandlerOptions extends McpHandlerOptions {
   healthPath?: string;
 }
 
+/**
+ * 定数時間の文字列比較 (タイミング攻撃対策)。長さが異なれば即 false。
+ * Web 標準のみで実装し、node:crypto に依存しない (Workers / Deno 等でも動作)。
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
 /** JSON レスポンスを生成する小さなヘルパ。 */
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -123,7 +136,8 @@ export function createMcpRequestHandler(
 
   function isAuthorized(req: Request): boolean {
     if (!apiKey) return true;
-    return req.headers.get(API_KEY_HEADER) === apiKey;
+    const provided = req.headers.get(API_KEY_HEADER);
+    return provided !== null && constantTimeEqual(provided, apiKey);
   }
 
   return async function handleMcp(req: Request): Promise<Response> {
