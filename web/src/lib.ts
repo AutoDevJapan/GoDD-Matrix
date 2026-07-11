@@ -532,6 +532,252 @@ export interface ComposeInput {
   request?: SearchInput;
 }
 
+// ---------------------------------------------------------------------------
+// カラースウォッチ (issue #37): セルカードにカラーパレットを色見本で表示する。
+// - 一覧カード: color slug (PCCS 色相/トーン) からクライアントで近似色を導出 (fetch 不要)。
+// - 選択セル: DESIGN.md 本文の color-system 実トークン色 (`--color-*`) を抽出して差し替え。
+// DOM/ネットワーク非依存の純関数 (決定論・テスト可能)。描画/取得は main.ts が担う。
+// de-brand: ラベルは商標色名を使わず「役割 + PCCS 表現 (色系統/トーン)」で表す。
+// ---------------------------------------------------------------------------
+
+/** 1 スウォッチ (色見本)。role=機械キー / hex=#rrggbb / label=日本語の役割・色ラベル。 */
+export interface Swatch {
+  readonly role: string;
+  /** 正規化済み `#rrggbb` (小文字)。 */
+  readonly hex: string;
+  /** de-brand なラベル (役割 + 色系統/トーン)。title/aria-label に使う。 */
+  readonly label: string;
+}
+
+/** 0..1 にクランプ。 */
+function clamp01(v: number): number {
+  return Math.min(1, Math.max(0, v));
+}
+
+/** 値を [lo, hi] にクランプ。 */
+function clampRange(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v));
+}
+
+/** HSL (h:0-360, s/l:0-100) → `#rrggbb` (小文字)。決定論・純関数。 */
+export function hslToHex(h: number, s: number, l: number): string {
+  const sn = clamp01(s / 100);
+  const ln = clamp01(l / 100);
+  const hh = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * ln - 1)) * sn;
+  const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+  const m = ln - c / 2;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hh < 60) [r, g, b] = [c, x, 0];
+  else if (hh < 120) [r, g, b] = [x, c, 0];
+  else if (hh < 180) [r, g, b] = [0, c, x];
+  else if (hh < 240) [r, g, b] = [0, x, c];
+  else if (hh < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const to = (v: number): string =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+/** PCCS 24 色相番号 → HSL 色相角 (度) の近似。ブラウズ用の視覚的目安。 */
+const PCCS_HUE_ANGLE: Readonly<Record<number, number>> = {
+  1: 345,
+  2: 0,
+  3: 11,
+  4: 20,
+  5: 28,
+  6: 38,
+  7: 46,
+  8: 53,
+  9: 64,
+  10: 78,
+  11: 95,
+  12: 125,
+  13: 150,
+  14: 168,
+  15: 180,
+  16: 193,
+  17: 208,
+  18: 220,
+  19: 234,
+  20: 250,
+  21: 266,
+  22: 284,
+  23: 305,
+  24: 326,
+};
+
+/** PCCS トーンの近似 (基準となる主色の彩度/明度)。 */
+interface ToneSpec {
+  readonly label: string;
+  readonly s: number;
+  readonly l: number;
+}
+
+/** PCCS トーン略号 → 近似 (彩度/明度) + 日本語ラベル。 */
+const PCCS_TONES: Readonly<Record<string, ToneSpec>> = {
+  v: { label: "ビビッド", s: 95, l: 50 },
+  b: { label: "ブライト", s: 85, l: 62 },
+  s: { label: "ストロング", s: 78, l: 47 },
+  dp: { label: "ディープ", s: 90, l: 32 },
+  lt: { label: "ライト", s: 55, l: 73 },
+  sf: { label: "ソフト", s: 45, l: 60 },
+  d: { label: "ダル", s: 38, l: 48 },
+  dk: { label: "ダーク", s: 60, l: 28 },
+  p: { label: "ペール", s: 28, l: 86 },
+  ltg: { label: "ライトグレイッシュ", s: 16, l: 72 },
+  g: { label: "グレイッシュ", s: 16, l: 50 },
+  dkg: { label: "ダークグレイッシュ", s: 18, l: 28 },
+};
+/** トーン未特定時の既定 (中庸なストロング)。 */
+const DEFAULT_TONE: ToneSpec = { label: "ストロング", s: 78, l: 47 };
+
+/** 無彩色の種別。 */
+type NeutralKind = "white" | "black" | "gray";
+
+/** color slug の解析結果 (PCCS 色相/トーン or 無彩色)。 */
+export interface ParsedColor {
+  /** 無彩色ならその種別、有彩色なら null。 */
+  readonly neutral: NeutralKind | null;
+  /** PCCS 色相番号 (1..24)。無彩色/未特定は null。 */
+  readonly hue: number | null;
+  /** PCCS トーン略号 ({@link PCCS_TONES} のキー)。未特定は null。 */
+  readonly tone: string | null;
+}
+
+/**
+ * color slug を PCCS 色相/トーン or 無彩色へ解析する (決定論・純関数, 例外なし)。
+ * 対応する slug 体系:
+ * - 無彩色: `white` / `ac-w` / `black` / `ac-bk` / `gray-N` / `grey…`。
+ * - 有彩色 (トーン先頭): `{tone}-h{NN}` 例 `d-h07` / `v-h03` / `sf-h05` / `dkg-h01`。
+ * - 有彩色 (色相先頭・旧式): `h{NN}{a|b}-{tone}` 例 `h17b-lt`。
+ * 色相が取れない/範囲外は無彩色 (gray) として扱う (画面は壊れない)。
+ */
+export function parseColorSlug(slug: string): ParsedColor {
+  const s = slug.trim().toLowerCase();
+  if (/^(ac-?w|white|off-?white|ivory)/.test(s)) return { neutral: "white", hue: null, tone: null };
+  if (/^(ac-?bk|black|ink)/.test(s)) return { neutral: "black", hue: null, tone: null };
+  if (/^gr[ae]y/.test(s)) return { neutral: "gray", hue: null, tone: null };
+  const hm = /h(\d{1,2})/.exec(s);
+  const hue = hm ? Number.parseInt(hm[1] ?? "", 10) : Number.NaN;
+  if (!Number.isFinite(hue) || hue < 1 || hue > 24) {
+    return { neutral: "gray", hue: null, tone: null };
+  }
+  const pre = /^([a-z]+)-h\d/.exec(s)?.[1];
+  const suf = /h\d{1,2}[a-z]?-([a-z]+)/.exec(s)?.[1];
+  const cand = pre ?? suf ?? null;
+  const tone = cand && cand in PCCS_TONES ? cand : null;
+  return { neutral: null, hue, tone };
+}
+
+/** 無彩色種別ごとの 4 段階スウォッチ (背景→主色→中間→前景)。 */
+function neutralSwatches(kind: NeutralKind): readonly Swatch[] {
+  const ramps: Readonly<Record<NeutralKind, readonly [number, number, number, number]>> = {
+    white: [99, 92, 62, 22],
+    gray: [90, 70, 45, 18],
+    black: [80, 54, 30, 10],
+  };
+  const [bg, primary, mid, ink] = ramps[kind];
+  const g = (l: number): string => hslToHex(0, 0, l);
+  return [
+    { role: "surface", hex: g(bg), label: "背景（無彩色・淡）" },
+    { role: "primary", hex: g(primary), label: "主色（無彩色）" },
+    { role: "accent", hex: g(mid), label: "中間（無彩色）" },
+    { role: "ink", hex: g(ink), label: "前景（無彩色・暗）" },
+  ];
+}
+
+/** 有彩色 (色相角 + トーン) から 4 段階スウォッチ (背景/主色/強調/前景) を導出。 */
+function chromaticSwatches(hue: number, toneKey: string | null): readonly Swatch[] {
+  const angle = PCCS_HUE_ANGLE[hue] ?? 0;
+  const tone: ToneSpec = PCCS_TONES[toneKey ?? ""] ?? DEFAULT_TONE;
+  const familyLabel = (familyByHue.get(hue) ?? NEUTRAL_FAMILY).label;
+  return [
+    {
+      role: "surface",
+      hex: hslToHex(angle, clampRange(tone.s * 0.35, 12, 34), 95),
+      label: `背景（${familyLabel}・淡）`,
+    },
+    {
+      role: "primary",
+      hex: hslToHex(angle, tone.s, tone.l),
+      label: `主色（${tone.label} × ${familyLabel}）`,
+    },
+    {
+      role: "accent",
+      hex: hslToHex(angle, Math.min(100, tone.s + 12), clampRange(tone.l * 0.62, 26, 46)),
+      label: `強調（${familyLabel}・濃）`,
+    },
+    {
+      role: "ink",
+      hex: hslToHex(angle, Math.min(tone.s, 22), 15),
+      label: `前景（${familyLabel}・暗）`,
+    },
+  ];
+}
+
+/**
+ * color slug から近似カラーパレット (4 スウォッチ) を導出する (決定論・純関数)。
+ * 一覧カードで DESIGN.md を取得せずに配色を視覚化するための近似。
+ * 実際のトークン色は {@link extractColorTokens} で DESIGN.md 本文から取り出す。
+ */
+export function approxSwatchesForColor(slug: string): readonly Swatch[] {
+  const parsed = parseColorSlug(slug);
+  if (parsed.neutral) return neutralSwatches(parsed.neutral);
+  // hue は parseColorSlug の契約上ここでは非 null (無彩色でなければ 1..24)。
+  return chromaticSwatches(parsed.hue ?? 1, parsed.tone);
+}
+
+/** カラートークン role (英小文字) → 日本語の役割ラベル。未知 role は role をそのまま使う。 */
+const TOKEN_ROLE_LABELS: Readonly<Record<string, string>> = {
+  primary: "主色",
+  secondary: "副色",
+  accent: "強調",
+  neutral: "中間色",
+  bg: "背景",
+  background: "背景",
+  surface: "面",
+  fg: "前景",
+  foreground: "前景",
+  muted: "抑え",
+  border: "境界",
+};
+
+/** `#rgb`/`#rrggbb` を検証し `#rrggbb` (小文字) に正規化する。不正は null。 */
+function normalizeHex(raw: string): string | null {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(raw.trim());
+  if (!m) return null;
+  const h = (m[1] ?? "").toLowerCase();
+  return h.length === 3 ? `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}` : `#${h}`;
+}
+
+/**
+ * DESIGN.md 本文の color-system テーブルから実トークン色を抽出する (決定論・純関数)。
+ * 行例: `| Primary | \`--color-primary\` | #F91F06 |` → `{ role:"primary", hex:"#f91f06", label:"主色" }`。
+ * 値セルの hex は素の `#f91f06` でもバッククォート括り `` `#2f6fb0` `` でも拾う (次セル `|` は跨がない)。
+ * 出現順を保ち、同一 role は初出のみ採用。トークンが無ければ空配列 (呼び手が近似へフォールバック)。
+ */
+export function extractColorTokens(markdown: string): readonly Swatch[] {
+  const out: Swatch[] = [];
+  const seen = new Set<string>();
+  const re = /--color-([a-z0-9-]+)[^|#]*\|[^#|]*(#[0-9a-fA-F]{3,6})\b/g;
+  let m = re.exec(markdown);
+  while (m !== null) {
+    const role = (m[1] ?? "").toLowerCase();
+    const hex = normalizeHex(m[2] ?? "");
+    if (hex && !seen.has(role)) {
+      seen.add(role);
+      out.push({ role, hex, label: TOKEN_ROLE_LABELS[role] ?? role });
+    }
+    m = re.exec(markdown);
+  }
+  return out;
+}
+
 /**
  * 選択セルの確定 DESIGN.md から Claude 用プロンプトを合成する。
  * 既存 `synthesizePrompt` (純関数) をそのまま呼ぶ。

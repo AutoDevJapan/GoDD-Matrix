@@ -18,11 +18,14 @@ import {
   type FacetValueItem,
   type Page,
   type SearchInput,
+  type Swatch,
   type Taxonomy,
+  approxSwatchesForColor,
   buildCellPermalink,
   composePromptForCell,
   computeFacetGroups,
   designRawUrl,
+  extractColorTokens,
   filterByFacets,
   findEntryById,
   hasAnyFacet,
@@ -138,6 +141,25 @@ function badge(text: string, kind: string): HTMLSpanElement {
   return el("span", { class: `badge badge-${kind}`, text });
 }
 
+/**
+ * カラースウォッチ列 (issue #37) を描画する。
+ * a11y: 列全体を role="img" + aria-label でひとまとまりに読み上げ、各見本は装飾扱い
+ * (aria-hidden) でホバー時 title に「役割ラベル + 色値」を出す。色値は inline style で
+ * 反映 (検証済み #rrggbb のみ, innerHTML は使わない)。
+ */
+function swatchRow(swatches: readonly Swatch[], groupLabel: string): HTMLElement {
+  const row = el("div", { class: "swatches" });
+  row.setAttribute("role", "img");
+  row.setAttribute("aria-label", `${groupLabel}: ${swatches.map((s) => s.label).join("、")}`);
+  for (const sw of swatches) {
+    const cell = el("span", { class: "swatch", title: `${sw.label}（${sw.hex}）` });
+    cell.style.backgroundColor = sw.hex;
+    cell.setAttribute("aria-hidden", "true");
+    row.appendChild(cell);
+  }
+  return row;
+}
+
 /** フォームから検索要望を読む。 */
 function readSearchInput(): SearchInput {
   const val = (id: string): string => byId<HTMLInputElement>(id).value.trim();
@@ -217,12 +239,14 @@ function renderCard(entry: DesignIndexEntry): HTMLElement {
   );
   const title = el("h3", { class: "card-title", text: entry.title });
   const industry = el("p", { class: "card-industry", text: `業種名: ${jsicName(entry.jsic)}` });
+  // カラースウォッチ (近似): DESIGN.md を取得せず slug からクライアントで配色を視覚化する。
+  const swatches = swatchRow(approxSwatchesForColor(entry.color), "カラーパレット（近似）");
   const select = el("button", { class: "select-btn", text: "このセルでプロンプト合成 →" });
   select.type = "button";
   select.addEventListener("click", () => {
     void openDetail(entry);
   });
-  return el("article", { class: "card" }, [title, industry, meta, tags, select]);
+  return el("article", { class: "card" }, [title, industry, swatches, meta, tags, select]);
 }
 
 /** 検索結果 (カード一覧) を描画する。 */
@@ -479,6 +503,18 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   info.replaceChildren(
     el("span", { text: `出所: ${prompt.provenance} / ` }),
     badge(hashVerified ? "hash 検証 OK" : "hash 未検証/不一致", hashVerified ? "ok" : "warn"),
+  );
+
+  // カラーパレット: DESIGN.md の実トークン色を優先し、無ければ slug 由来の近似へフォールバック。
+  const tokens = extractColorTokens(markdown);
+  const paletteHeading =
+    tokens.length > 0 ? "カラートークン（DESIGN.md 実値）" : "カラーパレット（近似）";
+  const paletteSwatches = tokens.length > 0 ? tokens : approxSwatchesForColor(entry.color);
+  detail.appendChild(
+    el("section", { class: "block swatch-block" }, [
+      el("div", { class: "block-head" }, [el("h3", { class: "sub-title", text: paletteHeading })]),
+      swatchRow(paletteSwatches, paletteHeading),
+    ]),
   );
 
   if (prompt.notices.length > 0) {
