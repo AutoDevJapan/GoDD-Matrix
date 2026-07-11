@@ -25,19 +25,19 @@ describe("DesignIndexClient query", () => {
 
   it("id でエントリを引く", () => {
     const c = client();
-    expect(c.get("5910_white_minimal")?.title).toContain("ミニマル");
+    expect(c.get("6061_white_minimal")?.title).toContain("ミニマル");
     expect(c.get("nope")).toBeUndefined();
   });
 
   it("業種 (jsic) で絞り込む", () => {
-    const hits = client().query({ jsic: "7412" });
-    expect(hits.map((e) => e.id)).toEqual(["7412_h17b-lt_trustworthy", "7412_h17b-lt_minimal"]);
+    const hits = client().query({ jsic: "7281" });
+    expect(hits.map((e) => e.id)).toEqual(["7281_h17b-lt_trustworthy", "7281_h17b-lt_minimal"]);
   });
 
   it("カラー + ムードの AND で絞り込む", () => {
     const hits = client().query({ color: "h17b-lt", mood: "minimal" });
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.id).toBe("7412_h17b-lt_minimal");
+    expect(hits[0]?.id).toBe("7281_h17b-lt_minimal");
   });
 
   it("タグは全一致 (AND) で絞り込む", () => {
@@ -52,9 +52,9 @@ describe("DesignIndexClient query", () => {
   });
 
   it("byAxis で AxisContext から引く", () => {
-    const hits = client().byAxis({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
+    const hits = client().byAxis({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.id).toBe("7412_h17b-lt_trustworthy");
+    expect(hits[0]?.id).toBe("7281_h17b-lt_trustworthy");
   });
 });
 

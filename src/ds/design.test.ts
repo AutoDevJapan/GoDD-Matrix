@@ -15,16 +15,16 @@ import type { DesignIndexEntry } from "./types.js";
 import { DesignIndexError } from "./validate.js";
 
 const baseDir = fileURLToPath(new URL("./__fixtures__", import.meta.url));
-const BODY_PATH = "design-md/7412/h17b-lt/trustworthy/DESIGN.md";
+const BODY_PATH = "design-md/7281/h17b-lt/trustworthy/DESIGN.md";
 const markdown = readFileSync(path.join(baseDir, BODY_PATH), "utf8");
 const realHash = `sha256:${createHash("sha256").update(markdown, "utf8").digest("hex")}`;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 
 function entryWith(hash: string): DesignIndexEntry {
   return {
-    id: "7412_h17b-lt_trustworthy",
+    id: "7281_h17b-lt_trustworthy",
     path: BODY_PATH,
-    jsic: "7412",
+    jsic: "7281",
     color: "h17b-lt",
     mood: "trustworthy",
     title: "経営コンサルタント業 × ライトブルー × 信頼",
@@ -65,7 +65,7 @@ describe("DesignBodyClient.fetch", () => {
     const doc = await c.fetch(entryWith(realHash));
     expect(doc.markdown).toBe(markdown);
     expect(doc.hashVerified).toBe(true);
-    expect(doc.entry.id).toBe("7412_h17b-lt_trustworthy");
+    expect(doc.entry.id).toBe("7281_h17b-lt_trustworthy");
   });
 
   it("hash 不一致は hashVerified:false で返す (既定は投げない)", async () => {
@@ -142,7 +142,7 @@ describe("DesignBodyClient.fetch", () => {
 });
 
 describe("DesignResolver", () => {
-  const ctx = { jsic: "7412", color: "h17b-lt", mood: "trustworthy" };
+  const ctx = { jsic: "7281", color: "h17b-lt", mood: "trustworthy" };
 
   function indexWith(hash: string): DesignIndexClient {
     return new DesignIndexClient({ version: 1, entries: [entryWith(hash)] });

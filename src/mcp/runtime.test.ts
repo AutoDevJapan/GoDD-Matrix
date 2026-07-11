@@ -74,7 +74,7 @@ describe("createRuntime の renderer 配線", () => {
       loadOptions: { cache: false },
       renderer,
     });
-    const res = await rt.resolver.resolve({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
+    const res = await rt.resolver.resolve({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
     expect(res.status).toBe("materialized");
     expect(renderer.render).not.toHaveBeenCalled();
   });

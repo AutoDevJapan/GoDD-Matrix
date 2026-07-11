@@ -7,7 +7,7 @@ import {
 } from "./client.js";
 import type { RenderRequest } from "./index.js";
 
-const ctx: RenderRequest = { jsic: "7412", color: "h17b-lt", mood: "trustworthy" };
+const ctx: RenderRequest = { jsic: "7281", color: "h17b-lt", mood: "trustworthy" };
 
 /** JSON レスポンスを組み立てる。 */
 function jsonResponse(body: unknown, status = 200): Response {
@@ -55,7 +55,7 @@ describe("GeneratorRenderClient.render (正常系)", () => {
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>)["x-api-key"]).toBe("secret-key");
     expect(JSON.parse(init.body as string)).toEqual({
-      jsic: "7412",
+      jsic: "7281",
       color: "h17b-lt",
       mood: "trustworthy",
       tags: ["serif"],
@@ -67,7 +67,7 @@ describe("GeneratorRenderClient.render (正常系)", () => {
     await client(fetchImpl as unknown as typeof fetch).render(ctx);
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string);
-    expect(body).toEqual({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
+    expect(body).toEqual({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
     expect(body).not.toHaveProperty("tags");
   });
 });

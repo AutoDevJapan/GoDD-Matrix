@@ -11,14 +11,14 @@ import { MCP_TOOLS } from "./index.js";
 import type { MatrixRuntime } from "./tools.js";
 
 const baseDir = fileURLToPath(new URL("../ds/__fixtures__", import.meta.url));
-const BODY_PATH = "design-md/7412/h17b-lt/trustworthy/DESIGN.md";
+const BODY_PATH = "design-md/7281/h17b-lt/trustworthy/DESIGN.md";
 const markdown = readFileSync(path.join(baseDir, BODY_PATH), "utf8");
 const realHash = `sha256:${createHash("sha256").update(markdown, "utf8").digest("hex")}`;
 
 const entry: DesignIndexEntry = {
-  id: "7412_h17b-lt_trustworthy",
+  id: "7281_h17b-lt_trustworthy",
   path: BODY_PATH,
-  jsic: "7412",
+  jsic: "7281",
   color: "h17b-lt",
   mood: "trustworthy",
   title: "経営コンサルタント業 × ライトブルー × 信頼",

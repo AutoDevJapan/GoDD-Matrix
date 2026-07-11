@@ -23,6 +23,8 @@ export interface AxisContext {
 
 export { normalizeKey } from "./normalize.js";
 export {
+  JSIC_CATALOG,
+  JSIC_OVERLAY,
   type JsicCandidate,
   type JsicEntry,
   type JsicMatchKind,
