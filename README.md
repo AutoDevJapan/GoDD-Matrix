@@ -67,4 +67,41 @@ GODD_DS_INDEX=./path/to/index.json node dist/mcp/main.js   # bin: godd-matrix-mc
 各ツールは共通入力 `{ industry: string; color?: string; mood?: string; tags?: string[] }` を受け取る。
 未解決軸がある場合、`compose` はプロンプトを合成せず候補を提示して `isError` を返す。
 
+## HTTP トランスポート / Vercel デプロイ (issue #8)
+
+stdio エントリ (`dist/mcp/main.js`) に加え、同じ MCP サーバ (3 ツール) を
+[Streamable HTTP](https://modelcontextprotocol.io) トランスポートで公開する。
+URL でホストできるため Vercel Function として配信する。
+
+- `GET /health` — ヘルスチェック (200, 認証不要)。
+- `POST /mcp` — MCP Streamable HTTP エンドポイント。stateless モード
+  (セッション非永続) で、リクエスト毎に MCP サーバを生成する。
+- 認証: `x-api-key` ヘッダ (期待値は env `GODD_MCP_API_KEY`)。未設定なら認証無効。
+
+配信は `api/mcp.ts` / `api/health.ts` (Vercel Node Function) が共有ハンドラ
+(`src/mcp/http.ts`) を呼ぶ。Vercel の Node 関数は `(req, res)` で呼ばれるため
+`src/mcp/node-adapter.ts` が Web 標準 `Request` / `Response` へ橋渡しする。
+
+### 追加の環境変数 (HTTP / Vercel)
+
+| 変数 | 必須 | 説明 |
+| --- | --- | --- |
+| `GODD_MCP_API_KEY` | | `POST /mcp` の `x-api-key` 期待値。未設定なら認証無効。 |
+| `GENERATOR_RENDER_URL` | | 未材化セルの Generator レンダー API ベース URL。未設定なら未材化は `unavailable`。 |
+| `GENERATOR_RENDER_API_KEY` | | 同 API の認証キー。`GENERATOR_RENDER_URL` と両方揃った場合のみ有効。 |
+
+### デプロイ (4 環境)
+
+`.github/workflows/deploy.yml` が Vercel へデプロイする。
+
+| 環境 | トリガ | 反映先 |
+| --- | --- | --- |
+| preview | PR | プレビュー URL |
+| dev | `main` への push | 本番 (dev live) |
+| stg | 手動 dispatch (`target=stg`) | 本番 |
+| prd | 手動 dispatch (`target=prd`) | 本番 (Environment `production` の承認ゲート付き) |
+
+必要な GitHub Secrets: `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` /
+`GODD_MCP_API_KEY`。
+
 各モジュールの実装は個別 issue で追加する。

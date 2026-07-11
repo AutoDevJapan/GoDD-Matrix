@@ -6,3 +6,6 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Vercel CLI (プロジェクト連携 / ローカル env)
+.vercel

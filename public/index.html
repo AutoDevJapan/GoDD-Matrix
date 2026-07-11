@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoDD-Matrix MCP</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 4rem auto;
+        padding: 0 1rem;
+        line-height: 1.6;
+      }
+      code {
+        background: #f0f0f0;
+        padding: 0.1rem 0.3rem;
+        border-radius: 0.2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>GoDD-Matrix MCP</h1>
+    <p>業種と要望から Claude 用デザインプロンプトを合成する MCP サーバ (Streamable HTTP)。</p>
+    <ul>
+      <li><code>GET /health</code> — ヘルスチェック (200)</li>
+      <li><code>POST /mcp</code> — MCP Streamable HTTP エンドポイント (<code>x-api-key</code> 認証)</li>
+    </ul>
+    <p>ツール: <code>godd_matrix_compose</code> / <code>godd_matrix_decide_axes</code> / <code>godd_matrix_select_cells</code></p>
+  </body>
+</html>
