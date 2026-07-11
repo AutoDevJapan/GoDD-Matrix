@@ -14,8 +14,11 @@ import {
   contextFromEntry,
   designRawUrl,
   extractColorTokens,
+  familySwatchHex,
   filterByFacets,
   findEntryById,
+  highlightMatches,
+  highlightTermsFromText,
   hslToHex,
   jsicMajor,
   jsicName,
@@ -232,6 +235,83 @@ describe("colorFamily (系統)", () => {
   it("無彩色 (h を含まない) は無彩色", () => {
     expect(colorFamily("white")).toEqual({ key: "neutral", label: "無彩色" });
     expect(colorFamily("ac-w").key).toBe("neutral");
+  });
+});
+
+describe("familySwatchHex (系統代表色, issue #39)", () => {
+  it("既知の系統キーは正規化済み #rrggbb を返す", () => {
+    for (const key of ["red", "orange", "yellow", "green", "blue", "purple"]) {
+      expect(familySwatchHex(key)).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+  it("無彩色は彩度ゼロのグレー (R=G=B)", () => {
+    const hex = familySwatchHex("neutral");
+    expect(hex).toMatch(/^#([0-9a-f]{2})\1\1$/);
+  });
+  it("colorFamily の key と往復で一貫する (slug → 系統 → 代表色)", () => {
+    expect(familySwatchHex(colorFamily("h17b-lt").key)).toMatch(/^#[0-9a-f]{6}$/);
+    expect(familySwatchHex(colorFamily("v-h03").key)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+  it("未知キーは null (呼び手はスウォッチを省ける)", () => {
+    expect(familySwatchHex("no-such-family")).toBeNull();
+    expect(familySwatchHex("")).toBeNull();
+  });
+  it("系統ごとに異なる代表色 (赤系 ≠ 青系)", () => {
+    expect(familySwatchHex("red")).not.toBe(familySwatchHex("blue"));
+  });
+});
+
+describe("highlightTermsFromText (issue #39)", () => {
+  it("空白/読点/カンマで語に分割する", () => {
+    expect(highlightTermsFromText("信頼 editorial")).toEqual(["信頼", "editorial"]);
+    expect(highlightTermsFromText("青、白, ミニマル")).toEqual(["青", "白", "ミニマル"]);
+  });
+  it("空/未指定は空配列", () => {
+    expect(highlightTermsFromText("")).toEqual([]);
+    expect(highlightTermsFromText(undefined)).toEqual([]);
+    expect(highlightTermsFromText("   ")).toEqual([]);
+  });
+});
+
+describe("highlightMatches (issue #39)", () => {
+  it("一致箇所を match=true 断片に切り出す", () => {
+    expect(highlightMatches("経営コンサルタント業", ["コンサル"])).toEqual([
+      { text: "経営", match: false },
+      { text: "コンサル", match: true },
+      { text: "タント業", match: false },
+    ]);
+  });
+  it("大文字小文字を無視し、元の表記を保つ", () => {
+    expect(highlightMatches("Editorial Serif", ["editorial"])).toEqual([
+      { text: "Editorial", match: true },
+      { text: " Serif", match: false },
+    ]);
+  });
+  it("複数語を強調し、隣接する同種断片はまとめる", () => {
+    // "赤" と "ポップ" が隣接 → それぞれ mark だが連続 match はまとめる。
+    expect(highlightMatches("赤ポップ", ["赤", "ポップ"])).toEqual([
+      { text: "赤ポップ", match: true },
+    ]);
+  });
+  it("最長一致を優先する (部分被り)", () => {
+    expect(highlightMatches("editorial", ["edit", "editorial"])).toEqual([
+      { text: "editorial", match: true },
+    ]);
+  });
+  it("語が無い/空テキストは単一の非一致断片", () => {
+    expect(highlightMatches("書店", [])).toEqual([{ text: "書店", match: false }]);
+    expect(highlightMatches("書店", ["  "])).toEqual([{ text: "書店", match: false }]);
+    expect(highlightMatches("", ["x"])).toEqual([{ text: "", match: false }]);
+  });
+  it("マッチが無ければ全体が非一致", () => {
+    expect(highlightMatches("書店", ["カフェ"])).toEqual([{ text: "書店", match: false }]);
+  });
+  it("再構成すると元テキストに一致する (無損失分割)", () => {
+    const text = "経営コンサル × 信頼 editorial";
+    const rebuilt = highlightMatches(text, ["コンサル", "editorial"])
+      .map((s) => s.text)
+      .join("");
+    expect(rebuilt).toBe(text);
   });
 });
 

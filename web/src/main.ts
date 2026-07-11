@@ -26,9 +26,12 @@ import {
   computeFacetGroups,
   designRawUrl,
   extractColorTokens,
+  familySwatchHex,
   filterByFacets,
   findEntryById,
   hasAnyFacet,
+  highlightMatches,
+  highlightTermsFromText,
   jsicName,
   labelForColor,
   labelForMood,
@@ -53,6 +56,18 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * `text` を自由文の一致語で分割し、一致部を `<mark>` に、非一致部をテキストノードにして
+ * `parent` へ追加する (XSS 安全: 全断片を textContent 経由で組み、innerHTML は使わない)。
+ * `terms` が空なら素のテキストを 1 ノードで追加する (従来表示と同等)。
+ */
+function appendHighlighted(parent: HTMLElement, text: string, terms: readonly string[]): void {
+  for (const seg of highlightMatches(text, terms)) {
+    if (seg.match) parent.appendChild(el("mark", { class: "hl", text: seg.text }));
+    else parent.appendChild(document.createTextNode(seg.text));
+  }
+}
+
 function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) throw new Error(`要素が見つかりません: #${id}`);
@@ -67,6 +82,8 @@ let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let baseMatches: readonly DesignIndexEntry[] = [];
 /** 直近の検索要望 (プロンプト合成の notices に反映)。 */
 let lastRequest: SearchInput = {};
+/** 自由文検索でハイライトする語 (カードのタイトル/業種名/タグの一致箇所を強調)。 */
+let highlightTerms: readonly string[] = [];
 /** 選択中のファセット (同一軸 OR / 軸跨ぎ AND)。 */
 let facetSelection: FacetSelection = EMPTY_SELECTION;
 /** 現在ページ (1 起点)。 */
@@ -235,10 +252,18 @@ function renderCard(entry: DesignIndexEntry): HTMLElement {
   const tags = el(
     "div",
     { class: "card-tags" },
-    (entry.tags ?? []).map((t) => el("span", { class: "tag", text: t })),
+    (entry.tags ?? []).map((t) => {
+      const span = el("span", { class: "tag" });
+      appendHighlighted(span, t, highlightTerms);
+      return span;
+    }),
   );
-  const title = el("h3", { class: "card-title", text: entry.title });
-  const industry = el("p", { class: "card-industry", text: `業種名: ${jsicName(entry.jsic)}` });
+  // タイトル/業種名は自由文の一致箇所を <mark> で強調する (highlightTerms が空なら素のテキスト)。
+  const title = el("h3", { class: "card-title" });
+  appendHighlighted(title, entry.title, highlightTerms);
+  const industry = el("p", { class: "card-industry" });
+  industry.appendChild(document.createTextNode("業種名: "));
+  appendHighlighted(industry, jsicName(entry.jsic), highlightTerms);
   // カラースウォッチ (近似): DESIGN.md を取得せず slug からクライアントで配色を視覚化する。
   const swatches = swatchRow(approxSwatchesForColor(entry.color), "カラーパレット（近似）");
   const select = el("button", { class: "select-btn", text: "このセルでプロンプト合成 →" });
@@ -266,6 +291,7 @@ function renderResults(matches: readonly DesignIndexEntry[]): void {
 function runSearch(): void {
   const input = readSearchInput();
   lastRequest = input;
+  highlightTerms = highlightTermsFromText(input.text);
   const result = searchCells(allEntries, input, taxonomy);
   baseMatches = result.matches;
   renderAxes(result, input);
@@ -358,6 +384,17 @@ function renderChip(axis: FacetAxis, item: FacetValueItem): HTMLButtonElement {
   const chip = el("button", { class: item.selected ? "chip selected" : "chip" });
   chip.type = "button";
   chip.setAttribute("aria-pressed", String(item.selected));
+  // カラー系統チップには代表色のスウォッチ (装飾) を添える。ラベルで系統名は読めるため
+  // 見本は aria-hidden にし、スクリーンリーダーの二重読みを避ける。
+  if (axis === "color") {
+    const hex = familySwatchHex(item.value);
+    if (hex) {
+      const dot = el("span", { class: "chip-swatch" });
+      dot.style.backgroundColor = hex;
+      dot.setAttribute("aria-hidden", "true");
+      chip.appendChild(dot);
+    }
+  }
   chip.appendChild(el("span", { class: "chip-label", text: item.label }));
   chip.appendChild(el("span", { class: "chip-count", text: String(item.count) }));
   if (item.count === 0 && !item.selected) chip.disabled = true;
