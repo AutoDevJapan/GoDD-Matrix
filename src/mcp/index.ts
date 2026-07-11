@@ -17,6 +17,17 @@ export const MCP_TOOLS = {
 } as const;
 
 export { createMatrixServer } from "./server.js";
+export {
+  API_KEY_HEADER,
+  createHttpHandler,
+  createMcpRequestHandler,
+  DEFAULT_HEALTH_PATH,
+  DEFAULT_MCP_PATH,
+  handleHealth,
+  type HttpHandlerOptions,
+  MCP_API_KEY_ENV,
+  type McpHandlerOptions,
+} from "./http.js";
 export { createRuntime, DS_BASE_ENV, type RuntimeOptions } from "./runtime.js";
 export {
   type ComposeResult,
