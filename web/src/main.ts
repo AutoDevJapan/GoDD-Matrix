@@ -8,7 +8,9 @@ import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
 import {
   DS_INDEX_URL,
+  DS_TAXONOMY_URL,
   EMPTY_SELECTION,
+  EMPTY_TAXONOMY,
   FACET_AXES,
   type FacetAxis,
   type FacetGroupView,
@@ -16,15 +18,17 @@ import {
   type FacetValueItem,
   type Page,
   type SearchInput,
-  colorLabel,
+  type Taxonomy,
   composePromptForCell,
   computeFacetGroups,
   designRawUrl,
   filterByFacets,
   hasAnyFacet,
   jsicName,
-  moodLabel,
+  labelForColor,
+  labelForMood,
   paginate,
+  parseTaxonomy,
   searchCells,
   toggleFacet,
 } from "./lib.js";
@@ -51,6 +55,8 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 
 /** 現在の全エントリ (index.json 取込後に確定)。 */
 let allEntries: readonly DesignIndexEntry[] = [];
+/** DS taxonomy (taxonomy.json 取込後に確定; 未達なら空 = slug/bundled フォールバック)。 */
+let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 /** フォーム検索の結果 (ファセット適用前の母集合)。 */
 let baseMatches: readonly DesignIndexEntry[] = [];
 /** 直近の検索要望 (プロンプト合成の notices に反映)。 */
@@ -170,7 +176,9 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
   rows.push(
     line(
       "カラー",
-      colorBest ? `${colorBest.entry.slug} (${colorBest.entry.label})` : undefined,
+      colorBest
+        ? `${colorBest.entry.slug} (${labelForColor(colorBest.entry.slug, taxonomy)})`
+        : undefined,
       input.color,
     ),
   );
@@ -178,7 +186,9 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
   rows.push(
     line(
       "ムード",
-      moodBest ? `${moodBest.entry.slug} (${moodBest.entry.label})` : undefined,
+      moodBest
+        ? `${moodBest.entry.slug} (${labelForMood(moodBest.entry.slug, taxonomy)})`
+        : undefined,
       input.mood,
     ),
   );
@@ -190,8 +200,8 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
 function renderCard(entry: DesignIndexEntry): HTMLElement {
   const meta = el("div", { class: "card-meta" }, [
     badge(`業種 ${entry.jsic}`, "jsic"),
-    badge(colorLabel(entry.color), "color"),
-    badge(moodLabel(entry.mood), "mood"),
+    badge(labelForColor(entry.color, taxonomy), "color"),
+    badge(labelForMood(entry.mood, taxonomy), "mood"),
   ]);
   const tags = el(
     "div",
@@ -225,7 +235,7 @@ function renderResults(matches: readonly DesignIndexEntry[]): void {
 function runSearch(): void {
   const input = readSearchInput();
   lastRequest = input;
-  const result = searchCells(allEntries, input);
+  const result = searchCells(allEntries, input, taxonomy);
   baseMatches = result.matches;
   renderAxes(result, input);
   applyState();
@@ -260,7 +270,7 @@ function updateStatus(pg: Page<DesignIndexEntry>): void {
 function renderFacets(): void {
   const box = byId("facets");
   box.replaceChildren();
-  const groups = computeFacetGroups(baseMatches, facetSelection);
+  const groups = computeFacetGroups(baseMatches, facetSelection, taxonomy);
   if (!groups.some((g) => g.items.length > 0)) return;
 
   const head = el("div", { class: "facets-head" }, [
@@ -470,10 +480,27 @@ function promptBlock(heading: string, content: string, copyLabel: string): HTMLE
   return el("section", { class: "block" }, [head, pre]);
 }
 
-/** index.json を取込んで初期表示する。 */
+/**
+ * DS taxonomy.json を取込む (フェイルセーフ)。
+ * fetch 失敗・形状不正でも例外を投げず空 taxonomy を返し、slug/bundled 表示で動作継続する。
+ */
+async function loadTaxonomy(): Promise<Taxonomy> {
+  try {
+    const res = await fetch(DS_TAXONOMY_URL, { cache: "no-cache" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return parseTaxonomy(await res.json());
+  } catch {
+    // taxonomy 未達は致命ではない (ラベル日本語化が効かないだけ)。画面は壊さない。
+    return EMPTY_TAXONOMY;
+  }
+}
+
+/** index.json を取込んで初期表示する。taxonomy.json は並行取得 (フェイルセーフ)。 */
 async function bootstrap(): Promise<void> {
   const status = byId("status");
   status.textContent = "index.json を取得中…";
+  // index (必須) と taxonomy (任意) を並行取得。taxonomy は失敗しても続行する。
+  const taxonomyPromise = loadTaxonomy();
   try {
     const res = await fetch(DS_INDEX_URL, { cache: "no-cache" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -486,6 +513,7 @@ async function bootstrap(): Promise<void> {
     }`;
     return;
   }
+  taxonomy = await taxonomyPromise;
   restoreFromUrl();
   runSearch();
 }

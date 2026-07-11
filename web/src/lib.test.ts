@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import {
   EMPTY_SELECTION,
+  EMPTY_TAXONOMY,
+  type Taxonomy,
   colorFamily,
   colorLabel,
   composePromptForCell,
@@ -11,8 +13,11 @@ import {
   filterByFacets,
   jsicMajor,
   jsicName,
+  labelForColor,
+  labelForMood,
   moodLabel,
   paginate,
+  parseTaxonomy,
   searchCells,
   toggleFacet,
 } from "./lib.js";
@@ -49,6 +54,71 @@ describe("カタログ参照", () => {
   });
   it("color/mood slug をラベルに解決する", () => {
     expect(colorLabel("h17b-lt")).toBe("ライトブルー");
+    expect(colorLabel("white")).toBe("ホワイト");
+    expect(moodLabel("unknown-mood")).toBe("unknown-mood");
+  });
+});
+
+describe("parseTaxonomy (フェイルセーフ)", () => {
+  it("契約形状を正規化する", () => {
+    const tx = parseTaxonomy({
+      version: "1.0.0",
+      colors: { "h17b-lt": { name_ja: "空色", family: "blue", family_ja: "青系" } },
+      moods: { bold: { name_ja: "大胆", axis: "energy" } },
+    });
+    expect(tx.version).toBe("1.0.0");
+    expect(tx.colors["h17b-lt"]).toEqual({ name_ja: "空色", family: "blue", family_ja: "青系" });
+    expect(tx.moods.bold).toEqual({ name_ja: "大胆", axis: "energy" });
+  });
+
+  it("object でない/欠損は空へ (例外を投げない)", () => {
+    expect(parseTaxonomy(null)).toEqual(EMPTY_TAXONOMY);
+    expect(parseTaxonomy("nope")).toEqual(EMPTY_TAXONOMY);
+    expect(parseTaxonomy(42)).toEqual(EMPTY_TAXONOMY);
+    expect(parseTaxonomy({})).toEqual(EMPTY_TAXONOMY);
+  });
+
+  it("不正な項目・型を握りつぶし取れる範囲だけ拾う", () => {
+    const tx = parseTaxonomy({
+      colors: { good: { name_ja: "良" }, bad: "not-object", empty: {} },
+      moods: 123,
+      version: 7,
+    });
+    expect(tx.colors.good).toEqual({ name_ja: "良" });
+    expect(tx.colors).not.toHaveProperty("bad");
+    expect(tx.colors.empty).toEqual({}); // object だが name_ja 等が無い → 空項目
+    expect(tx.moods).toEqual({});
+    expect(tx.version).toBeUndefined();
+  });
+});
+
+describe("labelForColor / labelForMood (name_ja 優先・フォールバック)", () => {
+  const tx: Taxonomy = {
+    colors: { "h17b-lt": { name_ja: "空色" } },
+    moods: { minimal: { name_ja: "極小" }, bold: { name_ja: "大胆" } },
+  };
+
+  it("taxonomy の name_ja を最優先する", () => {
+    expect(labelForColor("h17b-lt", tx)).toBe("空色"); // bundled ラベル(ライトブルー)より優先
+    expect(labelForMood("minimal", tx)).toBe("極小"); // bundled ラベル(ミニマル)より優先
+    expect(labelForMood("bold", tx)).toBe("大胆"); // bundled に無い slug も日本語化
+  });
+
+  it("taxonomy に無い slug は bundled ラベルへフォールバック", () => {
+    expect(labelForColor("white", tx)).toBe("ホワイト");
+    expect(labelForMood("trustworthy", tx)).toBe("信頼");
+  });
+
+  it("bundled にも無い slug は slug のまま", () => {
+    expect(labelForColor("h99z-xx", tx)).toBe("h99z-xx");
+    expect(labelForMood("brutalist", tx)).toBe("brutalist");
+  });
+
+  it("taxonomy 欠損時 (undefined) は bundled ラベル → slug", () => {
+    expect(labelForColor("h17b-lt")).toBe("ライトブルー");
+    expect(labelForMood("minimal")).toBe("ミニマル");
+    expect(labelForMood("brutalist")).toBe("brutalist");
+    // taxonomy 無し版の薄いラッパも同値
     expect(colorLabel("white")).toBe("ホワイト");
     expect(moodLabel("unknown-mood")).toBe("unknown-mood");
   });
@@ -170,6 +240,18 @@ describe("facets", () => {
     const tag = groups.find((g) => g.axis === "tag");
     // red を選ぶと editorial の候補件数は 1 (entertainment のみ)
     expect(tag?.items.find((i) => i.value === "editorial")?.count).toBe(1);
+  });
+
+  it("ムードファセットのラベルに taxonomy の name_ja を適用する", () => {
+    const tx: Taxonomy = { colors: {}, moods: { pop: { name_ja: "ポップ" } } };
+    const groups = computeFacetGroups(cells, EMPTY_SELECTION, tx);
+    const mood = groups.find((g) => g.axis === "mood");
+    // taxonomy 有り: pop → 「ポップ」。bundled にも無い slug なので name_ja が効く。
+    expect(mood?.items.find((i) => i.value === "pop")?.label).toBe("ポップ");
+    // taxonomy 未達: slug 表示にフォールバック (画面は壊れない)。
+    const fallback = computeFacetGroups(cells, EMPTY_SELECTION);
+    const moodFb = fallback.find((g) => g.axis === "mood");
+    expect(moodFb?.items.find((i) => i.value === "pop")?.label).toBe("pop");
   });
 
   it("toggleFacet は不変で追加/除去する", () => {

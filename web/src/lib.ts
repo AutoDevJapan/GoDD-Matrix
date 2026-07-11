@@ -21,23 +21,108 @@ export const DS_RAW_BASE =
 /** 公開 index.json の URL。 */
 export const DS_INDEX_URL = `${DS_RAW_BASE}index.json`;
 
+/** 公開 taxonomy.json の URL (DS がムード/カラーの機械可読な日本語名を公開する契約, issue #33)。 */
+export const DS_TAXONOMY_URL = `${DS_RAW_BASE}taxonomy.json`;
+
 const jsicNameByCode = new Map(JSIC_SUBCLASSES.map((e) => [e.code, e.name]));
 const colorLabelBySlug = new Map(MINIMAL_COLORS.map((e) => [e.slug, e.label]));
 const moodLabelBySlug = new Map(MINIMAL_MOODS.map((e) => [e.slug, e.label]));
+
+// ---------------------------------------------------------------------------
+// DS taxonomy.json (issue #33): ムード/カラーの機械可読な日本語名を実行時に取り込む。
+// 契約: { version, colors: { "<slug>": { name_ja, family, family_ja } },
+//         moods: { "<slug>": { name_ja, axis } } }
+// フェイルセーフ: fetch 失敗・形状不正でも例外を投げず、bundled ラベル/slug にフォールバック。
+// ---------------------------------------------------------------------------
+
+/** taxonomy.json のカラー項目 (全フィールド任意)。 */
+export interface TaxonomyColor {
+  readonly name_ja?: string;
+  readonly family?: string;
+  readonly family_ja?: string;
+}
+
+/** taxonomy.json のムード項目 (全フィールド任意)。 */
+export interface TaxonomyMood {
+  readonly name_ja?: string;
+  readonly axis?: string;
+}
+
+/** DS が公開する taxonomy (実行時 fetch)。欠損に強い形 (フェイルセーフ)。 */
+export interface Taxonomy {
+  readonly version?: string;
+  readonly colors: Readonly<Record<string, TaxonomyColor>>;
+  readonly moods: Readonly<Record<string, TaxonomyMood>>;
+}
+
+/** 空 taxonomy (fetch 失敗・未達時のフォールバック)。 */
+export const EMPTY_TAXONOMY: Taxonomy = { colors: {}, moods: {} };
+
+/** 値が非空文字列ならそれを、さもなくば undefined を返す。 */
+function optString(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+/** slug→項目 の生 map を正規化する (object でない値は握りつぶす)。 */
+function parseRecord<T>(raw: unknown, pick: (e: Record<string, unknown>) => T): Record<string, T> {
+  const out: Record<string, T> = {};
+  if (typeof raw !== "object" || raw === null) return out;
+  for (const [slug, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v !== "object" || v === null) continue;
+    out[slug] = pick(v as Record<string, unknown>);
+  }
+  return out;
+}
+
+/**
+ * 任意の JSON 値を {@link Taxonomy} に正規化する (フェイルセーフ・純関数)。
+ * 形状不正・欠損は握りつぶし、取れる範囲だけ拾って残りは空にする。例外は投げない。
+ */
+export function parseTaxonomy(raw: unknown): Taxonomy {
+  if (typeof raw !== "object" || raw === null) return EMPTY_TAXONOMY;
+  const obj = raw as Record<string, unknown>;
+  const colors = parseRecord<TaxonomyColor>(obj.colors, (e) => ({
+    ...(optString(e.name_ja) ? { name_ja: optString(e.name_ja) } : {}),
+    ...(optString(e.family) ? { family: optString(e.family) } : {}),
+    ...(optString(e.family_ja) ? { family_ja: optString(e.family_ja) } : {}),
+  }));
+  const moods = parseRecord<TaxonomyMood>(obj.moods, (e) => ({
+    ...(optString(e.name_ja) ? { name_ja: optString(e.name_ja) } : {}),
+    ...(optString(e.axis) ? { axis: optString(e.axis) } : {}),
+  }));
+  const version = optString(obj.version);
+  return { ...(version ? { version } : {}), colors, moods };
+}
 
 /** JSIC 細分類コード → 業種名 (未知コードはコードのまま返す)。 */
 export function jsicName(code: string): string {
   return jsicNameByCode.get(code) ?? code;
 }
 
-/** カラー slug → 表示ラベル (未知 slug は slug のまま返す)。 */
-export function colorLabel(slug: string): string {
-  return colorLabelBySlug.get(slug) ?? slug;
+/**
+ * カラー slug → 表示ラベル。taxonomy の `name_ja` を最優先し、無ければ bundled ラベル、
+ * 最後に slug をそのまま返す (taxonomy 未達でも従来どおり動作)。
+ */
+export function labelForColor(slug: string, taxonomy?: Taxonomy): string {
+  return taxonomy?.colors[slug]?.name_ja ?? colorLabelBySlug.get(slug) ?? slug;
 }
 
-/** ムード slug → 表示ラベル (未知 slug は slug のまま返す)。 */
+/**
+ * ムード slug → 表示ラベル。taxonomy の `name_ja` を最優先し、無ければ bundled ラベル、
+ * 最後に slug をそのまま返す (taxonomy 未達でも従来どおり動作)。
+ */
+export function labelForMood(slug: string, taxonomy?: Taxonomy): string {
+  return taxonomy?.moods[slug]?.name_ja ?? moodLabelBySlug.get(slug) ?? slug;
+}
+
+/** カラー slug → 表示ラベル (未知 slug は slug のまま返す)。{@link labelForColor} の taxonomy 無し版。 */
+export function colorLabel(slug: string): string {
+  return labelForColor(slug);
+}
+
+/** ムード slug → 表示ラベル (未知 slug は slug のまま返す)。{@link labelForMood} の taxonomy 無し版。 */
 export function moodLabel(slug: string): string {
-  return moodLabelBySlug.get(slug) ?? slug;
+  return labelForMood(slug);
 }
 
 /** DESIGN.md 本文の raw URL を entry.path から解決する。 */
@@ -78,16 +163,16 @@ function toBrief(input: SearchInput): DesignBrief {
 }
 
 /** 自由文語がエントリのメタ (業種名 / タイトル / slug / コード / タグ) に含まれるか。 */
-function matchesText(entry: DesignIndexEntry, term: string): boolean {
+function matchesText(entry: DesignIndexEntry, term: string, taxonomy?: Taxonomy): boolean {
   const q = term.trim().toLowerCase();
   if (!q) return true;
   const hay = [
     entry.jsic,
     jsicName(entry.jsic),
     entry.color,
-    colorLabel(entry.color),
+    labelForColor(entry.color, taxonomy),
     entry.mood,
-    moodLabel(entry.mood),
+    labelForMood(entry.mood, taxonomy),
     entry.title ?? "",
     ...(entry.tags ?? []),
   ]
@@ -107,6 +192,7 @@ function matchesText(entry: DesignIndexEntry, term: string): boolean {
 export function searchCells(
   entries: readonly DesignIndexEntry[],
   input: SearchInput,
+  taxonomy?: Taxonomy,
 ): SearchResult {
   const decision = decideAxes(toBrief(input));
   const industryText = input.industry?.trim() ?? "";
@@ -128,7 +214,7 @@ export function searchCells(
       const set = new Set(e.tags ?? []);
       if (!tags.every((t) => set.has(t))) return false;
     }
-    return textTerms.every((t) => matchesText(e, t));
+    return textTerms.every((t) => matchesText(e, t, taxonomy));
   });
 
   return { decision, matches };
@@ -261,11 +347,15 @@ function entryFacetValues(entry: DesignIndexEntry, axis: FacetAxis): readonly st
   return entry.tags ?? [];
 }
 
-/** ファセット値の表示ラベル。 */
-function facetLabel(axis: FacetAxis, value: string): string {
+/**
+ * ファセット値の表示ラベル。
+ * - industry / color は「大分類 / 色系統」の client 計算ラベル (一貫性のため taxonomy に依らない)。
+ * - mood は taxonomy の `name_ja` を優先 (無ければ bundled ラベル → slug)。
+ */
+function facetLabel(axis: FacetAxis, value: string, taxonomy?: Taxonomy): string {
   if (axis === "industry") return jsicDivisionByCode.get(value)?.label ?? value;
   if (axis === "color") return familyByKey.get(value)?.label ?? value;
-  if (axis === "mood") return moodLabel(value);
+  if (axis === "mood") return labelForMood(value, taxonomy);
   return value;
 }
 
@@ -346,6 +436,7 @@ export interface FacetGroupView {
 export function computeFacetGroups(
   entries: readonly DesignIndexEntry[],
   selection: FacetSelection,
+  taxonomy?: Taxonomy,
 ): FacetGroupView[] {
   return FACET_AXES.map((axis) => {
     const counts = new Map<string, number>();
@@ -359,7 +450,7 @@ export function computeFacetGroups(
     const items: FacetValueItem[] = [...counts.entries()].map(([value, count]) => ({
       value,
       count,
-      label: facetLabel(axis, value),
+      label: facetLabel(axis, value, taxonomy),
       selected: selection[axis].includes(value),
     }));
     items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ja"));
