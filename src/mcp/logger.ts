@@ -127,7 +127,13 @@ export function maskSecrets<T extends Record<string, unknown>>(record: T, secret
     if (typeof value === "string") {
       out[key] = maskString(value, secrets);
     } else if (value !== null && typeof value === "object") {
-      out[key] = JSON.parse(maskString(JSON.stringify(value), secrets));
+      // ネストは JSON 経由でマスクする。循環参照など直列化不能な値でも
+      // ログ呼び出しが例外で失敗しないよう安全側へフォールバックする。
+      try {
+        out[key] = JSON.parse(maskString(JSON.stringify(value), secrets));
+      } catch {
+        out[key] = "[unserializable]";
+      }
     } else {
       out[key] = value;
     }

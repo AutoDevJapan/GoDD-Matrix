@@ -139,6 +139,13 @@ describe("maskSecrets", () => {
     const out = maskSecrets({ s: "aXa", n: 5, o: { k: "Xy" } }, ["X"]);
     expect(out).toEqual({ s: "a***a", n: 5, o: { k: "***y" } });
   });
+
+  it("循環参照など直列化不能な値でも例外を投げずフォールバックする", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const out = maskSecrets({ o: circular }, ["X"]);
+    expect(out).toEqual({ o: "[unserializable]" });
+  });
 });
 
 describe("createNoopLogger", () => {
