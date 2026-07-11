@@ -27,7 +27,21 @@ export {
   type HttpHandlerOptions,
   MCP_API_KEY_ENV,
   type McpHandlerOptions,
+  REQUEST_ID_HEADER,
 } from "./http.js";
+export {
+  type ConsoleLoggerOptions,
+  createConsoleLogger,
+  createNoopLogger,
+  LOG_ENABLED_ENV,
+  LOG_LEVEL_ENV,
+  type Logger,
+  type LogFields,
+  type LogLevel,
+  type LogRecord,
+  maskSecrets,
+  newRequestId,
+} from "./logger.js";
 export { createRuntime, DS_BASE_ENV, type RuntimeOptions } from "./runtime.js";
 export {
   type ComposeResult,

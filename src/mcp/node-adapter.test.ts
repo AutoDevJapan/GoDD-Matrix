@@ -2,6 +2,7 @@ import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { handleHealth } from "./http.js";
+import { type LogRecord, createConsoleLogger } from "./logger.js";
 import { toNodeListener } from "./node-adapter.js";
 
 let server: Server | undefined;
@@ -86,14 +87,25 @@ describe("toNodeListener", () => {
     expect(await res.text()).toBe("hello");
   });
 
-  it("ハンドラ例外を 500 に変換する", async () => {
-    const base = await listen(() => {
-      throw new Error("boom");
-    });
+  it("ハンドラ例外を 500 に変換し、理由をログに記録する (本文へは露出しない)", async () => {
+    const records: LogRecord[] = [];
+    const logger = createConsoleLogger({ sink: (r) => records.push(r) });
+    const base = await listen(
+      () => {
+        throw new Error("boom");
+      },
+      { logger },
+    );
     const res = await fetch(`${base}/x`);
     expect(res.status).toBe(500);
-    const body = (await res.json()) as { error: string; message: string };
+    const body = (await res.json()) as { error: string; message?: string };
     expect(body.error).toBe("internal_error");
-    expect(body.message).toBe("boom");
+    // 内部例外メッセージはクライアントへ返さない (秘密混入の恐れ)。
+    expect(body.message).toBeUndefined();
+    // 500 の理由は構造化ログに残る。
+    const errorLog = records.find((r) => r.msg === "node.request.error");
+    expect(errorLog?.level).toBe("error");
+    expect(errorLog?.status).toBe(500);
+    expect(errorLog?.error).toBe("boom");
   });
 });

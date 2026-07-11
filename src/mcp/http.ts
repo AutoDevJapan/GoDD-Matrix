@@ -19,6 +19,7 @@
  */
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { VERSION } from "../version.js";
+import { type Logger, createConsoleLogger, newRequestId } from "./logger.js";
 import { createRuntime } from "./runtime.js";
 import { createMatrixServer } from "./server.js";
 import type { MatrixRuntime } from "./tools.js";
@@ -72,6 +73,11 @@ export interface McpHandlerOptions {
    * 省略時は環境変数 {@link MAX_BODY_BYTES_ENV} / 既定 {@link DEFAULT_MAX_BODY_BYTES}。
    */
   maxBodyBytes?: number;
+  /**
+   * 構造化ログの出力先。省略時は {@link createConsoleLogger} (JSON Lines を console へ)。
+   * 認証済み API キー等の秘密はマスク対象として自動登録する。
+   */
+  logger?: Logger;
 }
 
 /** {@link createHttpHandler} のオプション (パス設定を追加)。 */
@@ -95,12 +101,43 @@ function constantTimeEqual(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
-/** JSON レスポンスを生成する小さなヘルパ。 */
-function jsonResponse(body: unknown, status: number): Response {
+/** JSON レスポンスを生成する小さなヘルパ (追加ヘッダ任意)。 */
+function jsonResponse(body: unknown, status: number, headers?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   });
+}
+
+/** MCP エンドポイントが応答へ付与する相関 ID ヘッダ名。 */
+export const REQUEST_ID_HEADER = "x-request-id";
+
+/** JSON-RPC の method / tool 名を軽量に抽出した観測用メタ。 */
+interface RpcMeta {
+  method?: string;
+  tool?: string;
+}
+
+/**
+ * リクエストボディ (クローン) から JSON-RPC の method / tool を推定する (ログ用)。
+ * 本体消費を避けるため clone を読む。パース不能・GET(SSE) は空を返す (握り潰さずログは継続)。
+ * バッチ (配列) は先頭要素を代表とする。
+ */
+async function peekRpcMeta(req: Request): Promise<RpcMeta> {
+  if (req.method !== "POST") return {};
+  try {
+    const text = await req.clone().text();
+    if (!text) return {};
+    const parsed = JSON.parse(text) as unknown;
+    const first = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (first === null || typeof first !== "object") return {};
+    const obj = first as { method?: unknown; params?: { name?: unknown } };
+    const method = typeof obj.method === "string" ? obj.method : undefined;
+    const tool = typeof obj.params?.name === "string" ? obj.params.name : undefined;
+    return { method, tool };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -146,16 +183,20 @@ export function createMcpRequestHandler(
   const apiKey = options.apiKey ?? process.env[MCP_API_KEY_ENV];
   const runtimeFactory = options.runtimeFactory ?? (() => createRuntime());
   const maxBodyBytes = resolveMaxBodyBytes(options.maxBodyBytes);
+  // API キーはマスク対象として登録し、誤ってログへ漏れないようにする。
+  const logger = options.logger ?? createConsoleLogger({ secrets: [apiKey] });
 
   let runtimePromise: Promise<MatrixRuntime> | undefined;
 
-  async function resolveRuntime(): Promise<MatrixRuntime> {
+  async function resolveRuntime(log: Logger): Promise<MatrixRuntime> {
     if (!runtimePromise) runtimePromise = runtimeFactory();
     try {
       return await runtimePromise;
     } catch (err) {
       runtimePromise = undefined; // env 修正後に再試行できるようにする
       const message = err instanceof Error ? err.message : String(err);
+      // 黙ってフォールバックせず理由を記録する (ツール実行時に明示エラーへ写像)。
+      log.error("mcp.runtime.unavailable", { error: message });
       return createUnavailableRuntime(message);
     }
   }
@@ -172,7 +213,20 @@ export function createMcpRequestHandler(
   }
 
   return async function handleMcp(req: Request): Promise<Response> {
+    const requestId = newRequestId();
+    const log = logger.child({ requestId });
+    const startedAt = Date.now();
+    const idHeader = { [REQUEST_ID_HEADER]: requestId };
+    const meta = await peekRpcMeta(req);
+    log.info("mcp.request.start", { method: meta.method, tool: meta.tool });
+
     if (!isAuthorized(req)) {
+      log.warn("mcp.auth.failed", {
+        status: 401,
+        durationMs: Date.now() - startedAt,
+        method: meta.method,
+        tool: meta.tool,
+      });
       return jsonResponse(
         {
           jsonrpc: "2.0",
@@ -180,12 +234,18 @@ export function createMcpRequestHandler(
           id: null,
         },
         401,
+        idHeader,
       );
     }
 
     // Content-Length で早期に過大ボディを拒否する (Web 層の多層防御)。
     // 生ストリームの実バイト制限は Node ブリッジ (node-adapter) 側でも行う。
     if (bodyTooLarge(req)) {
+      log.warn("mcp.body.too_large", {
+        status: 413,
+        durationMs: Date.now() - startedAt,
+        maxBodyBytes,
+      });
       return jsonResponse(
         {
           jsonrpc: "2.0",
@@ -196,10 +256,11 @@ export function createMcpRequestHandler(
           id: null,
         },
         413,
+        idHeader,
       );
     }
 
-    const runtime = await resolveRuntime();
+    const runtime = await resolveRuntime(log);
     const server = createMatrixServer(runtime);
     // stateless: セッションを持たず、リクエスト毎に完結させる (サーバレス向け)。
     const transport = new WebStandardStreamableHTTPServerTransport({
@@ -208,11 +269,46 @@ export function createMcpRequestHandler(
     });
     try {
       await server.connect(transport);
-      return await transport.handleRequest(req);
+      const res = await transport.handleRequest(req);
+      log.info("mcp.request.end", {
+        method: meta.method,
+        tool: meta.tool,
+        status: res.status,
+        durationMs: Date.now() - startedAt,
+      });
+      return res;
+    } catch (err) {
+      // トランスポート層の想定外例外を握り潰さず記録し、構造化 JSON-RPC エラーを返す。
+      const message = err instanceof Error ? err.message : String(err);
+      log.error("mcp.request.error", {
+        method: meta.method,
+        tool: meta.tool,
+        status: 500,
+        durationMs: Date.now() - startedAt,
+        error: message,
+      });
+      return jsonResponse(
+        {
+          jsonrpc: "2.0",
+          error: { code: -32603, message: "内部エラーが発生しました" },
+          id: null,
+        },
+        500,
+        idHeader,
+      );
     } finally {
       // リクエスト完結後にサーバ/トランスポートを閉じ、リソースを解放する。
-      await transport.close().catch(() => {});
-      await server.close().catch(() => {});
+      // 失敗しても応答は成立しているため、握り潰さず warn で記録するに留める。
+      await transport.close().catch((err: unknown) => {
+        log.warn("mcp.transport.close_failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+      await server.close().catch((err: unknown) => {
+        log.warn("mcp.server.close_failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
   };
 }

@@ -6,8 +6,14 @@ import { describe, expect, it } from "vitest";
 import { DesignIndexClient } from "../ds/client.js";
 import { DesignBodyClient, DesignResolver } from "../ds/design.js";
 import type { DesignIndexEntry } from "../ds/types.js";
-import { createHttpHandler, createMcpRequestHandler, handleHealth } from "./http.js";
+import {
+  REQUEST_ID_HEADER,
+  createHttpHandler,
+  createMcpRequestHandler,
+  handleHealth,
+} from "./http.js";
 import { MCP_TOOLS } from "./index.js";
+import { type LogRecord, createConsoleLogger } from "./logger.js";
 import type { MatrixRuntime } from "./tools.js";
 
 const baseDir = fileURLToPath(new URL("../ds/__fixtures__", import.meta.url));
@@ -192,6 +198,109 @@ describe("createMcpRequestHandler", () => {
     const hasError =
       body.error !== undefined || (body.result as { isError?: boolean })?.isError === true;
     expect(hasError).toBe(true);
+  });
+});
+
+describe("createMcpRequestHandler (構造化ログ)", () => {
+  function captureLogger(): {
+    records: LogRecord[];
+    logger: ReturnType<typeof createConsoleLogger>;
+  } {
+    const records: LogRecord[] = [];
+    return {
+      records,
+      logger: createConsoleLogger({ sink: (r) => records.push(r), level: "debug" }),
+    };
+  }
+
+  it("リクエスト毎に start / end を記録し requestId を伝播する", async () => {
+    const { records, logger } = captureLogger();
+    const handle = createMcpRequestHandler({ runtimeFactory: async () => makeRuntime(), logger });
+    const res = await handle(mcpRequest(INITIALIZE));
+
+    const start = records.find((r) => r.msg === "mcp.request.start");
+    const end = records.find((r) => r.msg === "mcp.request.end");
+    expect(start).toBeDefined();
+    expect(end).toBeDefined();
+    // 同一リクエスト内で requestId が一貫している。
+    expect(start?.requestId).toBe(end?.requestId);
+    expect(typeof start?.requestId).toBe("string");
+    // method / status / durationMs を観測できる。
+    expect(start?.method).toBe("initialize");
+    expect(end?.status).toBe(200);
+    expect(typeof end?.durationMs).toBe("number");
+    // 応答へ相関 ID を返す (エラー応答系)。start と同一値ではないが存在は保証。
+    expect(res.status).toBe(200);
+  });
+
+  it("tools/call では tool 名をログに載せる", async () => {
+    const { records, logger } = captureLogger();
+    const handle = createMcpRequestHandler({ runtimeFactory: async () => makeRuntime(), logger });
+    await handle(
+      mcpRequest({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: MCP_TOOLS.compose,
+          arguments: { industry: "コンサル", color: "ライトブルー", mood: "信頼" },
+        },
+      }),
+    );
+    const end = records.find((r) => r.msg === "mcp.request.end");
+    expect(end?.method).toBe("tools/call");
+    expect(end?.tool).toBe(MCP_TOOLS.compose);
+  });
+
+  it("認証失敗を warn で記録し、応答に x-request-id を付与する", async () => {
+    const { records, logger } = captureLogger();
+    const handle = createMcpRequestHandler({
+      apiKey: "secret-key",
+      runtimeFactory: async () => makeRuntime(),
+      logger,
+    });
+    const res = await handle(mcpRequest(INITIALIZE));
+    expect(res.status).toBe(401);
+    expect(res.headers.get(REQUEST_ID_HEADER)).toBeTruthy();
+    const authLog = records.find((r) => r.msg === "mcp.auth.failed");
+    expect(authLog?.level).toBe("warn");
+    expect(authLog?.status).toBe(401);
+    // API キーがログへ漏れていない (マスク)。
+    expect(JSON.stringify(records)).not.toContain("secret-key");
+  });
+
+  it("ランタイム生成失敗を error で記録する (握り潰さない)", async () => {
+    const { records, logger } = captureLogger();
+    const handle = createMcpRequestHandler({
+      runtimeFactory: async () => {
+        throw new Error("index 未設定");
+      },
+      logger,
+    });
+    await handle(
+      mcpRequest({
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: MCP_TOOLS.selectCells, arguments: { industry: "コンサル" } },
+      }),
+    );
+    const runtimeLog = records.find((r) => r.msg === "mcp.runtime.unavailable");
+    expect(runtimeLog?.level).toBe("error");
+    expect(runtimeLog?.error).toContain("index 未設定");
+  });
+
+  it("body 超過を warn で記録する", async () => {
+    const { records, logger } = captureLogger();
+    const handle = createMcpRequestHandler({
+      maxBodyBytes: 32,
+      runtimeFactory: async () => makeRuntime(),
+      logger,
+    });
+    await handle(mcpRequest(INITIALIZE, { "content-length": "1000000" }));
+    const bodyLog = records.find((r) => r.msg === "mcp.body.too_large");
+    expect(bodyLog?.level).toBe("warn");
+    expect(bodyLog?.status).toBe(413);
   });
 });
 
