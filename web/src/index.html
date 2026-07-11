@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoDD Matrix — デザイン検索 & プロンプト</title>
+    <meta
+      name="description"
+      content="業種 × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude 用プロンプトを生成・コピーする静的ツール。完全クライアントサイド。"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>GoDD Matrix — デザイン検索 &amp; プロンプト</h1>
+      <p class="lede">
+        業種 (JSIC) × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude
+        用プロンプトをブラウザ内で合成してコピーします。データは公開リポジトリから直接取得し、
+        サーバや秘密は一切使いません (完全クライアントサイド)。
+      </p>
+    </header>
+
+    <main class="layout">
+      <form id="search-form" class="search" autocomplete="off">
+        <h2 class="section-title">要望で検索</h2>
+        <div class="field">
+          <label for="q-industry">業種 (名称 / キーワード / JSIC コード)</label>
+          <input id="q-industry" type="text" placeholder="例: コンサル / 書店 / 7281" />
+        </div>
+        <div class="field">
+          <label for="q-color">カラー</label>
+          <input id="q-color" type="text" placeholder="例: 青 / ライトブルー / white" />
+        </div>
+        <div class="field">
+          <label for="q-mood">ムード</label>
+          <input id="q-mood" type="text" placeholder="例: 信頼 / ミニマル" />
+        </div>
+        <div class="field">
+          <label for="q-tags">タグ (カンマ区切り / AND)</label>
+          <input id="q-tags" type="text" placeholder="例: editorial, serif-display" />
+        </div>
+        <div class="field">
+          <label for="q-text">自由文</label>
+          <input id="q-text" type="text" placeholder="タイトル・タグ・名称を横断検索" />
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary">検索</button>
+          <button type="button" id="reset" class="ghost">リセット</button>
+        </div>
+        <p id="status" class="status">読み込み中…</p>
+      </form>
+
+      <section class="content">
+        <div id="axes" class="axes"></div>
+        <h2 class="section-title">候補セル</h2>
+        <div id="results" class="results"></div>
+        <div id="detail" class="detail"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        データ出典: 公開 Design-Systems リポジトリ (index.json / DESIGN.md) を raw から直接取得。
+        本ツールはクライアントサイドのみで動作します。
+      </p>
+    </footer>
+
+    <script type="module" src="./assets/app.js"></script>
+  </body>
+</html>
