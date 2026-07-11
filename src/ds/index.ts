@@ -10,4 +10,15 @@ export {
   type IndexQuery,
   type LoadOptions,
 } from "./client.js";
+export {
+  DesignBodyClient,
+  type DesignBodyOptions,
+  type DesignDocument,
+  type DesignRenderer,
+  DesignResolver,
+  type DesignResolution,
+  resolveDesignLocation,
+  verifyDesignHash,
+} from "./design.js";
+export { type FetchTextOptions, fetchText, isHttpUrl } from "./fetch.js";
 export { DesignIndexError, parseDesignIndex, validateDesignIndex } from "./validate.js";

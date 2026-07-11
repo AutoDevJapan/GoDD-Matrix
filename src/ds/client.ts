@@ -4,9 +4,8 @@
  * - インメモリキャッシュ (取込元単位)。
  * - 軸 (業種/カラー/ムード) / タグによる filter/query。
  */
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import type { AxisContext } from "../axes/index.js";
+import { fetchText } from "./fetch.js";
 import type { DesignIndex, DesignIndexEntry } from "./types.js";
 import { DesignIndexError, parseDesignIndex } from "./validate.js";
 
@@ -51,28 +50,6 @@ function tagsMatch(entryTags: readonly string[] | undefined, wanted: readonly st
   if (wanted.length === 0) return true;
   const set = new Set(entryTags ?? []);
   return wanted.every((tag) => set.has(tag));
-}
-
-async function fetchText(source: string, opts: LoadOptions): Promise<string> {
-  if (/^https?:\/\//.test(source)) {
-    const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-    if (typeof fetchImpl !== "function") {
-      throw new DesignIndexError("fetch が利用できません。fetchImpl を指定してください");
-    }
-    const res = await fetchImpl(source, { signal: opts.signal });
-    if (!res.ok) {
-      throw new DesignIndexError(`index の取得に失敗しました (HTTP ${res.status}): ${source}`);
-    }
-    return res.text();
-  }
-  const filePath = source.startsWith("file:") ? fileURLToPath(source) : source;
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (cause) {
-    throw new DesignIndexError(
-      `index の読み込みに失敗しました: ${source} (${(cause as Error).message})`,
-    );
-  }
 }
 
 /**
