@@ -9,8 +9,14 @@
  */
 import path from "node:path";
 import { DS_INDEX_ENV, DesignIndexClient, type LoadOptions } from "../ds/client.js";
-import { DesignBodyClient, type DesignBodyOptions, DesignResolver } from "../ds/design.js";
+import {
+  DesignBodyClient,
+  type DesignBodyOptions,
+  type DesignRenderer,
+  DesignResolver,
+} from "../ds/design.js";
 import { isHttpUrl } from "../ds/fetch.js";
+import { GeneratorRenderClient, type GeneratorRenderClientOptions } from "../generator/index.js";
 import type { MatrixRuntime } from "./tools.js";
 
 /** DESIGN.md 本文の解決 base を差し替える環境変数名。 */
@@ -26,6 +32,14 @@ export interface RuntimeOptions {
   loadOptions?: LoadOptions;
   /** 本文 fetch の挙動 (fetch 差替 / hash 検証等)。 */
   bodyOptions?: DesignBodyOptions;
+  /**
+   * 未材化セルの Generator レンダー ({@link DesignRenderer})。
+   * 明示指定なら最優先。省略時は環境変数 (GENERATOR_RENDER_URL / _API_KEY) から
+   * 構築を試み、未設定なら renderer 無し (未材化は `unavailable`) にフォールバックする。
+   */
+  renderer?: DesignRenderer;
+  /** env から renderer を構築する際の追加設定 (タイムアウト / fetch 差替等)。 */
+  rendererOptions?: Partial<GeneratorRenderClientOptions>;
 }
 
 /** index 取込元から DESIGN.md 本文 base を推定する (index の所在ディレクトリ)。 */
@@ -51,6 +65,7 @@ export async function createRuntime(opts: RuntimeOptions = {}): Promise<MatrixRu
 
   const index = await DesignIndexClient.load(indexSource, opts.loadOptions);
   const body = new DesignBodyClient(bodyBase, opts.bodyOptions);
-  const resolver = new DesignResolver(index, body);
+  const renderer = opts.renderer ?? GeneratorRenderClient.fromEnv(opts.rendererOptions);
+  const resolver = new DesignResolver(index, body, renderer);
   return { index, resolver };
 }
