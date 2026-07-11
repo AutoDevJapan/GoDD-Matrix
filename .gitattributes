@@ -1,0 +1,10 @@
+# 全テキストは LF に正規化 (Biome の既定 lineEnding=lf と整合)
+* text=auto eol=lf
+
+# バイナリ扱い (差分・改行変換を無効化)
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
