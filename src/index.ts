@@ -54,5 +54,9 @@ export {
   verifyDesignHash,
 } from "./ds/index.js";
 export type { RenderRequest, RenderResult } from "./generator/index.js";
-export type { ComposedPrompt } from "./prompt/index.js";
+export {
+  type ComposedPrompt,
+  type PromptProvenance,
+  synthesizePrompt,
+} from "./prompt/index.js";
 export { MCP_TOOLS } from "./mcp/index.js";
