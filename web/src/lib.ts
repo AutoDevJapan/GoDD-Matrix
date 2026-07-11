@@ -254,6 +254,73 @@ export function searchCells(
   return { decision, matches };
 }
 
+// ---------------------------------------------------------------------------
+// 検索マッチのハイライト (issue #39): 自由文の一致箇所を <mark> で強調するための
+// 純関数。DOM 非依存で「テキスト → 断片列 (match フラグ付き)」に分割し、DOM 構築は
+// main.ts が textContent 経由で安全に行う (innerHTML 不使用 = XSS 安全)。
+// ---------------------------------------------------------------------------
+
+/** ハイライト用のテキスト断片。`match=true` の断片を `<mark>` で強調する。 */
+export interface HighlightSegment {
+  readonly text: string;
+  readonly match: boolean;
+}
+
+/** 自由文の値 (例 `"信頼 editorial"`) を、ハイライト対象の語 (トークン) 列に分割する。 */
+export function highlightTermsFromText(text: string | undefined): string[] {
+  if (!text) return [];
+  return text
+    .split(/[\s、,]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+/**
+ * `text` を `terms` (大文字小文字を無視) の出現で分割し、一致断片へ印を付ける (決定論・純関数)。
+ * 各位置で最長一致する語を採り、非一致部と隣接する同種断片はまとめる。空 `text` や有効な語が
+ * 無い場合は単一の非一致断片を返す。XSS 安全: 呼び手は各断片を textContent で DOM 化する。
+ */
+export function highlightMatches(
+  text: string,
+  terms: readonly string[],
+): readonly HighlightSegment[] {
+  const norm = [...new Set(terms.map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0))];
+  if (text.length === 0 || norm.length === 0) return [{ text, match: false }];
+  const lower = text.toLowerCase();
+  const raw: HighlightSegment[] = [];
+  let plainStart = 0;
+  let i = 0;
+  const flushPlain = (end: number): void => {
+    if (end > plainStart) raw.push({ text: text.slice(plainStart, end), match: false });
+  };
+  while (i < text.length) {
+    let best = 0;
+    for (const t of norm) {
+      if (t.length > best && lower.startsWith(t, i)) best = t.length;
+    }
+    if (best > 0) {
+      flushPlain(i);
+      raw.push({ text: text.slice(i, i + best), match: true });
+      i += best;
+      plainStart = i;
+    } else {
+      i += 1;
+    }
+  }
+  flushPlain(text.length);
+  // 隣接する同種 (連続一致 / 連続非一致) をまとめて断片を最小化する。
+  const merged: HighlightSegment[] = [];
+  for (const seg of raw) {
+    const last = merged[merged.length - 1];
+    if (last && last.match === seg.match) {
+      merged[merged.length - 1] = { text: last.text + seg.text, match: last.match };
+    } else {
+      merged.push(seg);
+    }
+  }
+  return merged.length > 0 ? merged : [{ text, match: false }];
+}
+
 /** エントリから確定軸 context を組む。 */
 export function contextFromEntry(entry: DesignIndexEntry): AxisContext {
   return {
@@ -730,6 +797,21 @@ export function approxSwatchesForColor(slug: string): readonly Swatch[] {
   if (parsed.neutral) return neutralSwatches(parsed.neutral);
   // hue は parseColorSlug の契約上ここでは非 null (無彩色でなければ 1..24)。
   return chromaticSwatches(parsed.hue ?? 1, parsed.tone);
+}
+
+/**
+ * カラー系統キー (`colorFamily` の `key`) → 代表色 `#rrggbb` (系統ファセットチップのスウォッチ用)。
+ * その系統の中央付近の PCCS 色相角をストロング相当のトーンで表す (決定論・純関数)。
+ * 無彩色は中庸グレー、未知キーは null (呼び手はスウォッチを省く)。
+ */
+export function familySwatchHex(familyKey: string): string | null {
+  if (familyKey === NEUTRAL_FAMILY.key) return hslToHex(0, 0, 62);
+  const group = HUE_FAMILIES.find((g) => g.family.key === familyKey);
+  if (!group) return null;
+  // 系統に属する色相の中央を代表色相に採る (両端に偏らない見本)。
+  const hue = group.hues[Math.floor(group.hues.length / 2)] ?? group.hues[0] ?? 1;
+  const angle = PCCS_HUE_ANGLE[hue] ?? 0;
+  return hslToHex(angle, 80, 50);
 }
 
 /** カラートークン role (英小文字) → 日本語の役割ラベル。未知 role は role をそのまま使う。 */
