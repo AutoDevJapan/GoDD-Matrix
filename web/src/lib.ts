@@ -130,6 +130,40 @@ export function designRawUrl(entry: DesignIndexEntry): string {
   return new URL(entry.path, DS_RAW_BASE).toString();
 }
 
+// ---------------------------------------------------------------------------
+// セルへのパーマリンク (issue #35): 選択セルを ?cell=<id> で URL に反映し、共有可能にする。
+// DOM/ネットワーク非依存の純関数 (決定論・テスト可能)。副作用 (URL 反映) は main.ts が担う。
+// ---------------------------------------------------------------------------
+
+/** URL クエリのセル指定に使うパラメータ名。 */
+export const CELL_PARAM = "cell";
+
+/** URL search 文字列 (例 `?cell=6061_white_minimal`) から選択セル ID を取り出す。無ければ null。 */
+export function parseCellParam(search: string): string | null {
+  const id = new URLSearchParams(search).get(CELL_PARAM);
+  return id && id.length > 0 ? id : null;
+}
+
+/**
+ * 現在ページ URL とセル ID から、そのセルだけを開く共有用パーマリンク (`?cell=<id>`) を組む。
+ * 既存の検索/ファセット等のクエリは落とし、共有に最適な最小 URL にする (決定論・純関数)。
+ */
+export function buildCellPermalink(pageUrl: string, cellId: string): string {
+  const url = new URL(pageUrl);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set(CELL_PARAM, cellId);
+  return url.toString();
+}
+
+/** id で材化済みセルを引く (見つからなければ undefined)。パーマリンク復元に使う。 */
+export function findEntryById(
+  entries: readonly DesignIndexEntry[],
+  id: string,
+): DesignIndexEntry | undefined {
+  return entries.find((e) => e.id === id);
+}
+
 /** 検索フォームの入力。全て任意。 */
 export interface SearchInput {
   /** 業種名 / キーワード / JSIC コード。 */

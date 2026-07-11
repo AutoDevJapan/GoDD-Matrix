@@ -4,6 +4,7 @@ import {
   EMPTY_SELECTION,
   EMPTY_TAXONOMY,
   type Taxonomy,
+  buildCellPermalink,
   colorFamily,
   colorLabel,
   composePromptForCell,
@@ -11,12 +12,14 @@ import {
   contextFromEntry,
   designRawUrl,
   filterByFacets,
+  findEntryById,
   jsicMajor,
   jsicName,
   labelForColor,
   labelForMood,
   moodLabel,
   paginate,
+  parseCellParam,
   parseTaxonomy,
   searchCells,
   toggleFacet,
@@ -129,6 +132,40 @@ describe("designRawUrl", () => {
     expect(designRawUrl(bookstore)).toBe(
       "https://raw.githubusercontent.com/AutoDevJapan/GoDD-Design-Systems/main/design-md/6061/white/minimal/DESIGN.md",
     );
+  });
+});
+
+describe("セルへのパーマリンク (issue #35)", () => {
+  const PAGE = "https://autodevjapan.github.io/GoDD-Matrix/";
+
+  it("?cell=<id> からセル ID を取り出す (無ければ null)", () => {
+    expect(parseCellParam("?cell=6061_white_minimal")).toBe("6061_white_minimal");
+    expect(parseCellParam("?industry=%E3%82%B3&cell=7281_h17b-lt_trustworthy")).toBe(
+      "7281_h17b-lt_trustworthy",
+    );
+    expect(parseCellParam("")).toBeNull();
+    expect(parseCellParam("?industry=x")).toBeNull();
+    expect(parseCellParam("?cell=")).toBeNull(); // 空値は未指定扱い
+  });
+
+  it("共有用パーマリンクは既存クエリ/ハッシュを落とし ?cell=<id> だけにする", () => {
+    expect(buildCellPermalink(PAGE, "6061_white_minimal")).toBe(`${PAGE}?cell=6061_white_minimal`);
+    // 既存の検索/ファセット/ページ/ハッシュは共有 URL から除外する。
+    expect(
+      buildCellPermalink(`${PAGE}?industry=book&f_color=blue&page=3#x`, "8036_v-h03_pop"),
+    ).toBe(`${PAGE}?cell=8036_v-h03_pop`);
+  });
+
+  it("build → parse で往復し ID を復元できる (パーマリンク復元)", () => {
+    const link = buildCellPermalink(PAGE, consulting.id);
+    const restoredId = parseCellParam(new URL(link).search);
+    expect(restoredId).toBe(consulting.id);
+    expect(findEntryById(entries, restoredId ?? "")).toBe(consulting);
+  });
+
+  it("findEntryById は未知 ID で undefined", () => {
+    expect(findEntryById(entries, "6061_white_minimal")).toBe(bookstore);
+    expect(findEntryById(entries, "does_not_exist")).toBeUndefined();
   });
 });
 

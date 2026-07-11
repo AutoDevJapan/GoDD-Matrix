@@ -19,15 +19,18 @@ import {
   type Page,
   type SearchInput,
   type Taxonomy,
+  buildCellPermalink,
   composePromptForCell,
   computeFacetGroups,
   designRawUrl,
   filterByFacets,
+  findEntryById,
   hasAnyFacet,
   jsicName,
   labelForColor,
   labelForMood,
   paginate,
+  parseCellParam,
   parseTaxonomy,
   searchCells,
   toggleFacet,
@@ -67,6 +70,10 @@ let facetSelection: FacetSelection = EMPTY_SELECTION;
 let currentPage = 1;
 /** 展開済みファセット軸 (多数の値を「もっと見る」で開いた軸)。 */
 const expandedFacets = new Set<FacetAxis>();
+/** 現在選択中のセル ID (詳細表示中なら URL の `?cell=` に反映する)。未選択なら null。 */
+let selectedCellId: string | null = null;
+/** URL から復元すべきセル ID (bootstrap で index 取込後に開く)。 */
+let pendingCellId: string | null = null;
 /** 1 ページの表示件数。 */
 const PAGE_SIZE = 24;
 /** 折りたたみ時のファセット値の初期表示数。 */
@@ -376,6 +383,8 @@ function syncUrl(): void {
     if (values.length > 0) params.set(`f_${axis}`, values.join(","));
   }
   if (currentPage > 1) params.set("page", String(currentPage));
+  // 選択セルを反映 (共有可能なパーマリンク)。検索/ファセット状態と併存する。
+  if (selectedCellId) params.set("cell", selectedCellId);
   const qs = params.toString();
   window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
 }
@@ -409,16 +418,32 @@ function restoreFromUrl(): void {
   };
   const page = Number.parseInt(params.get("page") ?? "1", 10);
   currentPage = Number.isFinite(page) && page > 0 ? page : 1;
+  // 選択セルは index 取込後に開くため、ここでは ID を控えておく。
+  pendingCellId = parseCellParam(window.location.search);
 }
 
 /** 選択セルの詳細 (DESIGN.md 取得 → プロンプト合成 → コピー) を描画する。 */
-async function openDetail(entry: DesignIndexEntry): Promise<void> {
+async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = {}): Promise<void> {
+  // 選択を状態と URL (?cell=<id>) に反映する (共有可能なパーマリンク)。
+  selectedCellId = entry.id;
+  syncUrl();
+
   const detail = byId("detail");
   detail.replaceChildren();
   detail.appendChild(el("h2", { class: "section-title", text: `選択: ${entry.title}` }));
+
+  // 詳細先頭のアクションツールバー: セルのリンクコピーは即時、DESIGN.md コピーは取得後に足す。
+  const actions = el("div", { class: "detail-actions" });
+  actions.appendChild(
+    copyButton("このセルのリンクをコピー", () =>
+      buildCellPermalink(window.location.href, entry.id),
+    ),
+  );
+  detail.appendChild(actions);
+
   const info = el("p", { class: "detail-note", text: "DESIGN.md を取得中…" });
   detail.appendChild(info);
-  detail.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (opts.scroll !== false) detail.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const url = designRawUrl(entry);
   let markdown: string;
@@ -433,6 +458,12 @@ async function openDetail(entry: DesignIndexEntry): Promise<void> {
     }。未材化セルの可能性があります (Generator レンダーが必要)。`;
     return;
   }
+
+  // 本文取得に成功したので、DESIGN.md 本文コピーをツールバー先頭に足す (スクロール不要の位置)。
+  actions.insertBefore(
+    copyButton("DESIGN.md をコピー", () => markdown),
+    actions.firstChild,
+  );
 
   let hashVerified = false;
   try {
@@ -466,7 +497,8 @@ async function openDetail(entry: DesignIndexEntry): Promise<void> {
   detail.appendChild(
     promptBlock("Claude user プロンプト", prompt.userPrompt, "user プロンプトをコピー"),
   );
-  detail.appendChild(promptBlock("DESIGN.md 本文", markdown, "DESIGN.md をコピー"));
+  // DESIGN.md 本文はツールバーでコピーできるため、ここでは本文プレビューのみ (コピー重複を避ける)。
+  detail.appendChild(previewBlock("DESIGN.md 本文", markdown));
 }
 
 /** 見出し + コピー + <pre> のブロック。 */
@@ -474,6 +506,16 @@ function promptBlock(heading: string, content: string, copyLabel: string): HTMLE
   const head = el("div", { class: "block-head" }, [
     el("h3", { class: "sub-title", text: heading }),
     copyButton(copyLabel, () => content),
+  ]);
+  const pre = el("pre", { class: "code" });
+  pre.appendChild(el("code", { text: content }));
+  return el("section", { class: "block" }, [head, pre]);
+}
+
+/** 見出し + <pre> のプレビューブロック (コピーボタンなし)。 */
+function previewBlock(heading: string, content: string): HTMLElement {
+  const head = el("div", { class: "block-head" }, [
+    el("h3", { class: "sub-title", text: heading }),
   ]);
   const pre = el("pre", { class: "code" });
   pre.appendChild(el("code", { text: content }));
@@ -516,6 +558,12 @@ async function bootstrap(): Promise<void> {
   taxonomy = await taxonomyPromise;
   restoreFromUrl();
   runSearch();
+  // パーマリンク復元: URL に ?cell=<id> があれば該当セルを開く (プロンプト表示状態で復元)。
+  if (pendingCellId) {
+    const entry = findEntryById(allEntries, pendingCellId);
+    pendingCellId = null;
+    if (entry) void openDetail(entry, { scroll: false });
+  }
 }
 
 function wireForm(): void {
@@ -527,11 +575,16 @@ function wireForm(): void {
     expandedFacets.clear();
     runSearch();
   });
-  byId<HTMLButtonElement>("reset").addEventListener("click", () => {
+  // id は "reset-btn"。フォーム内コントロールの id/name は `form.reset` 等の同名メソッドを
+  // 隠す (DOM の名前衝突) ため、"reset" を避けて native な form.reset() を使えるようにする。
+  byId<HTMLButtonElement>("reset-btn").addEventListener("click", () => {
     form.reset();
     facetSelection = { ...EMPTY_SELECTION };
     expandedFacets.clear();
     currentPage = 1;
+    // 選択セルも解除し、詳細と URL の ?cell= を消す。
+    selectedCellId = null;
+    byId("detail").replaceChildren();
     runSearch();
   });
 }
