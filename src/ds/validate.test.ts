@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DesignIndexError, parseDesignIndex, validateDesignIndex } from "./validate.js";
 
 const validEntry = {
-  id: "7412_h17b-lt_trustworthy",
-  path: "design-md/7412/h17b-lt/trustworthy/DESIGN.md",
-  jsic: "7412",
+  id: "7281_h17b-lt_trustworthy",
+  path: "design-md/7281/h17b-lt/trustworthy/DESIGN.md",
+  jsic: "7281",
   color: "h17b-lt",
   mood: "trustworthy",
   tags: ["professional"],
@@ -20,7 +20,7 @@ describe("validateDesignIndex", () => {
     const index = validateDesignIndex(validIndex);
     expect(index.version).toBe(1);
     expect(index.entries).toHaveLength(1);
-    expect(index.entries[0]?.id).toBe("7412_h17b-lt_trustworthy");
+    expect(index.entries[0]?.id).toBe("7281_h17b-lt_trustworthy");
     expect(index.generatedAt).toBe("2026-07-11T00:00:00Z");
   });
 

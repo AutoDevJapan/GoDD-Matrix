@@ -14,14 +14,14 @@ import { createMatrixServer } from "./server.js";
 import type { MatrixRuntime } from "./tools.js";
 
 const baseDir = fileURLToPath(new URL("../ds/__fixtures__", import.meta.url));
-const BODY_PATH = "design-md/7412/h17b-lt/trustworthy/DESIGN.md";
+const BODY_PATH = "design-md/7281/h17b-lt/trustworthy/DESIGN.md";
 const markdown = readFileSync(path.join(baseDir, BODY_PATH), "utf8");
 const realHash = `sha256:${createHash("sha256").update(markdown, "utf8").digest("hex")}`;
 
 const entry: DesignIndexEntry = {
-  id: "7412_h17b-lt_trustworthy",
+  id: "7281_h17b-lt_trustworthy",
   path: BODY_PATH,
-  jsic: "7412",
+  jsic: "7281",
   color: "h17b-lt",
   mood: "trustworthy",
   title: "経営コンサルタント業 × ライトブルー × 信頼",
@@ -89,7 +89,7 @@ describe("createMatrixServer", () => {
     })) as CallToolResult;
     const payload = parsePayload(result);
     expect(payload.resolved).toBe(true);
-    expect(payload.context).toEqual({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
+    expect(payload.context).toEqual({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
   });
 
   it("select_cells ツールが候補セルを返す", async () => {
@@ -100,7 +100,7 @@ describe("createMatrixServer", () => {
     const payload = parsePayload(result);
     const candidates = payload.candidates as ReadonlyArray<{ id: string }>;
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]?.id).toBe("7412_h17b-lt_trustworthy");
+    expect(candidates[0]?.id).toBe("7281_h17b-lt_trustworthy");
   });
 
   it("解決不能な要望の compose は isError で候補を返す", async () => {

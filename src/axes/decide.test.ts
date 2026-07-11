@@ -15,17 +15,17 @@ describe("decideAxes", () => {
       mood: "信頼",
     });
     expect(d.unresolved).toHaveLength(0);
-    expect(d.context).toEqual({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
+    expect(d.context).toEqual({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
   });
 
   it("JSIC コード直接指定でも解決する", () => {
-    const d = decideAxes({ industry: "5910", color: "白", mood: "ミニマル" });
-    expect(d.context).toEqual({ jsic: "5910", color: "white", mood: "minimal" });
+    const d = decideAxes({ industry: "6061", color: "白", mood: "ミニマル" });
+    expect(d.context).toEqual({ jsic: "6061", color: "white", mood: "minimal" });
   });
 
   it("tags を context に引き継ぐ", () => {
     const d = decideAxes({
-      industry: "7412",
+      industry: "7281",
       color: "青",
       mood: "信頼",
       tags: ["professional"],
@@ -38,7 +38,7 @@ describe("decideAxes", () => {
       { industry: "経営コンサル" },
       { defaults: { color: "white", mood: "minimal" } },
     );
-    expect(d.context).toEqual({ jsic: "7412", color: "white", mood: "minimal" });
+    expect(d.context).toEqual({ jsic: "7281", color: "white", mood: "minimal" });
   });
 
   it("希望が入力された上で解決不能なら defaults で握りつぶさず未解決", () => {
@@ -85,19 +85,19 @@ describe("selectCells (要望 → 軸 → 候補セル)", () => {
       { industry: "経営コンサルタント業", color: "ライトブルー", mood: "信頼" },
       index,
     );
-    expect(sel.context).toEqual({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
-    expect(sel.candidates.map((e) => e.id)).toEqual(["7412_h17b-lt_trustworthy"]);
+    expect(sel.context).toEqual({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
+    expect(sel.candidates.map((e) => e.id)).toEqual(["7281_h17b-lt_trustworthy"]);
   });
 
   it("tags でさらに絞り込む", () => {
     const hit = selectCells(
-      { industry: "7412", color: "青", mood: "ミニマル", tags: ["serif-display"] },
+      { industry: "7281", color: "青", mood: "ミニマル", tags: ["serif-display"] },
       index,
     );
-    expect(hit.candidates.map((e) => e.id)).toEqual(["7412_h17b-lt_minimal"]);
+    expect(hit.candidates.map((e) => e.id)).toEqual(["7281_h17b-lt_minimal"]);
 
     const miss = selectCells(
-      { industry: "7412", color: "青", mood: "ミニマル", tags: ["editorial"] },
+      { industry: "7281", color: "青", mood: "ミニマル", tags: ["editorial"] },
       index,
     );
     expect(miss.candidates).toHaveLength(0);
@@ -105,7 +105,7 @@ describe("selectCells (要望 → 軸 → 候補セル)", () => {
 
   it("未材化セル (index に無い軸) は候補空", () => {
     const sel = selectCells({ industry: "喫茶店", color: "赤", mood: "遊び心" }, index);
-    expect(sel.context).toEqual({ jsic: "7681", color: "h2v-vv", mood: "playful" });
+    expect(sel.context).toEqual({ jsic: "7671", color: "h2v-vv", mood: "playful" });
     expect(sel.candidates).toHaveLength(0);
   });
 

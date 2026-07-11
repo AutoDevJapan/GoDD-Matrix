@@ -4,9 +4,9 @@
   "generatedAt": "2026-07-11T00:00:00Z",
   "entries": [
     {
-      "id": "7412_h17b-lt_trustworthy",
-      "path": "design-md/7412/h17b-lt/trustworthy/DESIGN.md",
-      "jsic": "7412",
+      "id": "7281_h17b-lt_trustworthy",
+      "path": "design-md/7281/h17b-lt/trustworthy/DESIGN.md",
+      "jsic": "7281",
       "color": "h17b-lt",
       "mood": "trustworthy",
       "tags": ["professional", "geometric-grid", "sans-serif"],
@@ -15,9 +15,9 @@
       "createdAt": "2026-07-11T00:00:00Z"
     },
     {
-      "id": "5910_white_minimal",
-      "path": "design-md/5910/white/minimal/DESIGN.md",
-      "jsic": "5910",
+      "id": "6061_white_minimal",
+      "path": "design-md/6061/white/minimal/DESIGN.md",
+      "jsic": "6061",
       "color": "white",
       "mood": "minimal",
       "tags": ["editorial", "serif-display"],
@@ -26,9 +26,9 @@
       "createdAt": "2026-07-11T00:00:00Z"
     },
     {
-      "id": "7412_h17b-lt_minimal",
-      "path": "design-md/7412/h17b-lt/minimal/DESIGN.md",
-      "jsic": "7412",
+      "id": "7281_h17b-lt_minimal",
+      "path": "design-md/7281/h17b-lt/minimal/DESIGN.md",
+      "jsic": "7281",
       "color": "h17b-lt",
       "mood": "minimal",
       "tags": ["professional", "serif-display"],

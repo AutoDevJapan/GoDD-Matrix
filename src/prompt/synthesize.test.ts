@@ -9,13 +9,13 @@ import type { DesignIndexEntry } from "../ds/types.js";
 import { synthesizePrompt } from "./synthesize.js";
 
 const baseDir = fileURLToPath(new URL("./__fixtures__", import.meta.url));
-const BODY_PATH = "design-md/7412/h17b-lt/trustworthy/DESIGN.md";
+const BODY_PATH = "design-md/7281/h17b-lt/trustworthy/DESIGN.md";
 const markdown = readFileSync(path.join(baseDir, BODY_PATH), "utf8");
 
 const entry: DesignIndexEntry = {
-  id: "7412_h17b-lt_trustworthy",
+  id: "7281_h17b-lt_trustworthy",
   path: BODY_PATH,
-  jsic: "7412",
+  jsic: "7281",
   color: "h17b-lt",
   mood: "trustworthy",
   title: "経営コンサルタント業 × ライトブルー × 信頼",
@@ -23,7 +23,7 @@ const entry: DesignIndexEntry = {
   createdAt: "2026-07-11T00:00:00Z",
 };
 
-const ctx: AxisContext = { jsic: "7412", color: "h17b-lt", mood: "trustworthy" };
+const ctx: AxisContext = { jsic: "7281", color: "h17b-lt", mood: "trustworthy" };
 
 const brief: DesignBrief = {
   industry: "経営コンサルタント",
@@ -46,7 +46,7 @@ describe("synthesizePrompt (材化済み)", () => {
     // 必須要素
     expect(out.systemPrompt).toContain("# 役割");
     expect(out.systemPrompt).toContain("# 確定軸 (SSOT §2)");
-    expect(out.systemPrompt).toContain("業種 (JSIC 細分類): 7412");
+    expect(out.systemPrompt).toContain("業種 (JSIC 細分類): 7281");
     expect(out.systemPrompt).toContain("カラー: h17b-lt");
     expect(out.systemPrompt).toContain("ムード: trustworthy");
     // DESIGN.md 全文を欠落なく含む

@@ -9,14 +9,14 @@ import type { DesignIndexEntry } from "../ds/types.js";
 import { type MatrixRuntime, runCompose, runDecideAxes, runSelectCells } from "./tools.js";
 
 const baseDir = fileURLToPath(new URL("../ds/__fixtures__", import.meta.url));
-const BODY_PATH = "design-md/7412/h17b-lt/trustworthy/DESIGN.md";
+const BODY_PATH = "design-md/7281/h17b-lt/trustworthy/DESIGN.md";
 const markdown = readFileSync(path.join(baseDir, BODY_PATH), "utf8");
 const realHash = `sha256:${createHash("sha256").update(markdown, "utf8").digest("hex")}`;
 
 const entry: DesignIndexEntry = {
-  id: "7412_h17b-lt_trustworthy",
+  id: "7281_h17b-lt_trustworthy",
   path: BODY_PATH,
-  jsic: "7412",
+  jsic: "7281",
   color: "h17b-lt",
   mood: "trustworthy",
   tags: ["professional"],
@@ -36,9 +36,9 @@ describe("runDecideAxes", () => {
   it("業種/カラー/ムードが全て解決すると context を確定する", () => {
     const res = runDecideAxes({ industry: "コンサル", color: "ライトブルー", mood: "信頼" });
     expect(res.resolved).toBe(true);
-    expect(res.context).toEqual({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
+    expect(res.context).toEqual({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
     expect(res.unresolved).toEqual([]);
-    expect(res.axes.jsic.best?.code).toBe("7412");
+    expect(res.axes.jsic.best?.code).toBe("7281");
     expect(res.axes.color.best?.slug).toBe("h17b-lt");
     expect(res.axes.mood.best?.slug).toBe("trustworthy");
   });
@@ -64,7 +64,7 @@ describe("runSelectCells", () => {
     );
     expect(res.resolved).toBe(true);
     expect(res.candidates).toHaveLength(1);
-    expect(res.candidates[0]?.id).toBe("7412_h17b-lt_trustworthy");
+    expect(res.candidates[0]?.id).toBe("7281_h17b-lt_trustworthy");
   });
 
   it("未解決軸があれば候補を引かず空", () => {
@@ -82,7 +82,7 @@ describe("runCompose", () => {
     );
     expect(res.resolved).toBe(true);
     if (!res.resolved) return;
-    expect(res.context).toEqual({ jsic: "7412", color: "h17b-lt", mood: "trustworthy" });
+    expect(res.context).toEqual({ jsic: "7281", color: "h17b-lt", mood: "trustworthy" });
     expect(res.candidateCount).toBe(1);
     expect(res.prompt.provenance).toBe("materialized");
     expect(res.prompt.hasDesignBody).toBe(true);

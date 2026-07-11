@@ -1,15 +1,19 @@
 /**
- * 業種 → JSIC 細分類コードの決定 (issue #5, SSOT §2)。
+ * 業種 → JSIC 細分類コードの決定 (issue #5 / #18, SSOT §2)。
  *
  * 入力が業種名 / キーワード / コードいずれの場合も解決できるようにする。
- * 本来の JSIC マスタ (Design-Systems `jsic.json`, 1,473 細分類) は未取込のため、
- * ここでは最小マッピングを内蔵しつつ、差し替え/拡張できるよう {@link JsicResolver}
- * を interface 化する。`jsic.json` 取込後は同 interface の別実装に置換すればよい。
+ * 母集合は Design-Systems の `jsic.json` (第14回改定, 全 1,473 細分類) を
+ * ビルド時にバンドルした {@link JSIC_SUBCLASSES} を source-of-truth とし、
+ * ここに存在するコードのみを返す (捏造コード禁止, issue #18)。
+ * 代表的な業種には別名・キーワードの overlay ({@link JSIC_OVERLAY}) を付与し、
+ * 表記ゆれや口語 (「経営コンサル」「本屋」「SaaS」等) を実在コードへ寄せる。
+ * カタログは `scripts/gen-jsic-catalog.mjs` で DS から再生成できる。
  */
 import type { JsicCode } from "./index.js";
+import { JSIC_SUBCLASSES } from "./jsic-catalog.js";
 import { normalizeKey } from "./normalize.js";
 
-/** JSIC 細分類マスタの 1 エントリ (最小; 将来 `jsic.json` に置換)。 */
+/** JSIC 細分類マスタの 1 エントリ。 */
 export interface JsicEntry {
   /** JSIC 細分類コード (4桁)。 */
   code: JsicCode;
@@ -80,14 +84,15 @@ function scoreEntry(entry: JsicEntry, q: string): JsicCandidate | undefined {
 }
 
 /**
- * 内蔵マスタ (最小) に対する JSIC 決定器。
- * 既定は {@link MINIMAL_JSIC}。`jsic.json` 取込後は entries を差し替えて使う。
+ * 内蔵マスタに対する JSIC 決定器。
+ * 既定の母集合は DS 由来の全 1,473 細分類 ({@link JSIC_CATALOG})。
+ * 差し替え/絞り込みのため entries を注入できる。
  */
 export class StaticJsicResolver implements JsicResolver {
   private readonly entries: readonly JsicEntry[];
   private readonly byCode: Map<string, JsicEntry>;
 
-  constructor(entries: readonly JsicEntry[] = MINIMAL_JSIC) {
+  constructor(entries: readonly JsicEntry[] = JSIC_CATALOG) {
     this.entries = entries;
     this.byCode = new Map(entries.map((e) => [e.code, e]));
   }
@@ -111,44 +116,68 @@ export class StaticJsicResolver implements JsicResolver {
 }
 
 /**
- * 最小 JSIC マッピング (拡張前提の暫定シード)。
- * fixture (7412 / 5910) を含む代表的な細分類のみ。差し替え/追加で拡張する。
+ * 代表的な業種の別名・キーワード overlay (実在コード → 表記ゆれ)。
+ * キーは {@link JSIC_SUBCLASSES} に存在する実コードのみ (捏造禁止)。
+ * 口語・英語・略称を実コードへ寄せ、`select_cells` のデモ入力を安定解決する。
  */
-export const MINIMAL_JSIC: readonly JsicEntry[] = [
-  {
-    code: "7412",
-    name: "経営コンサルタント業",
+export const JSIC_OVERLAY: Readonly<
+  Record<string, { aliases?: readonly string[]; keywords?: readonly string[] }>
+> = {
+  // 経営コンサルタント業
+  "7281": {
     aliases: ["経営コンサルティング業", "コンサルティング業"],
-    keywords: ["コンサル", "コンサルティング", "経営", "consulting"],
+    keywords: ["経営コンサル", "コンサル", "コンサルティング", "consulting"],
   },
-  {
-    code: "5910",
-    name: "書籍・雑誌小売業",
-    aliases: ["書店"],
+  // 書籍・雑誌小売業（古本を除く）
+  "6061": {
+    aliases: ["書店", "書籍・雑誌小売業"],
     keywords: ["本屋", "書店", "書籍", "雑誌", "bookstore"],
   },
-  {
-    code: "7211",
-    name: "法律事務所",
+  // 法律事務所
+  "7211": {
     aliases: ["弁護士事務所"],
     keywords: ["弁護士", "法律", "law", "legal"],
   },
-  {
-    code: "3971",
-    name: "受託開発ソフトウェア業",
+  // 受託開発ソフトウェア業
+  "3911": {
     aliases: ["ソフトウェア開発業", "システム開発業"],
     keywords: ["ソフトウェア", "システム開発", "受託開発", "software", "saas"],
   },
-  {
-    code: "7521",
-    name: "デザイン業",
-    aliases: ["デザイン事務所"],
-    keywords: ["デザイン", "design", "クリエイティブ"],
+  // デザイン業
+  "7261": {
+    aliases: ["デザイン事務所", "デザイン"],
+    keywords: ["design", "クリエイティブ"],
   },
-  {
-    code: "7681",
-    name: "喫茶店",
+  // 喫茶店
+  "7671": {
     aliases: ["カフェ"],
     keywords: ["カフェ", "喫茶", "coffee", "cafe"],
   },
-];
+};
+
+/** DS 細分類 + overlay をマージして {@link JsicEntry} 群を構築する。 */
+function buildCatalog(): readonly JsicEntry[] {
+  return JSIC_SUBCLASSES.map((s) => {
+    const overlay = JSIC_OVERLAY[s.code];
+    return {
+      code: s.code,
+      name: s.name,
+      ...(overlay?.aliases ? { aliases: overlay.aliases } : {}),
+      ...(overlay?.keywords ? { keywords: overlay.keywords } : {}),
+    };
+  });
+}
+
+/**
+ * 既定の JSIC 母集合 (DS 由来の全細分類 + overlay)。
+ * `resolve` の探索対象であり、ここに存在するコードのみ返す。
+ */
+export const JSIC_CATALOG: readonly JsicEntry[] = buildCatalog();
+
+/**
+ * 代表的な業種の curated サブセット ({@link JSIC_CATALOG} のうち overlay 付きのもの)。
+ * デモ/テスト用途の便宜的な小集合。実コード (経営コンサル=7281 / 書籍雑誌=6061 ほか) を保持する。
+ */
+export const MINIMAL_JSIC: readonly JsicEntry[] = JSIC_CATALOG.filter((e) =>
+  Object.hasOwn(JSIC_OVERLAY, e.code),
+);
