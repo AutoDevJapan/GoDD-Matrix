@@ -39,4 +39,32 @@ src/
   index.ts     公開エントリ
 ```
 
-各モジュールの実装は個別 issue で追加する (本 PR は骨組みのみ)。
+## MCP サーバ (GitHub ネイティブ提供形態)
+
+既存パイプライン (軸決定 → index → DESIGN.md 解決 → プロンプト合成) を
+[Model Context Protocol](https://modelcontextprotocol.io) の stdio サーバとして公開する。
+
+```bash
+pnpm build
+GODD_DS_INDEX=./path/to/index.json node dist/mcp/main.js   # bin: godd-matrix-mcp
+```
+
+### 環境変数
+
+| 変数 | 必須 | 説明 |
+| --- | --- | --- |
+| `GODD_DS_INDEX` | ○ | Design-Systems `index.json` の取込元 (ローカルパス / file: / http(s) URL)。 |
+| `GODD_DS_BASE` | | DESIGN.md 本文の解決 base。未指定なら `GODD_DS_INDEX` の所在から推定。 |
+
+### 公開ツール (tools/list)
+
+| tool | 概要 |
+| --- | --- |
+| `godd_matrix_compose` | 要望 (業種/カラー/ムード) → 確定軸 → DESIGN.md 解決 → Claude 用プロンプト (system/user) 合成。 |
+| `godd_matrix_decide_axes` | 要望 → 各軸 (JSIC/カラー/ムード) の解決 (確定 context / 未解決軸 / 候補)。副作用なし。 |
+| `godd_matrix_select_cells` | 要望 → 確定軸 → index に一致する候補セル。 |
+
+各ツールは共通入力 `{ industry: string; color?: string; mood?: string; tags?: string[] }` を受け取る。
+未解決軸がある場合、`compose` はプロンプトを合成せず候補を提示して `isError` を返す。
+
+各モジュールの実装は個別 issue で追加する。

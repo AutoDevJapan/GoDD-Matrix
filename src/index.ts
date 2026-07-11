@@ -59,4 +59,18 @@ export {
   type PromptProvenance,
   synthesizePrompt,
 } from "./prompt/index.js";
-export { MCP_TOOLS } from "./mcp/index.js";
+export {
+  type ComposeResult,
+  createMatrixServer,
+  createRuntime,
+  type DecideAxesResult,
+  DS_BASE_ENV,
+  type MatrixBriefInput,
+  type MatrixRuntime,
+  MCP_TOOLS,
+  runCompose,
+  runDecideAxes,
+  runSelectCells,
+  type RuntimeOptions,
+  type SelectCellsResult,
+} from "./mcp/index.js";
