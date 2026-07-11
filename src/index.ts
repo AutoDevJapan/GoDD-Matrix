@@ -5,6 +5,33 @@
 export { VERSION } from "./version.js";
 export type { AxisContext, ColorKey, JsicCode, MoodKey } from "./axes/index.js";
 export {
+  type AxisDecision,
+  type AxisDefaults,
+  type AxisName,
+  type AxisResolvers,
+  type CellSelection,
+  type DecideOptions,
+  decideAxes,
+  type DesignBrief,
+  type JsicCandidate,
+  type JsicEntry,
+  type JsicResolution,
+  type JsicResolver,
+  MINIMAL_COLORS,
+  MINIMAL_JSIC,
+  MINIMAL_MOODS,
+  normalizeKey,
+  selectCells,
+  type SlugResolver,
+  StaticColorResolver,
+  StaticJsicResolver,
+  StaticMoodResolver,
+  StaticSlugResolver,
+  type TaxonomyCandidate,
+  type TaxonomyEntry,
+  type TaxonomyResolution,
+} from "./axes/index.js";
+export {
   DS_INDEX_ENV,
   DesignBodyClient,
   type DesignBodyOptions,
