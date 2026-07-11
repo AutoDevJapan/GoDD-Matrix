@@ -4,7 +4,17 @@
  */
 export { VERSION } from "./version.js";
 export type { AxisContext, ColorKey, JsicCode, MoodKey } from "./axes/index.js";
-export type { DesignIndexEntry } from "./ds/index.js";
+export {
+  DS_INDEX_ENV,
+  type DesignIndex,
+  DesignIndexClient,
+  DesignIndexError,
+  type DesignIndexEntry,
+  type IndexQuery,
+  type LoadOptions,
+  parseDesignIndex,
+  validateDesignIndex,
+} from "./ds/index.js";
 export type { RenderRequest, RenderResult } from "./generator/index.js";
 export type { ComposedPrompt } from "./prompt/index.js";
 export { MCP_TOOLS } from "./mcp/index.js";
