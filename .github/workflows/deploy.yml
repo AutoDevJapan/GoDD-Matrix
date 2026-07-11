@@ -28,7 +28,8 @@ permissions:
   contents: read
 
 env:
-  # Vercel CLI はこの 2 つを環境変数として参照する (トークンは各ステップで --token 指定)
+  # Vercel CLI はこれらを環境変数として自動参照する (--token は付けない)
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
   VERCEL_CLI: vercel@54.21.1
@@ -50,13 +51,13 @@ jobs:
           node-version: 20
           cache: pnpm
       - name: Vercel pull (preview)
-        run: npx --yes ${VERCEL_CLI} pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} pull --yes --environment=preview
       - name: Vercel build
-        run: npx --yes ${VERCEL_CLI} build --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} build
       - name: Vercel deploy (preview)
         id: deploy
         run: |
-          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}")"
+          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Preview: $url"
 
@@ -76,13 +77,13 @@ jobs:
           node-version: 20
           cache: pnpm
       - name: Vercel pull (production)
-        run: npx --yes ${VERCEL_CLI} pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} pull --yes --environment=production
       - name: Vercel build (prod)
-        run: npx --yes ${VERCEL_CLI} build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} build --prod
       - name: Vercel deploy (prod)
         id: deploy
         run: |
-          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")"
+          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt --prod)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "dev live: $url"
 
@@ -102,13 +103,13 @@ jobs:
           node-version: 20
           cache: pnpm
       - name: Vercel pull (production)
-        run: npx --yes ${VERCEL_CLI} pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} pull --yes --environment=production
       - name: Vercel build (prod)
-        run: npx --yes ${VERCEL_CLI} build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} build --prod
       - name: Vercel deploy (prod)
         id: deploy
         run: |
-          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")"
+          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt --prod)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "stg: $url"
 
@@ -129,12 +130,12 @@ jobs:
           node-version: 20
           cache: pnpm
       - name: Vercel pull (production)
-        run: npx --yes ${VERCEL_CLI} pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} pull --yes --environment=production
       - name: Vercel build (prod)
-        run: npx --yes ${VERCEL_CLI} build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        run: npx --yes ${VERCEL_CLI} build --prod
       - name: Vercel deploy (prod)
         id: deploy
         run: |
-          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")"
+          url="$(npx --yes ${VERCEL_CLI} deploy --prebuilt --prod)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "prd: $url"
