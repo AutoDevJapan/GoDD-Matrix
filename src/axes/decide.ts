@@ -67,8 +67,15 @@ const defaultResolvers = {
   mood: new StaticMoodResolver(),
 } as const;
 
+/** 希望が空 (未入力) かどうか。空白のみも未入力扱い。 */
+function isBlank(hint: string | undefined): boolean {
+  return hint === undefined || hint.trim().length === 0;
+}
+
 /**
- * 要望から各軸を決定する。カラー/ムード未指定は defaults を適用。
+ * 要望から各軸を決定する。
+ * カラー/ムードは「未入力」のときのみ defaults を適用する。希望が入力された上で
+ * 解決できなかった場合は既定で握りつぶさず未解決 (unresolved) として明示する。
  * 全軸が解決したときのみ {@link AxisDecision.context} を確定する。
  */
 export function decideAxes(brief: DesignBrief, opts: DecideOptions = {}): AxisDecision {
@@ -77,13 +84,14 @@ export function decideAxes(brief: DesignBrief, opts: DecideOptions = {}): AxisDe
   const moodResolver = opts.resolvers?.mood ?? defaultResolvers.mood;
 
   const jsic = jsicResolver.resolve(brief.industry);
-  // カラー/ムードは未指定なら空文字で解決 → best 無し → 既定へフォールバック。
+  // 未入力なら空文字で解決 → best 無し。既定適用は「未入力時のみ」に限定する。
   const color = colorResolver.resolve(brief.color ?? "");
   const mood = moodResolver.resolve(brief.mood ?? "");
 
   const jsicCode = jsic.best?.entry.code;
-  const colorSlug = color.best?.entry.slug ?? opts.defaults?.color;
-  const moodSlug = mood.best?.entry.slug ?? opts.defaults?.mood;
+  const colorSlug =
+    color.best?.entry.slug ?? (isBlank(brief.color) ? opts.defaults?.color : undefined);
+  const moodSlug = mood.best?.entry.slug ?? (isBlank(brief.mood) ? opts.defaults?.mood : undefined);
 
   const unresolved: AxisName[] = [];
   if (jsicCode === undefined) unresolved.push("jsic");

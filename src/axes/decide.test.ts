@@ -41,6 +41,15 @@ describe("decideAxes", () => {
     expect(d.context).toEqual({ jsic: "7412", color: "white", mood: "minimal" });
   });
 
+  it("希望が入力された上で解決不能なら defaults で握りつぶさず未解決", () => {
+    const d = decideAxes(
+      { industry: "経営コンサル", color: "ありえない色", mood: "ミニマル" },
+      { defaults: { color: "white", mood: "minimal" } },
+    );
+    expect(d.context).toBeUndefined();
+    expect(d.unresolved).toEqual(["color"]);
+  });
+
   it("未解決軸を列挙し context は未確定", () => {
     const d = decideAxes({ industry: "宇宙旅行代理店", color: "ありえない色" });
     expect(d.context).toBeUndefined();
@@ -51,7 +60,7 @@ describe("decideAxes", () => {
 
   it("resolver を差し替えられる", () => {
     const d = decideAxes(
-      { industry: "x", color: "y", mood: "z" },
+      { industry: "x" },
       {
         resolvers: {
           jsic: {
