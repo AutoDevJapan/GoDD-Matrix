@@ -53,7 +53,16 @@ export {
   validateDesignIndex,
   verifyDesignHash,
 } from "./ds/index.js";
-export type { RenderRequest, RenderResult } from "./generator/index.js";
+export {
+  GENERATOR_RENDER_API_KEY_ENV,
+  GENERATOR_RENDER_URL_ENV,
+  GeneratorRenderClient,
+  type GeneratorRenderClientOptions,
+  GeneratorRenderError,
+  type GeneratorRenderErrorKind,
+  type RenderRequest,
+  type RenderResult,
+} from "./generator/index.js";
 export {
   type ComposedPrompt,
   type PromptProvenance,
