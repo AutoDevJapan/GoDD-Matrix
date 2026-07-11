@@ -154,6 +154,248 @@ export function materializedResolution(
   return { status: "materialized", document: { entry, markdown, source, hashVerified } };
 }
 
+// ---------------------------------------------------------------------------
+// ファセット絞り込み + ページング (issue #31): 大コーパス向けの純ロジック。
+// DOM/ネットワーク非依存 (決定論・テスト可能)。UI 配線は main.ts が担う。
+// ---------------------------------------------------------------------------
+
+/** ファセット軸。 */
+export type FacetAxis = "industry" | "color" | "mood" | "tag";
+
+/** ファセット軸の列挙 (描画順)。 */
+export const FACET_AXES: readonly FacetAxis[] = ["industry", "color", "mood", "tag"];
+
+/** ファセット軸の見出し。 */
+export const FACET_TITLES: Record<FacetAxis, string> = {
+  industry: "業種 (大分類)",
+  color: "カラー系統",
+  mood: "ムード",
+  tag: "タグ",
+};
+
+/** JSIC 大分類 (SSOT/総務省 第14回改定)。中分類 (先頭2桁) の範囲で引く。 */
+interface JsicDivision {
+  readonly code: string;
+  readonly label: string;
+  readonly from: number;
+  readonly to: number;
+}
+const JSIC_DIVISIONS: readonly JsicDivision[] = [
+  { code: "A", label: "農業，林業", from: 1, to: 2 },
+  { code: "B", label: "漁業", from: 3, to: 4 },
+  { code: "C", label: "鉱業，採石業，砂利採取業", from: 5, to: 5 },
+  { code: "D", label: "建設業", from: 6, to: 8 },
+  { code: "E", label: "製造業", from: 9, to: 32 },
+  { code: "F", label: "電気・ガス・熱供給・水道業", from: 33, to: 36 },
+  { code: "G", label: "情報通信業", from: 37, to: 41 },
+  { code: "H", label: "運輸業，郵便業", from: 42, to: 49 },
+  { code: "I", label: "卸売業，小売業", from: 50, to: 61 },
+  { code: "J", label: "金融業，保険業", from: 62, to: 67 },
+  { code: "K", label: "不動産業，物品賃貸業", from: 68, to: 70 },
+  { code: "L", label: "学術研究，専門・技術サービス業", from: 71, to: 74 },
+  { code: "M", label: "宿泊業，飲食サービス業", from: 75, to: 77 },
+  { code: "N", label: "生活関連サービス業，娯楽業", from: 78, to: 80 },
+  { code: "O", label: "教育，学習支援業", from: 81, to: 82 },
+  { code: "P", label: "医療，福祉", from: 83, to: 85 },
+  { code: "Q", label: "複合サービス事業", from: 86, to: 87 },
+  { code: "R", label: "サービス業（他に分類されないもの）", from: 88, to: 96 },
+  { code: "S", label: "公務（他に分類されるものを除く）", from: 97, to: 98 },
+  { code: "T", label: "分類不能の産業", from: 99, to: 99 },
+];
+const jsicDivisionByCode = new Map(JSIC_DIVISIONS.map((d) => [d.code, d]));
+
+/** JSIC 大分類 (letter コード + 名称)。 */
+export interface JsicMajor {
+  readonly code: string;
+  readonly label: string;
+}
+const UNKNOWN_MAJOR: JsicMajor = { code: "?", label: "分類不明" };
+
+/** JSIC 細分類コード → 大分類 (letter + 名称)。範囲外/不正は「分類不明」。 */
+export function jsicMajor(code: string): JsicMajor {
+  const major = Number.parseInt(code.slice(0, 2), 10);
+  if (!Number.isFinite(major)) return UNKNOWN_MAJOR;
+  const div = JSIC_DIVISIONS.find((d) => major >= d.from && major <= d.to);
+  return div ? { code: div.code, label: div.label } : UNKNOWN_MAJOR;
+}
+
+/** カラー系統 (PCCS 色相番号を系統にまとめたもの)。 */
+export interface ColorFamily {
+  readonly key: string;
+  readonly label: string;
+}
+const NEUTRAL_FAMILY: ColorFamily = { key: "neutral", label: "無彩色" };
+const HUE_FAMILIES: readonly { readonly hues: readonly number[]; readonly family: ColorFamily }[] =
+  [
+    { hues: [1, 2, 3, 24], family: { key: "red", label: "赤系" } },
+    { hues: [4, 5, 6], family: { key: "orange", label: "オレンジ系" } },
+    { hues: [7, 8, 9], family: { key: "yellow", label: "黄系" } },
+    { hues: [10, 11], family: { key: "yellowgreen", label: "黄緑系" } },
+    { hues: [12, 13, 14], family: { key: "green", label: "緑系" } },
+    { hues: [15], family: { key: "bluegreen", label: "青緑系" } },
+    { hues: [16, 17, 18], family: { key: "blue", label: "青系" } },
+    { hues: [19, 20], family: { key: "bluepurple", label: "青紫系" } },
+    { hues: [21, 22], family: { key: "purple", label: "紫系" } },
+    { hues: [23], family: { key: "redpurple", label: "赤紫系" } },
+  ];
+const familyByHue = new Map<number, ColorFamily>();
+for (const g of HUE_FAMILIES) for (const h of g.hues) familyByHue.set(h, g.family);
+const familyByKey = new Map<string, ColorFamily>([
+  [NEUTRAL_FAMILY.key, NEUTRAL_FAMILY],
+  ...HUE_FAMILIES.map((g) => [g.family.key, g.family] as const),
+]);
+
+/** カラー slug → 色系統。slug 内の `h{PCCS色相番号}` から導出。無彩色は「無彩色」。 */
+export function colorFamily(slug: string): ColorFamily {
+  const m = /h(\d{1,2})/i.exec(slug);
+  const raw = m?.[1];
+  if (raw === undefined) return NEUTRAL_FAMILY;
+  return familyByHue.get(Number.parseInt(raw, 10)) ?? NEUTRAL_FAMILY;
+}
+
+/** 各軸で entry が属するファセット値 (industry=大分類 / color=系統 / mood / tag)。 */
+function entryFacetValues(entry: DesignIndexEntry, axis: FacetAxis): readonly string[] {
+  if (axis === "industry") return [jsicMajor(entry.jsic).code];
+  if (axis === "color") return [colorFamily(entry.color).key];
+  if (axis === "mood") return [entry.mood];
+  return entry.tags ?? [];
+}
+
+/** ファセット値の表示ラベル。 */
+function facetLabel(axis: FacetAxis, value: string): string {
+  if (axis === "industry") return jsicDivisionByCode.get(value)?.label ?? value;
+  if (axis === "color") return familyByKey.get(value)?.label ?? value;
+  if (axis === "mood") return moodLabel(value);
+  return value;
+}
+
+/** 選択中のファセット (軸ごとの値集合)。 */
+export interface FacetSelection {
+  readonly industry: readonly string[];
+  readonly color: readonly string[];
+  readonly mood: readonly string[];
+  readonly tag: readonly string[];
+}
+
+/** 空の選択 (全件ブラウズ)。 */
+export const EMPTY_SELECTION: FacetSelection = { industry: [], color: [], mood: [], tag: [] };
+
+/** ある軸の選択に entry が合致するか (同一軸 OR / 選択空なら true)。 */
+function matchesAxis(
+  entry: DesignIndexEntry,
+  axis: FacetAxis,
+  selected: readonly string[],
+): boolean {
+  if (selected.length === 0) return true;
+  const values = entryFacetValues(entry, axis);
+  return selected.some((s) => values.includes(s));
+}
+
+/** 全軸に合致するか (軸跨ぎ AND)。`except` 軸は無視 (件数算出用)。 */
+export function matchesFacets(
+  entry: DesignIndexEntry,
+  selection: FacetSelection,
+  except?: FacetAxis,
+): boolean {
+  return FACET_AXES.every((axis) => axis === except || matchesAxis(entry, axis, selection[axis]));
+}
+
+/** 選択に合致する entry だけを返す (軸跨ぎ AND / 同一軸 OR)。 */
+export function filterByFacets(
+  entries: readonly DesignIndexEntry[],
+  selection: FacetSelection,
+): DesignIndexEntry[] {
+  return entries.filter((e) => matchesFacets(e, selection));
+}
+
+/** 軸の値をトグルした新しい選択を返す (不変)。 */
+export function toggleFacet(
+  selection: FacetSelection,
+  axis: FacetAxis,
+  value: string,
+): FacetSelection {
+  const current = selection[axis];
+  const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+  return { ...selection, [axis]: next };
+}
+
+/** いずれかの軸で選択があるか。 */
+export function hasAnyFacet(selection: FacetSelection): boolean {
+  return FACET_AXES.some((axis) => selection[axis].length > 0);
+}
+
+/** 1 ファセット値の表示情報 (件数バッジ付き)。 */
+export interface FacetValueItem {
+  readonly value: string;
+  readonly label: string;
+  readonly count: number;
+  readonly selected: boolean;
+}
+
+/** 1 軸のファセット表示 (チップ群)。 */
+export interface FacetGroupView {
+  readonly axis: FacetAxis;
+  readonly title: string;
+  readonly items: readonly FacetValueItem[];
+}
+
+/**
+ * ファセット群を集計する。各値の件数は「その軸を除く選択」を反映した文脈依存カウント
+ * (クリック時に得られる件数)。件数降順 → ラベル昇順。選択済みの値は 0 件でも残す。
+ */
+export function computeFacetGroups(
+  entries: readonly DesignIndexEntry[],
+  selection: FacetSelection,
+): FacetGroupView[] {
+  return FACET_AXES.map((axis) => {
+    const counts = new Map<string, number>();
+    for (const entry of entries) {
+      if (!matchesFacets(entry, selection, axis)) continue;
+      for (const value of new Set(entryFacetValues(entry, axis))) {
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+    }
+    for (const value of selection[axis]) if (!counts.has(value)) counts.set(value, 0);
+    const items: FacetValueItem[] = [...counts.entries()].map(([value, count]) => ({
+      value,
+      count,
+      label: facetLabel(axis, value),
+      selected: selection[axis].includes(value),
+    }));
+    items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ja"));
+    return { axis, title: FACET_TITLES[axis], items };
+  });
+}
+
+/** ページング結果。 */
+export interface Page<T> {
+  readonly items: readonly T[];
+  /** 1 起点の現在ページ (範囲内にクランプ済み)。 */
+  readonly page: number;
+  /** 総ページ数 (最低 1)。 */
+  readonly pageCount: number;
+  /** 全件数。 */
+  readonly total: number;
+  /** 1 ページの件数。 */
+  readonly pageSize: number;
+}
+
+/** items を pageSize でページングする。page は範囲内にクランプする。 */
+export function paginate<T>(items: readonly T[], page: number, pageSize: number): Page<T> {
+  const size = Math.max(1, Math.floor(pageSize));
+  const total = items.length;
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  const clamped = Math.min(Math.max(1, Math.floor(page) || 1), pageCount);
+  const start = (clamped - 1) * size;
+  return {
+    items: items.slice(start, start + size),
+    page: clamped,
+    pageCount,
+    total,
+    pageSize: size,
+  };
+}
+
 /** {@link composePromptForCell} の入力。 */
 export interface ComposeInput {
   entry: DesignIndexEntry;

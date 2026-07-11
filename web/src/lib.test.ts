@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import {
+  EMPTY_SELECTION,
+  colorFamily,
   colorLabel,
   composePromptForCell,
+  computeFacetGroups,
   contextFromEntry,
   designRawUrl,
+  filterByFacets,
+  jsicMajor,
   jsicName,
   moodLabel,
+  paginate,
   searchCells,
+  toggleFacet,
 } from "./lib.js";
 
 /** 公開 index のミラー (材化済み 2 セル)。 */
@@ -88,6 +95,107 @@ describe("searchCells", () => {
     // index に無い業種語。JSIC は解決するかもしれないが、一致セルが無ければ 0 件。
     const r = searchCells(entries, { industry: "存在しない業種zzz" });
     expect(r.matches).toHaveLength(0);
+  });
+});
+
+describe("jsicMajor (大分類)", () => {
+  it("細分類コードを大分類 (letter + 名称) に解決する", () => {
+    expect(jsicMajor("7281")).toEqual({ code: "L", label: "学術研究，専門・技術サービス業" });
+    expect(jsicMajor("6061")).toEqual({ code: "I", label: "卸売業，小売業" });
+    expect(jsicMajor("0100")).toEqual({ code: "A", label: "農業，林業" });
+    expect(jsicMajor("2900").code).toBe("E"); // 製造業 (09-32)
+  });
+  it("不正/範囲外は分類不明", () => {
+    expect(jsicMajor("zz00").code).toBe("?");
+  });
+});
+
+describe("colorFamily (系統)", () => {
+  it("PCCS 色相番号から系統を導出する", () => {
+    expect(colorFamily("h17b-lt")).toEqual({ key: "blue", label: "青系" });
+    expect(colorFamily("d-h07").key).toBe("yellow");
+    expect(colorFamily("v-h03").key).toBe("red");
+    expect(colorFamily("dp-h24").key).toBe("red");
+  });
+  it("無彩色 (h を含まない) は無彩色", () => {
+    expect(colorFamily("white")).toEqual({ key: "neutral", label: "無彩色" });
+    expect(colorFamily("ac-w").key).toBe("neutral");
+  });
+});
+
+describe("facets", () => {
+  const cells: readonly DesignIndexEntry[] = [
+    { ...consulting },
+    { ...bookstore },
+    {
+      id: "8036_v-h03_pop",
+      path: "design-md/8036/v-h03/pop/DESIGN.md",
+      jsic: "8036",
+      color: "v-h03",
+      mood: "pop",
+      tags: ["editorial"],
+      title: "娯楽業 × 赤 × ポップ",
+      hash: "sha256:cccc",
+      createdAt: "2026-07-11T00:00:00Z",
+    },
+  ];
+
+  it("実在値だけを集計し件数を付ける", () => {
+    const groups = computeFacetGroups(cells, EMPTY_SELECTION);
+    const industry = groups.find((g) => g.axis === "industry");
+    expect(industry?.items.map((i) => i.value).sort()).toEqual(["I", "L", "N"]);
+    const tag = groups.find((g) => g.axis === "tag");
+    expect(tag?.items.find((i) => i.value === "editorial")?.count).toBe(2);
+  });
+
+  it("同一軸 OR で絞り込む", () => {
+    // color 系統 red OR blue → consulting(blue) + entertainment(red)
+    const orSel = toggleFacet(toggleFacet(EMPTY_SELECTION, "color", "blue"), "color", "red");
+    expect(
+      filterByFacets(cells, orSel)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(["7281_h17b-lt_trustworthy", "8036_v-h03_pop"]);
+  });
+
+  it("軸跨ぎ AND で絞り込む", () => {
+    // color red AND tag editorial → entertainment のみ
+    const sel = toggleFacet(toggleFacet(EMPTY_SELECTION, "color", "red"), "tag", "editorial");
+    expect(filterByFacets(cells, sel).map((e) => e.id)).toEqual(["8036_v-h03_pop"]);
+  });
+
+  it("文脈依存カウント (他軸選択を反映)", () => {
+    const sel = toggleFacet(EMPTY_SELECTION, "color", "red");
+    const groups = computeFacetGroups(cells, sel);
+    const tag = groups.find((g) => g.axis === "tag");
+    // red を選ぶと editorial の候補件数は 1 (entertainment のみ)
+    expect(tag?.items.find((i) => i.value === "editorial")?.count).toBe(1);
+  });
+
+  it("toggleFacet は不変で追加/除去する", () => {
+    const s1 = toggleFacet(EMPTY_SELECTION, "mood", "pop");
+    expect(s1.mood).toEqual(["pop"]);
+    expect(EMPTY_SELECTION.mood).toEqual([]); // 元は不変
+    expect(toggleFacet(s1, "mood", "pop").mood).toEqual([]);
+  });
+});
+
+describe("paginate", () => {
+  const items = Array.from({ length: 50 }, (_, i) => i);
+  it("ページを切り出す", () => {
+    const p = paginate(items, 2, 24);
+    expect(p.items).toHaveLength(24);
+    expect(p.items[0]).toBe(24);
+    expect(p.pageCount).toBe(3);
+  });
+  it("範囲外ページをクランプする", () => {
+    expect(paginate(items, 99, 24).page).toBe(3);
+    expect(paginate(items, 0, 24).page).toBe(1);
+  });
+  it("空でも pageCount は 1", () => {
+    const p = paginate([], 1, 24);
+    expect(p.pageCount).toBe(1);
+    expect(p.total).toBe(0);
   });
 });
 
