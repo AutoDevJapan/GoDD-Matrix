@@ -11,6 +11,7 @@
  * (JSON 応答 = `enableJsonResponse` 前提のため、ここでは非ストリーミングで完結する)。
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { type Logger, createConsoleLogger } from "./logger.js";
 
 /** Web 標準ハンドラ ((Request) => Response)。 */
 export type WebHandler = (req: Request) => Response | Promise<Response>;
@@ -22,6 +23,11 @@ export interface NodeListenerOptions {
    * 未指定なら上限なし (従来動作)。0 以下は無視する。
    */
   maxBodyBytes?: number;
+  /**
+   * 構造化ログの出力先。省略時は {@link createConsoleLogger}。
+   * Node ブリッジで発生した 500 / 413 の理由を記録する (握り潰し防止)。
+   */
+  logger?: Logger;
 }
 
 /** body-parser (Vercel / Next 等) が付与しうる `body` プロパティ。 */
@@ -141,6 +147,7 @@ export function toNodeListener(
   handler: WebHandler,
   options: NodeListenerOptions = {},
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  const logger = options.logger ?? createConsoleLogger();
   return async function listener(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const webReq = await toWebRequest(req, options.maxBodyBytes);
@@ -148,6 +155,11 @@ export function toNodeListener(
       await sendWebResponse(res, webRes);
     } catch (err) {
       if (err instanceof PayloadTooLargeError) {
+        logger.warn("node.body.too_large", {
+          status: 413,
+          path: req.url,
+          maxBodyBytes: err.maxBytes,
+        });
         if (!res.headersSent) {
           res.statusCode = 413;
           res.setHeader("content-type", "application/json");
@@ -155,12 +167,20 @@ export function toNodeListener(
         res.end(JSON.stringify({ error: "payload_too_large", message: err.message }));
         return;
       }
+      // 500 応答の理由を記録する (従来は無記録で本番診断が不能だった)。
       const message = err instanceof Error ? err.message : String(err);
+      logger.error("node.request.error", {
+        status: 500,
+        method: req.method,
+        path: req.url,
+        error: message,
+      });
       if (!res.headersSent) {
         res.statusCode = 500;
         res.setHeader("content-type", "application/json");
       }
-      res.end(JSON.stringify({ error: "internal_error", message }));
+      // 内部例外メッセージはクライアントへ露出しない (秘密混入の恐れ)。ログにのみ残す。
+      res.end(JSON.stringify({ error: "internal_error" }));
     }
   };
 }
