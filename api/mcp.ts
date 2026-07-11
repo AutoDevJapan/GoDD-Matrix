@@ -10,7 +10,10 @@
  * Vercel の Node 関数は `(req, res)` で呼ばれるため {@link toNodeListener} で橋渡しする。
  * ロジックは共有モジュール ({@link createMcpRequestHandler}) に集約。参照先はビルド成果物 (`dist/`)。
  */
-import { createMcpRequestHandler } from "../dist/mcp/http.js";
+import { createMcpRequestHandler, resolveMaxBodyBytes } from "../dist/mcp/http.js";
 import { toNodeListener } from "../dist/mcp/node-adapter.js";
 
-export default toNodeListener(createMcpRequestHandler());
+// Web 層 (Content-Length 早期拒否) と Node ブリッジ (実バイト上限) で同一の上限を用いる。
+const maxBodyBytes = resolveMaxBodyBytes();
+
+export default toNodeListener(createMcpRequestHandler(), { maxBodyBytes });

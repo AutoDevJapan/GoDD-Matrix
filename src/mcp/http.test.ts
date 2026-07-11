@@ -132,6 +132,33 @@ describe("createMcpRequestHandler", () => {
     expect(ok.status).toBe(200);
   });
 
+  it("Content-Length が maxBodyBytes 超過なら 413 (処理前に拒否)", async () => {
+    let built = false;
+    const handle = createMcpRequestHandler({
+      maxBodyBytes: 32,
+      runtimeFactory: async () => {
+        built = true;
+        return makeRuntime();
+      },
+    });
+    // 実クライアント / Vercel は content-length を付与する (node-adapter が写す)。
+    const res = await handle(mcpRequest(INITIALIZE, { "content-length": "1000000" }));
+    expect(res.status).toBe(413);
+    const body = await readJson(res);
+    expect((body.error as { code: number }).code).toBe(-32600);
+    // 過大ボディはランタイム構築より前に弾く。
+    expect(built).toBe(false);
+  });
+
+  it("maxBodyBytes 以内なら通常どおり処理する", async () => {
+    const handle = createMcpRequestHandler({
+      maxBodyBytes: 1_048_576,
+      runtimeFactory: async () => makeRuntime(),
+    });
+    const res = await handle(mcpRequest(INITIALIZE));
+    expect(res.status).toBe(200);
+  });
+
   it("ランタイム生成失敗でも tools/list は応答する (遅延フォールバック)", async () => {
     const handle = createMcpRequestHandler({
       runtimeFactory: async () => {
