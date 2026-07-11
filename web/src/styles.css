@@ -343,6 +343,128 @@ pre.code code {
   word-break: break-word;
 }
 
+/* ---- ファセット絞り込み (issue #31) ---- */
+.facets {
+  margin-bottom: 1.2rem;
+}
+
+.facets:empty {
+  display: none;
+}
+
+.facets-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.facets-head .section-title {
+  margin: 0;
+}
+
+.facet-clear {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.facet-group {
+  margin-bottom: 0.7rem;
+}
+
+.facet-title {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 0.35rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.chip.selected {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chip-count {
+  font-size: 0.72rem;
+  padding: 0.02rem 0.4rem;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.chip.selected .chip-count {
+  background: var(--accent);
+  color: #fff;
+}
+
+.facet-more {
+  font-size: 0.78rem;
+  padding: 0.28rem 0.6rem;
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+}
+
+/* ---- ページャ (issue #31) ---- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 1.2rem;
+}
+
+.pager:empty {
+  display: none;
+}
+
+.page-btn {
+  min-width: 5.5rem;
+}
+
+.page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* キーボード操作の可視化 (a11y) */
+button:focus-visible,
+.chip:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .site-footer {
   max-width: 1100px;
   margin: 2rem auto;

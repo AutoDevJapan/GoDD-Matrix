@@ -47,13 +47,15 @@
           <button type="submit" class="primary">検索</button>
           <button type="button" id="reset" class="ghost">リセット</button>
         </div>
-        <p id="status" class="status">読み込み中…</p>
+        <p id="status" class="status" role="status" aria-live="polite">読み込み中…</p>
       </form>
 
       <section class="content">
         <div id="axes" class="axes"></div>
+        <section id="facets" class="facets" aria-label="ファセット絞り込み"></section>
         <h2 class="section-title">候補セル</h2>
         <div id="results" class="results"></div>
+        <nav id="pager" class="pager" aria-label="ページ送り"></nav>
         <div id="detail" class="detail"></div>
       </section>
     </main>

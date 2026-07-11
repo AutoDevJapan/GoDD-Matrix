@@ -8,13 +8,25 @@ import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
 import {
   DS_INDEX_URL,
+  EMPTY_SELECTION,
+  FACET_AXES,
+  type FacetAxis,
+  type FacetGroupView,
+  type FacetSelection,
+  type FacetValueItem,
+  type Page,
   type SearchInput,
   colorLabel,
   composePromptForCell,
+  computeFacetGroups,
   designRawUrl,
+  filterByFacets,
+  hasAnyFacet,
   jsicName,
   moodLabel,
+  paginate,
   searchCells,
+  toggleFacet,
 } from "./lib.js";
 
 /** DOM を安全に組むための小さなヘルパ (textContent 経由; innerHTML は使わない)。 */
@@ -39,8 +51,20 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 
 /** 現在の全エントリ (index.json 取込後に確定)。 */
 let allEntries: readonly DesignIndexEntry[] = [];
+/** フォーム検索の結果 (ファセット適用前の母集合)。 */
+let baseMatches: readonly DesignIndexEntry[] = [];
 /** 直近の検索要望 (プロンプト合成の notices に反映)。 */
 let lastRequest: SearchInput = {};
+/** 選択中のファセット (同一軸 OR / 軸跨ぎ AND)。 */
+let facetSelection: FacetSelection = EMPTY_SELECTION;
+/** 現在ページ (1 起点)。 */
+let currentPage = 1;
+/** 展開済みファセット軸 (多数の値を「もっと見る」で開いた軸)。 */
+const expandedFacets = new Set<FacetAxis>();
+/** 1 ページの表示件数。 */
+const PAGE_SIZE = 24;
+/** 折りたたみ時のファセット値の初期表示数。 */
+const FACET_COLLAPSE_LIMIT = 16;
 
 /** SHA-256 (hex)。crypto.subtle は secure context (https/localhost) で有効。 */
 async function sha256Hex(text: string): Promise<string> {
@@ -197,14 +221,184 @@ function renderResults(matches: readonly DesignIndexEntry[]): void {
   for (const entry of matches) list.appendChild(renderCard(entry));
 }
 
-/** 検索を実行して結果と軸を更新する。 */
+/** フォーム検索を実行し (ファセット母集合を再計算)、表示を更新する。 */
 function runSearch(): void {
   const input = readSearchInput();
   lastRequest = input;
   const result = searchCells(allEntries, input);
+  baseMatches = result.matches;
   renderAxes(result, input);
-  renderResults(result.matches);
-  byId("status").textContent = `${result.matches.length} / ${allEntries.length} 件を表示`;
+  applyState();
+}
+
+/** ファセット + ページングを適用して結果 / ファセット / ページャ / URL を更新する。 */
+function applyState(): void {
+  renderFacets();
+  const filtered = filterByFacets(baseMatches, facetSelection);
+  const pageView = paginate(filtered, currentPage, PAGE_SIZE);
+  currentPage = pageView.page;
+  renderResults(pageView.items);
+  renderPager(pageView);
+  updateStatus(pageView);
+  syncUrl();
+}
+
+/** 件数サマリを更新する。 */
+function updateStatus(pg: Page<DesignIndexEntry>): void {
+  const status = byId("status");
+  status.className = "status";
+  if (pg.total === 0) {
+    status.textContent = `0 / ${allEntries.length} 件`;
+    return;
+  }
+  const start = (pg.page - 1) * pg.pageSize + 1;
+  const end = start + pg.items.length - 1;
+  status.textContent = `${pg.total} / ${allEntries.length} 件中 ${start}–${end} を表示`;
+}
+
+/** ファセット (チップ群) を描画する。 */
+function renderFacets(): void {
+  const box = byId("facets");
+  box.replaceChildren();
+  const groups = computeFacetGroups(baseMatches, facetSelection);
+  if (!groups.some((g) => g.items.length > 0)) return;
+
+  const head = el("div", { class: "facets-head" }, [
+    el("h2", { class: "section-title", text: "絞り込み" }),
+  ]);
+  if (hasAnyFacet(facetSelection)) {
+    const clear = el("button", { class: "facet-clear", text: "条件をクリア" });
+    clear.type = "button";
+    clear.addEventListener("click", () => {
+      facetSelection = { ...EMPTY_SELECTION };
+      currentPage = 1;
+      applyState();
+    });
+    head.appendChild(clear);
+  }
+  box.appendChild(head);
+
+  for (const group of groups) {
+    if (group.items.length === 0) continue;
+    box.appendChild(renderFacetGroup(group));
+  }
+}
+
+/** 1 軸のファセット (見出し + チップ + もっと見る) を描画する。 */
+function renderFacetGroup(group: FacetGroupView): HTMLElement {
+  const expanded = expandedFacets.has(group.axis);
+  const overLimit = group.items.length > FACET_COLLAPSE_LIMIT;
+  const visible = expanded || !overLimit ? group.items : group.items.slice(0, FACET_COLLAPSE_LIMIT);
+
+  const chips = el("div", { class: "chips" });
+  for (const item of visible) chips.appendChild(renderChip(group.axis, item));
+  if (overLimit) {
+    const more = el("button", {
+      class: "facet-more",
+      text: expanded ? "閉じる" : `他 ${group.items.length - FACET_COLLAPSE_LIMIT} 件を表示`,
+    });
+    more.type = "button";
+    more.setAttribute("aria-expanded", String(expanded));
+    more.addEventListener("click", () => {
+      if (expanded) expandedFacets.delete(group.axis);
+      else expandedFacets.add(group.axis);
+      renderFacets();
+    });
+    chips.appendChild(more);
+  }
+  return el("div", { class: "facet-group" }, [
+    el("h3", { class: "facet-title", text: group.title }),
+    chips,
+  ]);
+}
+
+/** 1 ファセット値のトグルチップ (件数バッジ付き)。 */
+function renderChip(axis: FacetAxis, item: FacetValueItem): HTMLButtonElement {
+  const chip = el("button", { class: item.selected ? "chip selected" : "chip" });
+  chip.type = "button";
+  chip.setAttribute("aria-pressed", String(item.selected));
+  chip.appendChild(el("span", { class: "chip-label", text: item.label }));
+  chip.appendChild(el("span", { class: "chip-count", text: String(item.count) }));
+  if (item.count === 0 && !item.selected) chip.disabled = true;
+  chip.addEventListener("click", () => {
+    facetSelection = toggleFacet(facetSelection, axis, item.value);
+    currentPage = 1;
+    applyState();
+  });
+  return chip;
+}
+
+/** ページャ (前へ / ページ数 / 次へ) を描画する。 */
+function renderPager(pg: Page<DesignIndexEntry>): void {
+  const nav = byId("pager");
+  nav.replaceChildren();
+  if (pg.pageCount <= 1) return;
+  const prev = el("button", { class: "page-btn", text: "← 前へ" });
+  prev.type = "button";
+  prev.disabled = pg.page <= 1;
+  prev.addEventListener("click", () => goToPage(pg.page - 1));
+  const next = el("button", { class: "page-btn", text: "次へ →" });
+  next.type = "button";
+  next.disabled = pg.page >= pg.pageCount;
+  next.addEventListener("click", () => goToPage(pg.page + 1));
+  const info = el("span", { class: "page-info", text: `${pg.page} / ${pg.pageCount} ページ` });
+  nav.append(prev, info, next);
+}
+
+/** ページ移動して結果先頭へスクロールする。 */
+function goToPage(page: number): void {
+  currentPage = page;
+  applyState();
+  byId("results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/** 現在の状態 (フォーム値 / ファセット / ページ) を URL クエリへ反映する (共有可能)。 */
+function syncUrl(): void {
+  const params = new URLSearchParams();
+  const input = lastRequest;
+  if (input.industry) params.set("industry", input.industry);
+  if (input.color) params.set("color", input.color);
+  if (input.mood) params.set("mood", input.mood);
+  if (input.tags && input.tags.length > 0) params.set("tags", input.tags.join(","));
+  if (input.text) params.set("text", input.text);
+  for (const axis of FACET_AXES) {
+    const values = facetSelection[axis];
+    if (values.length > 0) params.set(`f_${axis}`, values.join(","));
+  }
+  if (currentPage > 1) params.set("page", String(currentPage));
+  const qs = params.toString();
+  window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+}
+
+/** URL クエリから状態 (フォーム値 / ファセット / ページ) を復元する。 */
+function restoreFromUrl(): void {
+  const params = new URLSearchParams(window.location.search);
+  const setInput = (id: string, key: string): void => {
+    const v = params.get(key);
+    if (v) byId<HTMLInputElement>(id).value = v;
+  };
+  setInput("q-industry", "industry");
+  setInput("q-color", "color");
+  setInput("q-mood", "mood");
+  setInput("q-tags", "tags");
+  setInput("q-text", "text");
+  const splitValues = (key: string): string[] => {
+    const v = params.get(key);
+    return v
+      ? v
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : [];
+  };
+  facetSelection = {
+    industry: splitValues("f_industry"),
+    color: splitValues("f_color"),
+    mood: splitValues("f_mood"),
+    tag: splitValues("f_tag"),
+  };
+  const page = Number.parseInt(params.get("page") ?? "1", 10);
+  currentPage = Number.isFinite(page) && page > 0 ? page : 1;
 }
 
 /** 選択セルの詳細 (DESIGN.md 取得 → プロンプト合成 → コピー) を描画する。 */
@@ -292,6 +486,7 @@ async function bootstrap(): Promise<void> {
     }`;
     return;
   }
+  restoreFromUrl();
   runSearch();
 }
 
@@ -299,10 +494,16 @@ function wireForm(): void {
   const form = byId<HTMLFormElement>("search-form");
   form.addEventListener("submit", (e) => {
     e.preventDefault();
+    // フォーム検索は母集合を変えるため、ページとファセット展開状態を初期化する。
+    currentPage = 1;
+    expandedFacets.clear();
     runSearch();
   });
   byId<HTMLButtonElement>("reset").addEventListener("click", () => {
     form.reset();
+    facetSelection = { ...EMPTY_SELECTION };
+    expandedFacets.clear();
+    currentPage = 1;
     runSearch();
   });
 }
