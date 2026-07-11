@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/AutoDevJapan/GoDD-Design-Systems/main/documents/schema/index.schema.json",
+  "version": 1,
+  "generatedAt": "2026-07-11T00:00:00Z",
+  "entries": [
+    {
+      "id": "7412_h17b-lt_trustworthy",
+      "path": "design-md/7412/h17b-lt/trustworthy/DESIGN.md",
+      "jsic": "7412",
+      "color": "h17b-lt",
+      "mood": "trustworthy",
+      "tags": ["professional", "geometric-grid", "sans-serif"],
+      "title": "経営コンサルタント業 × ライトブルー × 信頼",
+      "hash": "sha256:a52a165a297d54aa3a93149f7ba66f00b6a200b599da12ca9b8cfc8a8954bdbf",
+      "createdAt": "2026-07-11T00:00:00Z"
+    },
+    {
+      "id": "5910_white_minimal",
+      "path": "design-md/5910/white/minimal/DESIGN.md",
+      "jsic": "5910",
+      "color": "white",
+      "mood": "minimal",
+      "tags": ["editorial", "serif-display"],
+      "title": "書籍・雑誌小売業 × ホワイト × ミニマル",
+      "hash": "sha256:9f7b12aebcf0a3b504fc2912261643af1e3238760b98c1c6018ac45b791284ab",
+      "createdAt": "2026-07-11T00:00:00Z"
+    },
+    {
+      "id": "7412_h17b-lt_minimal",
+      "path": "design-md/7412/h17b-lt/minimal/DESIGN.md",
+      "jsic": "7412",
+      "color": "h17b-lt",
+      "mood": "minimal",
+      "tags": ["professional", "serif-display"],
+      "title": "経営コンサルタント業 × ライトブルー × ミニマル",
+      "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "createdAt": "2026-07-11T00:00:00Z"
+    }
+  ]
+}
