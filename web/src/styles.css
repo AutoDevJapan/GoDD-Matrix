@@ -280,6 +280,32 @@ button:hover {
   font-weight: 600;
 }
 
+/* ---- カラースウォッチ (issue #37) ---- */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  /* 背景色に依らず縁を視認できるよう内側に薄い明色リングを重ねる (淡色/濃色どちらも)。 */
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  flex: 0 0 auto;
+}
+
+.swatch-block .swatches {
+  gap: 0.4rem;
+}
+
+.swatch-block .swatch {
+  width: 2rem;
+  height: 2rem;
+}
+
 .empty {
   color: var(--muted);
 }

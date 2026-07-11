@@ -3,7 +3,9 @@ import type { DesignIndexEntry } from "../../src/ds/types.js";
 import {
   EMPTY_SELECTION,
   EMPTY_TAXONOMY,
+  type Swatch,
   type Taxonomy,
+  approxSwatchesForColor,
   buildCellPermalink,
   colorFamily,
   colorLabel,
@@ -11,8 +13,10 @@ import {
   computeFacetGroups,
   contextFromEntry,
   designRawUrl,
+  extractColorTokens,
   filterByFacets,
   findEntryById,
+  hslToHex,
   jsicMajor,
   jsicName,
   labelForColor,
@@ -20,6 +24,7 @@ import {
   moodLabel,
   paginate,
   parseCellParam,
+  parseColorSlug,
   parseTaxonomy,
   searchCells,
   toggleFacet,
@@ -315,6 +320,139 @@ describe("paginate", () => {
     const p = paginate([], 1, 24);
     expect(p.pageCount).toBe(1);
     expect(p.total).toBe(0);
+  });
+});
+
+describe("カラースウォッチ (issue #37)", () => {
+  const HEX6 = /^#[0-9a-f]{6}$/;
+
+  describe("hslToHex", () => {
+    it("原色/白黒を正しく変換する", () => {
+      expect(hslToHex(0, 100, 50)).toBe("#ff0000");
+      expect(hslToHex(120, 100, 50)).toBe("#00ff00");
+      expect(hslToHex(240, 100, 50)).toBe("#0000ff");
+      expect(hslToHex(0, 0, 100)).toBe("#ffffff");
+      expect(hslToHex(0, 0, 0)).toBe("#000000");
+    });
+    it("範囲外の入力もクランプ/巻き戻しして #rrggbb を返す", () => {
+      expect(hslToHex(360, 100, 50)).toBe("#ff0000"); // 360 は 0 と同値
+      expect(hslToHex(0, 150, 120)).toMatch(HEX6); // s/l クランプ
+    });
+  });
+
+  describe("parseColorSlug", () => {
+    it("無彩色 slug を種別へ解決する", () => {
+      expect(parseColorSlug("white")).toEqual({ neutral: "white", hue: null, tone: null });
+      expect(parseColorSlug("ac-w")).toEqual({ neutral: "white", hue: null, tone: null });
+      expect(parseColorSlug("ac-bk")).toEqual({ neutral: "black", hue: null, tone: null });
+      expect(parseColorSlug("black")).toEqual({ neutral: "black", hue: null, tone: null });
+      expect(parseColorSlug("gray-3")).toEqual({ neutral: "gray", hue: null, tone: null });
+    });
+    it("トーン先頭形 {tone}-h{NN} を解析する", () => {
+      expect(parseColorSlug("d-h07")).toEqual({ neutral: null, hue: 7, tone: "d" });
+      expect(parseColorSlug("v-h03")).toEqual({ neutral: null, hue: 3, tone: "v" });
+      expect(parseColorSlug("sf-h05")).toEqual({ neutral: null, hue: 5, tone: "sf" });
+      expect(parseColorSlug("dkg-h01")).toEqual({ neutral: null, hue: 1, tone: "dkg" });
+      expect(parseColorSlug("ltg-h24")).toEqual({ neutral: null, hue: 24, tone: "ltg" });
+    });
+    it("色相先頭形 (旧式) h{NN}{a|b}-{tone} を解析する", () => {
+      expect(parseColorSlug("h17b-lt")).toEqual({ neutral: null, hue: 17, tone: "lt" });
+    });
+    it("未知トーンは tone=null、色相の取れない/範囲外は無彩色 gray へ", () => {
+      expect(parseColorSlug("zz-h09")).toEqual({ neutral: null, hue: 9, tone: null });
+      expect(parseColorSlug("h99-lt").neutral).toBe("gray"); // 範囲外色相
+      expect(parseColorSlug("mystery").neutral).toBe("gray");
+    });
+  });
+
+  describe("approxSwatchesForColor", () => {
+    const isValid = (sw: readonly Swatch[]): boolean =>
+      sw.length === 4 &&
+      sw.every((s) => HEX6.test(s.hex) && s.label.length > 0 && s.role.length > 0);
+
+    it("有彩色は 4 スウォッチ (背景/主色/強調/前景) を #rrggbb で返す", () => {
+      const sw = approxSwatchesForColor("v-h03");
+      expect(isValid(sw)).toBe(true);
+      expect(sw.map((s) => s.role)).toEqual(["surface", "primary", "accent", "ink"]);
+      // 赤系 (h03) の主色は赤成分が最大になる。
+      const primary = sw[1].hex;
+      const r = Number.parseInt(primary.slice(1, 3), 16);
+      const g = Number.parseInt(primary.slice(3, 5), 16);
+      const b = Number.parseInt(primary.slice(5, 7), 16);
+      expect(r).toBeGreaterThan(g);
+      expect(r).toBeGreaterThan(b);
+    });
+    it("無彩色も 4 スウォッチ (全て無彩) を返す", () => {
+      const sw = approxSwatchesForColor("white");
+      expect(isValid(sw)).toBe(true);
+      // 無彩色は r=g=b。
+      for (const s of sw) {
+        expect(s.hex.slice(1, 3)).toBe(s.hex.slice(3, 5));
+        expect(s.hex.slice(3, 5)).toBe(s.hex.slice(5, 7));
+      }
+    });
+    it("de-brand ラベル (役割 + 色系統/トーン) を持つ", () => {
+      const sw = approxSwatchesForColor("v-h03");
+      expect(sw[1].label).toContain("主色");
+      expect(sw[1].label).toContain("赤系");
+      expect(sw[1].label).toContain("ビビッド");
+    });
+    it("決定論的 (同 slug は同結果)", () => {
+      expect(approxSwatchesForColor("sf-h12")).toEqual(approxSwatchesForColor("sf-h12"));
+    });
+    it("トーンで主色の明度が変わる (ペール > ディープ)", () => {
+      const light = approxSwatchesForColor("p-h13")[1].hex;
+      const deep = approxSwatchesForColor("dp-h13")[1].hex;
+      const lum = (hex: string): number =>
+        Number.parseInt(hex.slice(1, 3), 16) +
+        Number.parseInt(hex.slice(3, 5), 16) +
+        Number.parseInt(hex.slice(5, 7), 16);
+      expect(lum(light)).toBeGreaterThan(lum(deep));
+    });
+  });
+
+  describe("extractColorTokens", () => {
+    const md = [
+      "## カラーシステム / color-system",
+      "| 役割 | トークン | 値 |",
+      "| --- | --- | --- |",
+      "| Primary | `--color-primary` | #F91F06 |",
+      "| Secondary | `--color-secondary` | #A33F33 |",
+      "| Accent | `--color-accent` | #0DF297 |",
+      "| Neutral | `--color-neutral` | #9A817E |",
+      "| Background | `--color-bg` | #F8F7F7 |",
+      "| Foreground | `--color-fg` | #28201F |",
+    ].join("\n");
+
+    it("color-system テーブルからトークン色を出現順に抽出し小文字正規化する", () => {
+      const tokens = extractColorTokens(md);
+      expect(tokens.map((t) => t.role)).toEqual([
+        "primary",
+        "secondary",
+        "accent",
+        "neutral",
+        "bg",
+        "fg",
+      ]);
+      expect(tokens[0]).toEqual({ role: "primary", hex: "#f91f06", label: "主色" });
+      expect(tokens.find((t) => t.role === "bg")?.label).toBe("背景");
+      expect(tokens.find((t) => t.role === "fg")?.hex).toBe("#28201f");
+    });
+    it("トークンが無い本文は空配列 (呼び手が近似へフォールバック)", () => {
+      expect(extractColorTokens("# DESIGN\n本文にトークン表なし")).toEqual([]);
+    });
+    it("3 桁 hex を 6 桁へ展開し、同一 role は初出のみ採用", () => {
+      const t = extractColorTokens(
+        "| P | `--color-primary` | #f00 |\n| P2 | `--color-primary` | #0f0 |",
+      );
+      expect(t).toHaveLength(1);
+      expect(t[0].hex).toBe("#ff0000");
+    });
+    it("値セルがバッククォート括り (`#2f6fb0`) の表記も拾う", () => {
+      // 実コーパスには素の #hex とバッククォート括りの両方が存在する。
+      const t = extractColorTokens("| Primary | `--color-primary` | `#2F6FB0` |");
+      expect(t).toEqual([{ role: "primary", hex: "#2f6fb0", label: "主色" }]);
+    });
   });
 });
 
