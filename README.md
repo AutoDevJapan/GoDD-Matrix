@@ -87,6 +87,7 @@ URL でホストできるため Vercel Function として配信する。
 | 変数 | 必須 | 説明 |
 | --- | --- | --- |
 | `GODD_MCP_API_KEY` | | `POST /mcp` の `x-api-key` 期待値。未設定なら認証無効。 |
+| `GODD_MCP_MAX_BODY_BYTES` | | `POST /mcp` のリクエストボディ上限 (bytes)。既定 1 MiB。超過は 413。 |
 | `GENERATOR_RENDER_URL` | | 未材化セルの Generator レンダー API ベース URL。未設定なら未材化は `unavailable`。 |
 | `GENERATOR_RENDER_API_KEY` | | 同 API の認証キー。`GENERATOR_RENDER_URL` と両方揃った場合のみ有効。 |
 

@@ -35,6 +35,26 @@ export const DEFAULT_MCP_PATH = "/mcp";
 /** 既定のヘルスチェックパス。 */
 export const DEFAULT_HEALTH_PATH = "/health";
 
+/** リクエストボディ上限 (bytes) を差し替える環境変数名。 */
+export const MAX_BODY_BYTES_ENV = "GODD_MCP_MAX_BODY_BYTES";
+
+/** リクエストボディの既定上限 (1 MiB)。JSON-RPC の MCP リクエストには十分。 */
+export const DEFAULT_MAX_BODY_BYTES = 1_048_576;
+
+/**
+ * リクエストボディ上限 (bytes) を決定する。明示指定 > 環境変数 > 既定の順。
+ * 正の有限値のみ採用し、不正値は既定にフォールバックする。
+ */
+export function resolveMaxBodyBytes(explicit?: number): number {
+  if (explicit !== undefined && Number.isFinite(explicit) && explicit > 0) return explicit;
+  const raw = process.env[MAX_BODY_BYTES_ENV];
+  if (raw !== undefined) {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_MAX_BODY_BYTES;
+}
+
 /** MCP リクエストハンドラのオプション。 */
 export interface McpHandlerOptions {
   /**
@@ -47,6 +67,11 @@ export interface McpHandlerOptions {
    * テストではインメモリ実装を注入できる。
    */
   runtimeFactory?: () => Promise<MatrixRuntime>;
+  /**
+   * リクエストボディの最大バイト数。`Content-Length` 超過を早期に 413 で拒否する。
+   * 省略時は環境変数 {@link MAX_BODY_BYTES_ENV} / 既定 {@link DEFAULT_MAX_BODY_BYTES}。
+   */
+  maxBodyBytes?: number;
 }
 
 /** {@link createHttpHandler} のオプション (パス設定を追加)。 */
@@ -120,6 +145,7 @@ export function createMcpRequestHandler(
 ): (req: Request) => Promise<Response> {
   const apiKey = options.apiKey ?? process.env[MCP_API_KEY_ENV];
   const runtimeFactory = options.runtimeFactory ?? (() => createRuntime());
+  const maxBodyBytes = resolveMaxBodyBytes(options.maxBodyBytes);
 
   let runtimePromise: Promise<MatrixRuntime> | undefined;
 
@@ -140,6 +166,11 @@ export function createMcpRequestHandler(
     return provided !== null && constantTimeEqual(provided, apiKey);
   }
 
+  function bodyTooLarge(req: Request): boolean {
+    const declared = Number.parseInt(req.headers.get("content-length") ?? "", 10);
+    return Number.isFinite(declared) && declared > maxBodyBytes;
+  }
+
   return async function handleMcp(req: Request): Promise<Response> {
     if (!isAuthorized(req)) {
       return jsonResponse(
@@ -149,6 +180,22 @@ export function createMcpRequestHandler(
           id: null,
         },
         401,
+      );
+    }
+
+    // Content-Length で早期に過大ボディを拒否する (Web 層の多層防御)。
+    // 生ストリームの実バイト制限は Node ブリッジ (node-adapter) 側でも行う。
+    if (bodyTooLarge(req)) {
+      return jsonResponse(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32600,
+            message: `リクエストボディが上限 (${maxBodyBytes} bytes) を超えています`,
+          },
+          id: null,
+        },
+        413,
       );
     }
 

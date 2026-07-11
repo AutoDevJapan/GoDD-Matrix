@@ -14,8 +14,11 @@ afterEach(async () => {
 });
 
 /** 与えた Web ハンドラを Node サーバとして起動し、base URL を返す。 */
-async function listen(handler: Parameters<typeof toNodeListener>[0]): Promise<string> {
-  server = createServer(toNodeListener(handler));
+async function listen(
+  handler: Parameters<typeof toNodeListener>[0],
+  options?: Parameters<typeof toNodeListener>[1],
+): Promise<string> {
+  server = createServer(toNodeListener(handler, options));
   await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
   return `http://127.0.0.1:${port}`;
@@ -47,6 +50,40 @@ describe("toNodeListener", () => {
     const body = (await res.json()) as { echo: string; method: string };
     expect(body.method).toBe("POST");
     expect(JSON.parse(body.echo)).toEqual({ hello: "世界" });
+  });
+
+  it("maxBodyBytes 超過のボディは 413 を返しハンドラに到達しない", async () => {
+    let reached = false;
+    const base = await listen(
+      async (req) => {
+        reached = true;
+        await req.text();
+        return new Response("ok");
+      },
+      { maxBodyBytes: 16 },
+    );
+    const res = await fetch(`${base}/x`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: "x".repeat(1024),
+    });
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("payload_too_large");
+    expect(reached).toBe(false);
+  });
+
+  it("maxBodyBytes 以内のボディは通常どおり処理する", async () => {
+    const base = await listen(async (req) => new Response(await req.text(), { status: 200 }), {
+      maxBodyBytes: 1024,
+    });
+    const res = await fetch(`${base}/x`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: "hello",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("hello");
   });
 
   it("ハンドラ例外を 500 に変換する", async () => {
