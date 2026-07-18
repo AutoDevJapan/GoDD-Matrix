@@ -38,15 +38,21 @@ const moodLabelBySlug = new Map(MINIMAL_MOODS.map((e) => [e.slug, e.label]));
 /** taxonomy.json のカラー項目 (全フィールド任意)。 */
 export interface TaxonomyColor {
   readonly name_ja?: string;
+  readonly name_en?: string;
   readonly family?: string;
   readonly family_ja?: string;
+  readonly family_en?: string;
 }
 
 /** taxonomy.json のムード項目 (全フィールド任意)。 */
 export interface TaxonomyMood {
   readonly name_ja?: string;
+  readonly name_en?: string;
   readonly axis?: string;
 }
+
+/** UI の表示言語。既定は日本語 (従来動作)。 */
+export type Locale = "ja" | "en";
 
 /** DS が公開する taxonomy (実行時 fetch)。欠損に強い形 (フェイルセーフ)。 */
 export interface Taxonomy {
@@ -83,11 +89,14 @@ export function parseTaxonomy(raw: unknown): Taxonomy {
   const obj = raw as Record<string, unknown>;
   const colors = parseRecord<TaxonomyColor>(obj.colors, (e) => ({
     ...(optString(e.name_ja) ? { name_ja: optString(e.name_ja) } : {}),
+    ...(optString(e.name_en) ? { name_en: optString(e.name_en) } : {}),
     ...(optString(e.family) ? { family: optString(e.family) } : {}),
     ...(optString(e.family_ja) ? { family_ja: optString(e.family_ja) } : {}),
+    ...(optString(e.family_en) ? { family_en: optString(e.family_en) } : {}),
   }));
   const moods = parseRecord<TaxonomyMood>(obj.moods, (e) => ({
     ...(optString(e.name_ja) ? { name_ja: optString(e.name_ja) } : {}),
+    ...(optString(e.name_en) ? { name_en: optString(e.name_en) } : {}),
     ...(optString(e.axis) ? { axis: optString(e.axis) } : {}),
   }));
   const version = optString(obj.version);
@@ -100,19 +109,24 @@ export function jsicName(code: string): string {
 }
 
 /**
- * カラー slug → 表示ラベル。taxonomy の `name_ja` を最優先し、無ければ bundled ラベル、
- * 最後に slug をそのまま返す (taxonomy 未達でも従来どおり動作)。
+ * カラー slug → 表示ラベル。`locale === "en"` なら taxonomy の `name_en` を最優先し、無ければ
+ * `name_ja` → bundled ラベル → slug の順にフォールバックする。既定は `"ja"`（従来どおり）。
+ * 英語データが無い slug（未達 taxonomy 等）でも必ず何か表示できる。
  */
-export function labelForColor(slug: string, taxonomy?: Taxonomy): string {
-  return taxonomy?.colors[slug]?.name_ja ?? colorLabelBySlug.get(slug) ?? slug;
+export function labelForColor(slug: string, taxonomy?: Taxonomy, locale: Locale = "ja"): string {
+  const entry = taxonomy?.colors[slug];
+  const localized = locale === "en" ? (entry?.name_en ?? entry?.name_ja) : entry?.name_ja;
+  return localized ?? colorLabelBySlug.get(slug) ?? slug;
 }
 
 /**
- * ムード slug → 表示ラベル。taxonomy の `name_ja` を最優先し、無ければ bundled ラベル、
- * 最後に slug をそのまま返す (taxonomy 未達でも従来どおり動作)。
+ * ムード slug → 表示ラベル。`locale === "en"` なら taxonomy の `name_en` を最優先し、無ければ
+ * `name_ja` → bundled ラベル → slug の順にフォールバックする。既定は `"ja"`（従来どおり）。
  */
-export function labelForMood(slug: string, taxonomy?: Taxonomy): string {
-  return taxonomy?.moods[slug]?.name_ja ?? moodLabelBySlug.get(slug) ?? slug;
+export function labelForMood(slug: string, taxonomy?: Taxonomy, locale: Locale = "ja"): string {
+  const entry = taxonomy?.moods[slug];
+  const localized = locale === "en" ? (entry?.name_en ?? entry?.name_ja) : entry?.name_ja;
+  return localized ?? moodLabelBySlug.get(slug) ?? slug;
 }
 
 /** カラー slug → 表示ラベル (未知 slug は slug のまま返す)。{@link labelForColor} の taxonomy 無し版。 */
