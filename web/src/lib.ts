@@ -611,6 +611,12 @@ export interface ComposeInput {
   hashVerified: boolean;
   /** 元の検索要望 (notices に反映)。省略時はエントリの軸から補う。 */
   request?: SearchInput;
+  /**
+   * 作りたいサイトの言語。指定すると合成プロンプトへ「ユーザー可視テキストをこの言語で出力せよ」
+   * と注入する。任意の言語名を受け付ける（下流の生成エージェントが翻訳する。Matrix は保存しない）。
+   * 空/未指定なら注入しない。UI（Matrix）の表示言語とは独立。
+   */
+  outputLanguage?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -879,7 +885,7 @@ export function extractColorTokens(markdown: string): readonly Swatch[] {
  * 既存 `synthesizePrompt` (純関数) をそのまま呼ぶ。
  */
 export function composePromptForCell(input: ComposeInput): ComposedPrompt {
-  const { entry, markdown, hashVerified, request } = input;
+  const { entry, markdown, hashVerified, request, outputLanguage } = input;
   const ctx = contextFromEntry(entry);
   const brief: DesignBrief = {
     industry: request?.industry?.trim() || jsicName(entry.jsic),
@@ -888,5 +894,7 @@ export function composePromptForCell(input: ComposeInput): ComposedPrompt {
     ...(entry.tags && entry.tags.length > 0 ? { tags: entry.tags } : {}),
   };
   const resolution = materializedResolution(entry, markdown, designRawUrl(entry), hashVerified);
-  return synthesizePrompt(brief, resolution, ctx);
+  return synthesizePrompt(brief, resolution, ctx, {
+    ...(outputLanguage?.trim() ? { outputLanguage: outputLanguage.trim() } : {}),
+  });
 }
