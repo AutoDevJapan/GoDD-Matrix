@@ -82,6 +82,29 @@ function provenanceLine(resolved: DesignResolution): string {
  * 明示すべき注意を決定論的な順序で組む。
  * 順序: 出所由来 (hash / フォールバック / 未取得) → カラー未指定 → ムード未指定。
  */
+/** {@link synthesizePrompt} の追加オプション。 */
+export interface SynthesizeOptions {
+  /**
+   * 生成する成果物（作りたいサイト）の言語。ユーザー向けの全テキスト（UI コピー・見出し・
+   * 本文・ラベル）をこの言語で出力するよう、合成プロンプトへ指示を注入する。任意の言語名を
+   * 受け付ける（"English" / "Français" / "简体中文" / "日本語" など）。空/未指定なら注入しない
+   * （従来どおり DESIGN.md の言語に委ねる）。翻訳は下流の生成エージェントが行い、本モジュールは
+   * 指示文字列を組むだけ（純関数・決定論を維持）。
+   */
+  readonly outputLanguage?: string;
+}
+
+/** 出力言語の指示ブロック（未指定なら空配列）。 */
+function outputLanguageLines(outputLanguage: string | undefined): string[] {
+  if (isBlank(outputLanguage)) return [];
+  const lang = (outputLanguage as string).trim();
+  return [
+    "# 出力言語 (最優先)",
+    `ユーザー向けに表示される全テキスト（UI コピー・見出し・本文・ボタン・ラベル・プレースホルダ・エラーメッセージ等）を **${lang}** で生成してください。DESIGN.md 本文が別言語で書かれていても、成果物のユーザー可視テキストは必ず ${lang} にします。コード識別子・技術用語・ファイルパスはこの限りではありません。`,
+    "",
+  ];
+}
+
 function buildNotices(brief: DesignBrief, resolved: DesignResolution, ctx: AxisContext): string[] {
   const notices: string[] = [];
 
@@ -133,14 +156,17 @@ export function synthesizePrompt(
   brief: DesignBrief,
   resolved: DesignResolution,
   ctx: AxisContext,
+  options: SynthesizeOptions = {},
 ): ComposedPrompt {
   const body = designBody(resolved);
   const notices = buildNotices(brief, resolved, ctx);
+  const languageLines = outputLanguageLines(options.outputLanguage);
 
   const systemPrompt = [
     "# 役割",
     "あなたは GoDD デザインプロンプト合成アシスタントです。以下の確定デザイン仕様 (DESIGN.md) に厳密に従い、ユーザーの要望に沿った成果物を生成してください。仕様に明記された配色・タイポグラフィ・ムードから逸脱しないでください。",
     "",
+    ...languageLines,
     "# 確定軸 (SSOT §2)",
     `- 業種 (JSIC 細分類): ${ctx.jsic}`,
     `- カラー: ${ctx.color}`,
@@ -163,6 +189,9 @@ export function synthesizePrompt(
     `- 希望カラー: ${orElse(brief.color, "指定なし")}`,
     `- 希望ムード: ${orElse(brief.mood, "指定なし")}`,
     `- 追加タグ: ${formatTags(brief.tags)}`,
+    ...(isBlank(options.outputLanguage)
+      ? []
+      : [`- 出力言語: ${(options.outputLanguage as string).trim()}`]),
     "",
     "上記の要望と確定デザイン仕様に基づいて、デザイン成果物を生成してください。",
   ].join("\n");

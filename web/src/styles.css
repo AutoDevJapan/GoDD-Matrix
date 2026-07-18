@@ -119,6 +119,12 @@ body {
   font: inherit;
 }
 
+.field-hint {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .field input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

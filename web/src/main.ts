@@ -534,7 +534,14 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     hashVerified = false;
   }
 
-  const prompt = composePromptForCell({ entry, markdown, hashVerified, request: lastRequest });
+  const outputLanguage = byId<HTMLInputElement>("q-output-lang").value.trim();
+  const prompt = composePromptForCell({
+    entry,
+    markdown,
+    hashVerified,
+    request: lastRequest,
+    ...(outputLanguage ? { outputLanguage } : {}),
+  });
 
   info.className = "detail-note";
   info.replaceChildren(

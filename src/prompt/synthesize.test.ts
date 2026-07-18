@@ -72,6 +72,28 @@ describe("synthesizePrompt (材化済み)", () => {
     expect(out.systemPrompt).toContain("特記事項なし");
   });
 
+  it("outputLanguage を指定すると出力言語の指示を system/user へ注入する", () => {
+    const out = synthesizePrompt(brief, materialized(), ctx, { outputLanguage: "Français" });
+    expect(out.systemPrompt).toContain("# 出力言語 (最優先)");
+    expect(out.systemPrompt).toContain("**Français**");
+    expect(out.userPrompt).toContain("出力言語: Français");
+  });
+
+  it("outputLanguage 未指定なら出力言語の指示を注入しない (従来どおり)", () => {
+    const out = synthesizePrompt(brief, materialized(), ctx);
+    expect(out.systemPrompt).not.toContain("# 出力言語");
+    expect(out.userPrompt).not.toContain("出力言語:");
+    // 空白のみも未指定扱い
+    const blank = synthesizePrompt(brief, materialized(), ctx, { outputLanguage: "   " });
+    expect(blank.systemPrompt).not.toContain("# 出力言語");
+  });
+
+  it("決定論: 同一 outputLanguage は同一出力", () => {
+    const a = synthesizePrompt(brief, materialized(), ctx, { outputLanguage: "简体中文" });
+    const b = synthesizePrompt(brief, materialized(), ctx, { outputLanguage: "简体中文" });
+    expect(a).toEqual(b);
+  });
+
   it("決定論: 同一入力は同一出力 (純関数)", () => {
     const a = synthesizePrompt(brief, materialized(), ctx);
     const b = synthesizePrompt(brief, materialized(), ctx);
