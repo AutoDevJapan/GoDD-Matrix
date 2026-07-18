@@ -133,6 +133,27 @@ describe("labelForColor / labelForMood (name_ja 優先・フォールバック)"
     expect(colorLabel("white")).toBe("ホワイト");
     expect(moodLabel("unknown-mood")).toBe("unknown-mood");
   });
+
+  it("locale='en' は name_en を最優先する", () => {
+    const en: Taxonomy = {
+      colors: { "b-h01": { name_ja: "赤紫みの赤", name_en: "bright purplish red" } },
+      moods: { minimal: { name_ja: "極小", name_en: "minimal" } },
+    };
+    expect(labelForColor("b-h01", en, "en")).toBe("bright purplish red");
+    expect(labelForMood("minimal", en, "en")).toBe("minimal");
+    // locale 既定は ja（後方互換）
+    expect(labelForColor("b-h01", en)).toBe("赤紫みの赤");
+  });
+
+  it("locale='en' で name_en が無ければ name_ja → bundled → slug へフォールバック", () => {
+    const partial: Taxonomy = {
+      colors: { "h17b-lt": { name_ja: "空色" } }, // name_en なし
+      moods: {},
+    };
+    expect(labelForColor("h17b-lt", partial, "en")).toBe("空色"); // name_ja へ
+    expect(labelForColor("white", partial, "en")).toBe("ホワイト"); // bundled へ
+    expect(labelForMood("unknown", partial, "en")).toBe("unknown"); // slug へ
+  });
 });
 
 describe("designRawUrl", () => {
