@@ -314,13 +314,20 @@ function applyState(): void {
 function updateStatus(pg: Page<DesignIndexEntry>): void {
   const status = byId("status");
   status.className = "status";
+
+  const totalEntries = allEntries.length;
+  const statVal = document.getElementById("stat-materialized-count");
+  if (statVal) {
+    statVal.textContent = `${totalEntries.toLocaleString()} 件`;
+  }
+
   if (pg.total === 0) {
-    status.textContent = `0 / ${allEntries.length} 件`;
+    status.textContent = `0 / ${totalEntries.toLocaleString()} 件`;
     return;
   }
   const start = (pg.page - 1) * pg.pageSize + 1;
   const end = start + pg.items.length - 1;
-  status.textContent = `${pg.total} / ${allEntries.length} 件中 ${start}–${end} を表示`;
+  status.textContent = `一致: ${pg.total.toLocaleString()} / ${totalEntries.toLocaleString()} 件中 ${start}–${end} を表示`;
 }
 
 /** ファセット (チップ群) を描画する。 */
