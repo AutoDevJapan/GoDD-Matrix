@@ -24,6 +24,7 @@ import {
 } from "./lib.js";
 import { renderMatchesCount } from "./matches-count.js";
 import { loadMaterializedDesign } from "./materialized-design.js";
+import { type ResultSortOrder, sortDesignEntries, virtualIndexAtRank } from "./result-sorting.js";
 import {
   SEARCH_COLORS,
   SEARCH_STYLES,
@@ -102,7 +103,7 @@ let allEntries: readonly DesignIndexEntry[] = [];
 let currentLocale: Locale = "ja";
 let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let searchQuery = "";
-let sortOrder: "popular" | "newest" = "popular";
+let sortOrder: ResultSortOrder = "popular";
 let currentPage = 1;
 let selectedEntry: DesignIndexEntry | null = null;
 let detailRequestId = 0;
@@ -948,7 +949,7 @@ function applyState(): void {
   let totalMatches = TOTAL_LIBRARY;
 
   if (!isFiltered) {
-    pageView = paginate(allEntries, currentPage, PAGE_SIZE);
+    pageView = paginate(sortDesignEntries(allEntries, sortOrder), currentPage, PAGE_SIZE);
     totalMatches = TOTAL_LIBRARY;
   } else {
     // Determine combinatorics sizes
@@ -1020,7 +1021,8 @@ function applyState(): void {
     const start = (p - 1) * PAGE_SIZE;
 
     const pageItems: DesignIndexEntry[] = [];
-    for (let idx = start; idx < Math.min(start + PAGE_SIZE, totalMatches); idx++) {
+    for (let rank = start; rank < Math.min(start + PAGE_SIZE, totalMatches); rank++) {
+      const idx = virtualIndexAtRank(rank, totalMatches, sortOrder);
       pageItems.push(
         getCombinationAtIndex(
           idx,
