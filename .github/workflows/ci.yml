@@ -41,11 +41,17 @@ jobs:
       - name: Typecheck (tsc)
         run: pnpm typecheck
 
+      - name: Typecheck web
+        run: pnpm typecheck:web
+
       - name: Test (vitest)
         run: pnpm test
 
       - name: Build (tsc)
         run: pnpm build
+
+      - name: Build static web
+        run: pnpm build:web
 
   gitleaks:
     name: シークレット走査 (gitleaks)
