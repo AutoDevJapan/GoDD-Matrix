@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Taxonomy } from "./lib.js";
-import { findColorValue, findStyleValue } from "./search-parser.js";
+import {
+  findColorValue,
+  findStyleValue,
+  resolveColorSlugs,
+  resolveMoodSlug,
+} from "./search-parser.js";
 
 const taxonomy: Taxonomy = {
   moods: {
@@ -63,5 +68,19 @@ describe("findColorValue", () => {
     expect(findColorValue("\t", taxonomy)).toBeNull();
     expect(findColorValue("珊瑚色")).toBeNull();
     expect(findColorValue("unknown", taxonomy)).toBeNull();
+  });
+});
+
+describe("parser consumer contract", () => {
+  it("preserves dynamically matched mood slugs for generated combinations", () => {
+    const parsed = findStyleValue("穏やか", taxonomy);
+    expect(parsed).toBe("serene");
+    expect(resolveMoodSlug(parsed as string)).toBe("serene");
+  });
+
+  it("preserves dynamically matched color slugs for generated combinations", () => {
+    const parsed = findColorValue("珊瑚", taxonomy);
+    expect(parsed).toBe("custom-coral");
+    expect(resolveColorSlugs(parsed as string, taxonomy)).toEqual(["custom-coral"]);
   });
 });

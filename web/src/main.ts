@@ -27,7 +27,14 @@ import {
   labelForColor,
   labelForMood,
 } from "./lib.js";
-import { SEARCH_COLORS, SEARCH_STYLES, findColorValue, findStyleValue } from "./search-parser.js";
+import {
+  SEARCH_COLORS,
+  SEARCH_STYLES,
+  findColorValue,
+  findStyleValue,
+  resolveColorSlugs,
+  resolveMoodSlug,
+} from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
 
 // DOM helper to build elements cleanly
@@ -358,6 +365,7 @@ interface TranslationKeys {
   localeLabel: string;
   pagerLabel: string;
   previewLabel: string;
+  footerText: string;
   brandSubtitle: string;
   heroTag: string;
   heroSub: string;
@@ -401,6 +409,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     localeLabel: "言語",
     pagerLabel: "ページ送り",
     previewLabel: "プレビュー",
+    footerText: "データ提供元: GoDD Design System 公開コーパス（ブラウザから取得）",
     brandSubtitle: "1億件以上のDESIGNファイルを検索・共有",
     heroTag: "世界最大のDESIGNファイルライブラリ",
     heroSub: "件のDESIGN.mdファイルが検索可能",
@@ -442,6 +451,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     localeLabel: "Language",
     pagerLabel: "Pagination",
     previewLabel: "Preview",
+    footerText: "Data source: GoDD Design System public corpus (fetched client-side)",
     brandSubtitle: "Search & share 100M+ DESIGN files",
     heroTag: "World's largest DESIGN.md library",
     heroSub: "DESIGN.md files ready to search",
@@ -523,7 +533,11 @@ function animateCounter(): void {
     step++;
     const progress = 1 - (1 - step / steps) ** 3;
     animatedTotal = Math.min(target, Math.round(target * progress));
-    if (counterEl) counterEl.textContent = animatedTotal.toLocaleString();
+    if (counterEl) {
+      counterEl.textContent = animatedTotal.toLocaleString(
+        currentLocale === "ja" ? "ja-JP" : "en-US",
+      );
+    }
     if (step >= steps) {
       clearInterval(timer);
     }
@@ -541,6 +555,7 @@ function translateUI(): void {
   byId("locale-select").setAttribute("aria-label", t.localeLabel);
   byId("pager").setAttribute("aria-label", t.pagerLabel);
   byId("label-preview-overlay").textContent = t.previewLabel;
+  byId("label-footer").textContent = t.footerText;
 
   byId("label-brand-subtitle").textContent = t.brandSubtitle;
   byId("label-hero-tag").textContent = t.heroTag;
@@ -973,24 +988,7 @@ function applyState(): void {
     let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
     const colFilter = parsedColor;
     if (colFilter) {
-      const family = colorFamily(colFilter).key;
-      if (family === "blue" || family === "bluepurple" || family === "purple") {
-        matchingColors = ["h17b-lt"];
-      } else if (family === "green" || family === "yellowgreen" || family === "bluegreen") {
-        matchingColors = ["h12s-sf"];
-      } else if (family === "yellow") {
-        matchingColors = ["gray-3"];
-      } else if (family === "red" || family === "orange" || family === "redpurple") {
-        matchingColors = ["h2v-vv"];
-      } else if (family === "neutral") {
-        if (colFilter.includes("white") || colFilter.includes("lt")) {
-          matchingColors = ["white"];
-        } else if (colFilter.includes("black") || colFilter.includes("dk")) {
-          matchingColors = ["black"];
-        } else {
-          matchingColors = ["gray-3"];
-        }
-      }
+      matchingColors = resolveColorSlugs(colFilter, taxonomy);
     }
 
     const uniqueKeysCount = cLen * sLen * matchingJsic.length * matchingColors.length;
@@ -1113,7 +1111,9 @@ function applyState(): void {
 
   // Exact integer display
   byId("matches-count-display").replaceChildren(
-    document.createTextNode(totalMatches.toLocaleString()),
+    document.createTextNode(
+      totalMatches.toLocaleString(currentLocale === "ja" ? "ja-JP" : "en-US"),
+    ),
     el("span", {
       class: "matches-count-label",
       text: ` ${TRANSLATIONS[currentLocale].labelMatches}`,
@@ -1236,15 +1236,7 @@ function getCombinationAtIndex(
   const jsicObj = matchingJsic[jsicIdx] || { code: "6061", name: "ソフトウェア業" };
   const color = matchingColors[colorIdx] || "h17b-lt";
 
-  let mood = "minimal";
-  if (style === "minimal") mood = "minimal";
-  else if (style === "retro") mood = "vintage";
-  else if (style === "brutalist") mood = "brutalist";
-  else if (style === "glass") mood = "elegant";
-  else if (style === "corporate") mood = "corporate";
-  else if (style === "dark") mood = "tech";
-  else if (style === "neu") mood = "warm";
-  else if (style === "playful") mood = "organic";
+  const mood = resolveMoodSlug(style);
 
   // Vary typography and layouts based on extraIndex
   const layoutIdx = extraIndex % 4;

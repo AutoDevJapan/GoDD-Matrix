@@ -1,4 +1,4 @@
-import type { Taxonomy } from "./lib.js";
+import { type Taxonomy, colorFamily } from "./lib.js";
 
 export const SEARCH_STYLES = [
   { v: "minimal", ja: "ミニマル", en: "Minimal" },
@@ -96,4 +96,34 @@ export function findColorValue(term: string, taxonomy?: Taxonomy): string | null
     }
   }
   return null;
+}
+
+const STYLE_TO_MOOD: Readonly<Record<StyleKey, string>> = {
+  minimal: "minimal",
+  retro: "vintage",
+  brutalist: "brutalist",
+  glass: "elegant",
+  corporate: "corporate",
+  dark: "tech",
+  neu: "warm",
+  playful: "organic",
+};
+
+/** Convert a UI style key or dynamically matched taxonomy slug into a downstream mood slug. */
+export function resolveMoodSlug(style: string): string {
+  return STYLE_TO_MOOD[style as StyleKey] ?? style;
+}
+
+/** Convert a UI color key or dynamically matched taxonomy slug into concrete taxonomy colors. */
+export function resolveColorSlugs(color: string, taxonomy?: Taxonomy): string[] {
+  if (taxonomy?.colors[color]) return [color];
+
+  const family = colorFamily(color).key;
+  if (family === "blue" || family === "bluepurple" || family === "purple") return ["h17b-lt"];
+  if (family === "green" || family === "yellowgreen" || family === "bluegreen") return ["h12s-sf"];
+  if (family === "yellow") return ["gray-3"];
+  if (family === "red" || family === "orange" || family === "redpurple") return ["h2v-vv"];
+  if (color.includes("white") || color.includes("lt")) return ["white"];
+  if (color.includes("black") || color.includes("dk")) return ["black"];
+  return ["gray-3"];
 }
