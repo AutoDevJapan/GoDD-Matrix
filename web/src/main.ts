@@ -336,7 +336,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     btnNewest: "新着順 / Newest",
     detailBack: "← 検索に戻る / Back to search",
     labelCodePreview: "DESIGN.md プレビュー / Preview",
-    labelDownloads: "ダウンロード数 / Downloads",
+    labelDownloads: "提供形式 / Type",
     labelUpdated: "更新日 / Updated",
     labelLicense: "ライセンス / License",
     btnDownload: "ダウンロード / Download",
@@ -366,7 +366,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     btnNewest: "Newest",
     detailBack: "← Back to search",
     labelCodePreview: "DESIGN.md Preview",
-    labelDownloads: "Downloads",
+    labelDownloads: "Type",
     labelUpdated: "Updated",
     labelLicense: "License",
     btnDownload: "Download",
@@ -553,8 +553,16 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   const previewBox = byId("detail-preview-box");
   previewBox.style.background = getThumbnailBg(entry);
 
-  // Set download count simulation
-  byId("detail-downloads-val").textContent = getDownloadsCount(entry).toLocaleString();
+  const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
+
+  // Set file type and metadata
+  byId("detail-downloads-val").textContent = isVirtual
+    ? currentLocale === "ja"
+      ? "リアルタイム合成 / Virtual"
+      : "Virtual (Synthesized)"
+    : currentLocale === "ja"
+      ? "OSS 材化済み / Pre-generated"
+      : "Pre-generated (OSS)";
   byId("detail-updated-val").textContent = entry.createdAt
     ? entry.createdAt.slice(0, 10)
     : "2026-07-20";
@@ -562,7 +570,6 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
   // Hide virtual notice by default unless it is dynamic virtual cell
   const virtualNotice = byId("detail-virtual-notice");
-  const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
   if (isVirtual) {
     virtualNotice.classList.remove("hidden");
     byId("label-virtual-badge").textContent = TRANSLATIONS[currentLocale].labelVirtualBadge;
@@ -839,7 +846,15 @@ function applyState(): void {
 
       // Card footer
       const footer = el("div", { class: "card-footer" });
-      footer.appendChild(el("span", { text: `↓ ${formatDownloads(getDownloadsCount(entry))}` }));
+      const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
+      const typeText = isVirtual
+        ? currentLocale === "ja"
+          ? "リアルタイム合成"
+          : "Virtual"
+        : currentLocale === "ja"
+          ? "OSS 材化済み"
+          : "Pre-generated";
+      footer.appendChild(el("span", { class: "card-type-label", text: typeText }));
       footer.appendChild(
         el("span", { text: entry.createdAt ? entry.createdAt.slice(0, 10) : "2026-07-20" }),
       );
