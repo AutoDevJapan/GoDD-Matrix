@@ -168,7 +168,7 @@ function getSwatchHexes(entry: DesignIndexEntry): string[] {
 
 function getThumbnailBg(entry: DesignIndexEntry): string {
   const colors = getSwatchHexes(entry);
-  return `repeating-linear-gradient(135deg, ${colors[0]} 0px, ${colors[0]} 22px, ${colors[1]} 22px, 44px)`;
+  return `repeating-linear-gradient(135deg, ${colors[0]} 0px, ${colors[0]} 22px, ${colors[1]} 22px, ${colors[1]} 44px)`;
 }
 
 // Translations Structure
