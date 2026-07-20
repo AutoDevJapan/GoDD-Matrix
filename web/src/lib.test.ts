@@ -294,9 +294,21 @@ describe("searchCells", () => {
 
 describe("jsicMajor (大分類)", () => {
   it("細分類コードを大分類 (letter + 名称) に解決する", () => {
-    expect(jsicMajor("7281")).toEqual({ code: "L", label: "学術研究，専門・技術サービス業" });
-    expect(jsicMajor("6061")).toEqual({ code: "I", label: "卸売業，小売業" });
-    expect(jsicMajor("0100")).toEqual({ code: "A", label: "農業，林業" });
+    expect(jsicMajor("7281")).toEqual({
+      code: "L",
+      label: "学術研究，専門・技術サービス業",
+      label_en: "Scientific Research, Professional and Technical Services",
+    });
+    expect(jsicMajor("6061")).toEqual({
+      code: "I",
+      label: "卸売業，小売業",
+      label_en: "Wholesale and Retail Trade",
+    });
+    expect(jsicMajor("0100")).toEqual({
+      code: "A",
+      label: "農業，林業",
+      label_en: "Agriculture and Forestry",
+    });
     expect(jsicMajor("2900").code).toBe("E"); // 製造業 (09-32)
   });
   it("不正/範囲外は分類不明", () => {
