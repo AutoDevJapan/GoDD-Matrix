@@ -378,30 +378,103 @@ export const FACET_TITLES: Record<FacetAxis, string> = {
 interface JsicDivision {
   readonly code: string;
   readonly label: string;
+  readonly label_en: string;
   readonly from: number;
   readonly to: number;
 }
 const JSIC_DIVISIONS: readonly JsicDivision[] = [
-  { code: "A", label: "農業，林業", from: 1, to: 2 },
-  { code: "B", label: "漁業", from: 3, to: 4 },
-  { code: "C", label: "鉱業，採石業，砂利採取業", from: 5, to: 5 },
-  { code: "D", label: "建設業", from: 6, to: 8 },
-  { code: "E", label: "製造業", from: 9, to: 32 },
-  { code: "F", label: "電気・ガス・熱供給・水道業", from: 33, to: 36 },
-  { code: "G", label: "情報通信業", from: 37, to: 41 },
-  { code: "H", label: "運輸業，郵便業", from: 42, to: 49 },
-  { code: "I", label: "卸売業，小売業", from: 50, to: 61 },
-  { code: "J", label: "金融業，保険業", from: 62, to: 67 },
-  { code: "K", label: "不動産業，物品賃貸業", from: 68, to: 70 },
-  { code: "L", label: "学術研究，専門・技術サービス業", from: 71, to: 74 },
-  { code: "M", label: "宿泊業，飲食サービス業", from: 75, to: 77 },
-  { code: "N", label: "生活関連サービス業，娯楽業", from: 78, to: 80 },
-  { code: "O", label: "教育，学習支援業", from: 81, to: 82 },
-  { code: "P", label: "医療，福祉", from: 83, to: 85 },
-  { code: "Q", label: "複合サービス事業", from: 86, to: 87 },
-  { code: "R", label: "サービス業（他に分類されないもの）", from: 88, to: 96 },
-  { code: "S", label: "公務（他に分類されるものを除く）", from: 97, to: 98 },
-  { code: "T", label: "分類不能の産業", from: 99, to: 99 },
+  { code: "A", label: "農業，林業", label_en: "Agriculture and Forestry", from: 1, to: 2 },
+  { code: "B", label: "漁業", label_en: "Fisheries", from: 3, to: 4 },
+  {
+    code: "C",
+    label: "鉱業，採石業，砂利採取業",
+    label_en: "Mining, Quarrying and Stone Extraction",
+    from: 5,
+    to: 5,
+  },
+  { code: "D", label: "建設業", label_en: "Construction", from: 6, to: 8 },
+  { code: "E", label: "製造業", label_en: "Manufacturing", from: 9, to: 32 },
+  {
+    code: "F",
+    label: "電気・ガス・熱供給・水道業",
+    label_en: "Electricity, Gas, Heat Supply and Water",
+    from: 33,
+    to: 36,
+  },
+  { code: "G", label: "情報通信業", label_en: "Information and Communications", from: 37, to: 41 },
+  {
+    code: "H",
+    label: "運輸業，郵便業",
+    label_en: "Transport and Postal Services",
+    from: 42,
+    to: 49,
+  },
+  { code: "I", label: "卸売業，小売業", label_en: "Wholesale and Retail Trade", from: 50, to: 61 },
+  { code: "J", label: "金融業，保険業", label_en: "Finance and Insurance", from: 62, to: 67 },
+  {
+    code: "K",
+    label: "不動産業，物品賃貸業",
+    label_en: "Real Estate and Goods Rental and Leasing",
+    from: 68,
+    to: 70,
+  },
+  {
+    code: "L",
+    label: "学術研究，専門・技術サービス業",
+    label_en: "Scientific Research, Professional and Technical Services",
+    from: 71,
+    to: 74,
+  },
+  {
+    code: "M",
+    label: "宿泊業，飲食サービス業",
+    label_en: "Accommodations, Eating and Drinking Services",
+    from: 75,
+    to: 77,
+  },
+  {
+    code: "N",
+    label: "生活関連サービス業，娯楽業",
+    label_en: "Living-related and Personal Services and Amusement Services",
+    from: 78,
+    to: 80,
+  },
+  {
+    code: "O",
+    label: "教育，学習支援業",
+    label_en: "Education, Learning Support",
+    from: 81,
+    to: 82,
+  },
+  {
+    code: "P",
+    label: "医療，福祉",
+    label_en: "Medical, Health Care and Welfare",
+    from: 83,
+    to: 85,
+  },
+  { code: "Q", label: "複合サービス事業", label_en: "Compound Services", from: 86, to: 87 },
+  {
+    code: "R",
+    label: "サービス業（他に分類されないもの）",
+    label_en: "Services, N.E.C. (Not Elsewhere Classified)",
+    from: 88,
+    to: 96,
+  },
+  {
+    code: "S",
+    label: "公務（他に分類されるものを除く）",
+    label_en: "Government, N.E.C.",
+    from: 97,
+    to: 98,
+  },
+  {
+    code: "T",
+    label: "分類不能の産業",
+    label_en: "Industries Unable to Classify",
+    from: 99,
+    to: 99,
+  },
 ];
 const jsicDivisionByCode = new Map(JSIC_DIVISIONS.map((d) => [d.code, d]));
 
@@ -467,10 +540,38 @@ function entryFacetValues(entry: DesignIndexEntry, axis: FacetAxis): readonly st
  * - industry / color は「大分類 / 色系統」の client 計算ラベル (一貫性のため taxonomy に依らない)。
  * - mood は taxonomy の `name_ja` を優先 (無ければ bundled ラベル → slug)。
  */
-function facetLabel(axis: FacetAxis, value: string, taxonomy?: Taxonomy): string {
-  if (axis === "industry") return jsicDivisionByCode.get(value)?.label ?? value;
-  if (axis === "color") return familyByKey.get(value)?.label ?? value;
-  if (axis === "mood") return labelForMood(value, taxonomy);
+export function facetLabel(
+  axis: FacetAxis,
+  value: string,
+  taxonomy?: Taxonomy,
+  locale: Locale = "ja",
+): string {
+  if (axis === "industry") {
+    const div = jsicDivisionByCode.get(value);
+    return locale === "en" ? (div?.label_en ?? value) : (div?.label ?? value);
+  }
+  if (axis === "color") {
+    const family = familyByKey.get(value);
+    if (!family) return value;
+    if (locale === "en") {
+      const enLabels: Record<string, string> = {
+        red: "Reds",
+        orange: "Oranges",
+        yellow: "Yellows",
+        yellowgreen: "Yellow-greens",
+        green: "Greens",
+        bluegreen: "Blue-greens",
+        blue: "Blues",
+        bluepurple: "Blue-purples",
+        purple: "Purples",
+        redpurple: "Red-purples",
+        neutral: "Neutral",
+      };
+      return enLabels[value] ?? family.label;
+    }
+    return family.label;
+  }
+  if (axis === "mood") return labelForMood(value, taxonomy, locale);
   return value;
 }
 
@@ -552,7 +653,21 @@ export function computeFacetGroups(
   entries: readonly DesignIndexEntry[],
   selection: FacetSelection,
   taxonomy?: Taxonomy,
+  locale: Locale = "ja",
 ): FacetGroupView[] {
+  const titles_ja: Record<FacetAxis, string> = {
+    industry: "業種 (大分類)",
+    color: "カラー系統",
+    mood: "ムード",
+    tag: "タグ",
+  };
+  const titles_en: Record<FacetAxis, string> = {
+    industry: "Industry (Division)",
+    color: "Color Family",
+    mood: "Mood",
+    tag: "Tags",
+  };
+  const titles = locale === "en" ? titles_en : titles_ja;
   return FACET_AXES.map((axis) => {
     const counts = new Map<string, number>();
     for (const entry of entries) {
@@ -565,11 +680,11 @@ export function computeFacetGroups(
     const items: FacetValueItem[] = [...counts.entries()].map(([value, count]) => ({
       value,
       count,
-      label: facetLabel(axis, value, taxonomy),
+      label: facetLabel(axis, value, taxonomy, locale),
       selected: selection[axis].includes(value),
     }));
     items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ja"));
-    return { axis, title: FACET_TITLES[axis], items };
+    return { axis, title: titles[axis], items };
   });
 }
 
@@ -762,7 +877,7 @@ export function parseColorSlug(slug: string): ParsedColor {
 }
 
 /** 無彩色種別ごとの 4 段階スウォッチ (背景→主色→中間→前景)。 */
-function neutralSwatches(kind: NeutralKind): readonly Swatch[] {
+function neutralSwatches(kind: NeutralKind, locale: Locale = "ja"): readonly Swatch[] {
   const ramps: Readonly<Record<NeutralKind, readonly [number, number, number, number]>> = {
     white: [99, 92, 62, 22],
     gray: [90, 70, 45, 18],
@@ -770,6 +885,14 @@ function neutralSwatches(kind: NeutralKind): readonly Swatch[] {
   };
   const [bg, primary, mid, ink] = ramps[kind];
   const g = (l: number): string => hslToHex(0, 0, l);
+  if (locale === "en") {
+    return [
+      { role: "surface", hex: g(bg), label: "Background (Neutral, Light)" },
+      { role: "primary", hex: g(primary), label: "Primary (Neutral)" },
+      { role: "accent", hex: g(mid), label: "Mid (Neutral)" },
+      { role: "ink", hex: g(ink), label: "Foreground (Neutral, Dark)" },
+    ];
+  }
   return [
     { role: "surface", hex: g(bg), label: "背景（無彩色・淡）" },
     { role: "primary", hex: g(primary), label: "主色（無彩色）" },
@@ -779,10 +902,68 @@ function neutralSwatches(kind: NeutralKind): readonly Swatch[] {
 }
 
 /** 有彩色 (色相角 + トーン) から 4 段階スウォッチ (背景/主色/強調/前景) を導出。 */
-function chromaticSwatches(hue: number, toneKey: string | null): readonly Swatch[] {
+function chromaticSwatches(
+  hue: number,
+  toneKey: string | null,
+  locale: Locale = "ja",
+): readonly Swatch[] {
   const angle = PCCS_HUE_ANGLE[hue] ?? 0;
   const tone: ToneSpec = PCCS_TONES[toneKey ?? ""] ?? DEFAULT_TONE;
-  const familyLabel = (familyByHue.get(hue) ?? NEUTRAL_FAMILY).label;
+  const family = familyByHue.get(hue) ?? NEUTRAL_FAMILY;
+  const enLabels: Record<string, string> = {
+    red: "Red",
+    orange: "Orange",
+    yellow: "Yellow",
+    yellowgreen: "Yellow-green",
+    green: "Green",
+    bluegreen: "Blue-green",
+    blue: "Blue",
+    bluepurple: "Blue-purple",
+    purple: "Purple",
+    redpurple: "Red-purple",
+    neutral: "Neutral",
+  };
+  const familyLabel = locale === "en" ? (enLabels[family.key] ?? family.label) : family.label;
+  const toneLabels_en: Record<string, string> = {
+    v: "Vivid",
+    b: "Bright",
+    s: "Strong",
+    dp: "Deep",
+    lt: "Light",
+    sf: "Soft",
+    d: "Dull",
+    dk: "Dark",
+    p: "Pale",
+    ltg: "Light Grayish",
+    g: "Grayish",
+    dkg: "Dark Grayish",
+  };
+  const toneLabel = locale === "en" ? (toneLabels_en[toneKey ?? ""] ?? "Strong") : tone.label;
+
+  if (locale === "en") {
+    return [
+      {
+        role: "surface",
+        hex: hslToHex(angle, clampRange(tone.s * 0.35, 12, 34), 95),
+        label: `Background (${familyLabel}, Light)`,
+      },
+      {
+        role: "primary",
+        hex: hslToHex(angle, tone.s, tone.l),
+        label: `Primary (${toneLabel} x ${familyLabel})`,
+      },
+      {
+        role: "accent",
+        hex: hslToHex(angle, Math.min(100, tone.s + 12), clampRange(tone.l * 0.62, 26, 46)),
+        label: `Accent (${familyLabel}, Dark)`,
+      },
+      {
+        role: "ink",
+        hex: hslToHex(angle, Math.min(tone.s, 22), 15),
+        label: `Foreground (${familyLabel}, Dark)`,
+      },
+    ];
+  }
   return [
     {
       role: "surface",
@@ -812,11 +993,11 @@ function chromaticSwatches(hue: number, toneKey: string | null): readonly Swatch
  * 一覧カードで DESIGN.md を取得せずに配色を視覚化するための近似。
  * 実際のトークン色は {@link extractColorTokens} で DESIGN.md 本文から取り出す。
  */
-export function approxSwatchesForColor(slug: string): readonly Swatch[] {
+export function approxSwatchesForColor(slug: string, locale: Locale = "ja"): readonly Swatch[] {
   const parsed = parseColorSlug(slug);
-  if (parsed.neutral) return neutralSwatches(parsed.neutral);
+  if (parsed.neutral) return neutralSwatches(parsed.neutral, locale);
   // hue は parseColorSlug の契約上ここでは非 null (無彩色でなければ 1..24)。
-  return chromaticSwatches(parsed.hue ?? 1, parsed.tone);
+  return chromaticSwatches(parsed.hue ?? 1, parsed.tone, locale);
 }
 
 /**
@@ -849,6 +1030,20 @@ const TOKEN_ROLE_LABELS: Readonly<Record<string, string>> = {
   border: "境界",
 };
 
+const TOKEN_ROLE_LABELS_EN: Readonly<Record<string, string>> = {
+  primary: "Primary",
+  secondary: "Secondary",
+  accent: "Accent",
+  neutral: "Neutral",
+  bg: "Background",
+  background: "Background",
+  surface: "Surface",
+  fg: "Foreground",
+  foreground: "Foreground",
+  muted: "Muted",
+  border: "Border",
+};
+
 /** `#rgb`/`#rrggbb` を検証し `#rrggbb` (小文字) に正規化する。不正は null。 */
 function normalizeHex(raw: string): string | null {
   const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(raw.trim());
@@ -863,17 +1058,18 @@ function normalizeHex(raw: string): string | null {
  * 値セルの hex は素の `#f91f06` でもバッククォート括り `` `#2f6fb0` `` でも拾う (次セル `|` は跨がない)。
  * 出現順を保ち、同一 role は初出のみ採用。トークンが無ければ空配列 (呼び手が近似へフォールバック)。
  */
-export function extractColorTokens(markdown: string): readonly Swatch[] {
+export function extractColorTokens(markdown: string, locale: Locale = "ja"): readonly Swatch[] {
   const out: Swatch[] = [];
   const seen = new Set<string>();
   const re = /--color-([a-z0-9-]+)[^|#]*\|[^#|]*(#[0-9a-fA-F]{3,6})\b/g;
   let m = re.exec(markdown);
+  const roleLabels = locale === "en" ? TOKEN_ROLE_LABELS_EN : TOKEN_ROLE_LABELS;
   while (m !== null) {
     const role = (m[1] ?? "").toLowerCase();
     const hex = normalizeHex(m[2] ?? "");
     if (hex && !seen.has(role)) {
       seen.add(role);
-      out.push({ role, hex, label: TOKEN_ROLE_LABELS[role] ?? role });
+      out.push({ role, hex, label: roleLabels[role] ?? role });
     }
     m = re.exec(markdown);
   }

@@ -21,12 +21,18 @@
         </p>
       </div>
       <div class="stats-card">
-        <div class="stat-item">
-          <span class="stat-label">理論空間 (直積×バリアント)</span>
-          <span class="stat-value highlight">1.16億件以上</span>
+        <div class="locale-select-container">
+          <select id="locale-select" class="locale-select" aria-label="Language / 言語">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+          </select>
         </div>
         <div class="stat-item">
-          <span class="stat-label">生成済み実数 (DESIGN.md)</span>
+          <span class="stat-label" id="stat-label-theoretical">理論空間 (直積×バリアント)</span>
+          <span class="stat-value highlight" id="stat-value-theoretical">1.16億件以上</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label" id="stat-label-materialized">生成済み実数 (DESIGN.md)</span>
           <span class="stat-value" id="stat-materialized-count">読み込み中…</span>
         </div>
       </div>
