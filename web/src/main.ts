@@ -710,6 +710,9 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     markdown: renderedMarkdown,
     hashVerified: !isVirtual,
     ...(isVirtual ? { resolutionStatus: "rendered" as const } : {}),
+    ...(currentLocale === "en"
+      ? { request: { industry: jsicMajor(entry.jsic).label_en || entry.jsic } }
+      : {}),
     outputLanguage: currentLocale === "ja" ? "日本語" : "English",
   });
 

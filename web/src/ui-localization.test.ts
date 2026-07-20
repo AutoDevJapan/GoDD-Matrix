@@ -17,7 +17,7 @@ const prompt: ComposedPrompt = {
   ].join("\n"),
   userPrompt: [
     "# 要望",
-    "- 業種: ソフトウェア業",
+    "- 業種: Information and Communications",
     "- 希望カラー: 指定なし",
     "- 希望ムード: 指定なし",
     "- 追加タグ: dashboard",
@@ -46,8 +46,22 @@ describe("detail prompt localization", () => {
     expect(result).not.toContain("# 役割");
     expect(result).not.toContain("# 要望");
     expect(result).not.toContain("指定なし");
+    expect(result).not.toContain("ソフトウェア業");
+    expect(result).toContain("- Industry: Information and Communications");
     expect(result).toContain("- Preferred color: Not specified");
     expect(result).toContain("# ソース由来の固有名");
+  });
+
+  it("does not leak a Japanese unavailable reason into the English shell", () => {
+    const unavailable = {
+      ...prompt,
+      notices: ["確定 DESIGN.md 本文がありません: 未材化セル: 6061"],
+    };
+
+    const result = localizePromptPreview(unavailable, "en");
+
+    expect(result).toContain("The resolved DESIGN.md body is unavailable.");
+    expect(result).not.toContain("未材化セル");
   });
 
   it("keeps the Japanese prompt byte-for-byte apart from the existing separator", () => {
