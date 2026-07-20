@@ -16,7 +16,22 @@ export function buildVirtualDesign(
   labels: VirtualDesignLabels,
 ): string {
   const tags = entry.tags?.join(", ") || "—";
-  const palette = labels.swatches.map((hex, index) => `- \`--color-${index + 1}\`: \`${hex}\``);
+  const variant = Math.max(0, entry.variant ?? 0);
+  const category = entry.tags?.[0] ?? "general";
+  const layouts = ["single-column", "sidebar", "split-view", "modular-grid"] as const;
+  const densities = ["comfortable", "compact", "spacious"] as const;
+  const fontPairs = [
+    "system-ui / ui-sans-serif",
+    "ui-serif / system-ui",
+    "system-ui / ui-monospace",
+  ] as const;
+  const layout = layouts[variant % layouts.length];
+  const density = densities[(variant + entry.jsic.length) % densities.length];
+  const fontPair = fontPairs[(variant + entry.mood.length) % fontPairs.length];
+  const palette =
+    labels.swatches.length > 0
+      ? labels.swatches.map((hex, index) => `- \`--color-${index + 1}\`: \`${hex}\``)
+      : [locale === "ja" ? "- 利用可能なカラートークンなし" : "- No color tokens available"];
 
   if (locale === "ja") {
     return [
@@ -28,6 +43,7 @@ export function buildVirtualDesign(
       `- カラー: ${labels.color}（${entry.color}）`,
       `- ムード: ${labels.mood}（${entry.mood}）`,
       `- タグ: ${tags}`,
+      `- バリアント: ${variant}（${layout} / ${density}）`,
       "",
       "## デザイン方針",
       "",
@@ -39,18 +55,21 @@ export function buildVirtualDesign(
       "",
       "## タイポグラフィ",
       "",
-      "- 本文: system-ui、16px、行高 1.6",
+      `- 書体ペア: ${fontPair}`,
+      `- 本文: ${density === "compact" ? "15px" : "16px"}、行高 ${density === "spacious" ? "1.75" : "1.6"}`,
       "- 見出し: system-ui、700、本文とのコントラストを明確にする",
       "- 補助テキスト: 14px以上、背景とのコントラスト比 4.5:1 以上",
       "",
       "## レイアウトと間隔",
       "",
+      `- 構成: ${layout}（${category}の主要タスクを最短導線に置く）`,
       "- 4px基準のスペーシングスケールを使用する",
       "- コンテンツ幅を制限し、モバイルでは1カラムへ縮退する",
       "- 主要操作間に十分な余白を確保し、44px以上のタップ領域を保つ",
       "",
       "## コンポーネント",
       "",
+      `- ${category}向けの主要操作をprimary actionとして一つに絞る`,
       "- ボタン: primary / secondary / disabled / focus-visible を定義する",
       "- 入力: label、説明、エラーを関連付ける",
       "- カード: 見出し、本文、操作の順で一貫した構造にする",
@@ -73,6 +92,7 @@ export function buildVirtualDesign(
     `- Color: ${labels.color} (${entry.color})`,
     `- Mood: ${labels.mood} (${entry.mood})`,
     `- Tags: ${tags}`,
+    `- Variant: ${variant} (${layout} / ${density})`,
     "",
     "## Design direction",
     "",
@@ -84,18 +104,21 @@ export function buildVirtualDesign(
     "",
     "## Typography",
     "",
-    "- Body: system-ui, 16px, 1.6 line height",
+    `- Font pair: ${fontPair}`,
+    `- Body: ${density === "compact" ? "15px" : "16px"}, ${density === "spacious" ? "1.75" : "1.6"} line height`,
     "- Headings: system-ui, 700, with clear contrast from body text",
     "- Supporting text: at least 14px and 4.5:1 contrast against its background",
     "",
     "## Layout and spacing",
     "",
+    `- Structure: ${layout}, placing the primary ${category} task on the shortest path`,
     "- Use a 4px-based spacing scale",
     "- Constrain content width and collapse to one column on mobile",
     "- Keep primary actions separated and provide tap targets of at least 44px",
     "",
     "## Components",
     "",
+    `- Keep one primary action for the core ${category} task`,
     "- Buttons: define primary, secondary, disabled, and focus-visible states",
     "- Inputs: associate labels, descriptions, and errors programmatically",
     "- Cards: keep a consistent heading, content, and action structure",

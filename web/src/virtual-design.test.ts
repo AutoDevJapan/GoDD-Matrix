@@ -45,14 +45,28 @@ describe("buildVirtualDesign", () => {
   });
 
   it("renders a stable fallback when tags are missing", () => {
-    expect(
-      buildVirtualDesign({ ...entry, tags: undefined }, "en", {
-        title: "Virtual design",
-        industry: "Information services",
-        color: "Blue",
-        mood: "Minimal",
-        swatches: [],
-      }),
-    ).toContain("- Tags: —");
+    const result = buildVirtualDesign({ ...entry, tags: undefined }, "en", {
+      title: "Virtual design",
+      industry: "Information services",
+      color: "Blue",
+      mood: "Minimal",
+      swatches: [],
+    });
+    expect(result).toContain("- Tags: —");
+    expect(result).toContain("- No color tokens available");
+  });
+
+  it("varies deterministic design decisions by cell variant", () => {
+    const labels = {
+      title: "Virtual design",
+      industry: "Information services",
+      color: "Blue",
+      mood: "Minimal",
+      swatches: ["#112233"],
+    };
+
+    expect(buildVirtualDesign({ ...entry, variant: 1 }, "en", labels)).not.toBe(
+      buildVirtualDesign({ ...entry, variant: 2 }, "en", labels),
+    );
   });
 });
