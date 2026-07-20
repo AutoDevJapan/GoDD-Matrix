@@ -7,7 +7,6 @@ import { buildDesignDocument } from "../../../src/engine/document.js";
 import Handlebars from "handlebars";
 import {
   DS_INDEX_URL,
-  DS_TAXONOMY_URL,
   EMPTY_SELECTION,
   EMPTY_TAXONOMY,
   type FacetSelection,
@@ -25,8 +24,8 @@ import {
   jsicName,
   labelForColor,
   labelForMood,
-  parseTaxonomy,
 } from "./lib.js";
+import { loadTaxonomy } from "./taxonomy-cache.js";
 
 // DOM helper to build elements cleanly
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -511,17 +510,6 @@ function animateCounter(): void {
   }, 40);
 }
 
-// Fetch Taxonomy
-async function loadTaxonomy(): Promise<Taxonomy> {
-  try {
-    const res = await fetch(DS_TAXONOMY_URL, { cache: "no-cache" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return parseTaxonomy(await res.json());
-  } catch {
-    return EMPTY_TAXONOMY;
-  }
-}
-
 // Dynamic UI Text Localization updates
 function translateUI(): void {
   const t = TRANSLATIONS[currentLocale];
@@ -911,7 +899,7 @@ function getEntryTitle(entry: DesignIndexEntry, locale: Locale): string {
   
   const colLabel = labelForColor(entry.color, taxonomy, locale);
   const mdLabel = labelForMood(entry.mood, taxonomy, locale);
-  
+
   if (locale === "en") {
     const major = jsicMajor(entry.jsic);
     const indName = major.label_en || jsicName(entry.jsic) || entry.jsic;
@@ -992,7 +980,7 @@ function applyState(): void {
         const name = jsicName(s.code) || "";
         const major = jsicMajor(s.code);
         const overlay = JSIC_OVERLAY[s.code];
-        
+
         return industryTerms.every((term) => {
           if (s.code.includes(term) ||
               name.toLowerCase().includes(term) ||
