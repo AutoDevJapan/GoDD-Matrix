@@ -719,6 +719,7 @@ function renderFilters(): void {
     const label = currentLocale === "ja" ? i.ja : i.en;
     const chip = el("button", { class: `facet-chip ${active ? "selected" : ""}`, text: label });
     chip.onclick = () => {
+      // Toggle industry selection and reset to page 1
       filters.industry = active ? null : i.v;
       currentPage = 1;
       applyState();
