@@ -6,7 +6,7 @@
  * 静的資産 (index.html / styles.css) を `web/dist/` へ配置する。GitHub Pages で
  * そのまま配信できる純静的成果物を生成する (サーバ不要・秘密なし)。
  */
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -30,7 +30,12 @@ await build({
   legalComments: "none",
 });
 
-await cp(path.join(webSrc, "index.html"), path.join(outDir, "index.html"));
+const timestamp = Date.now();
+let html = await readFile(path.join(webSrc, "index.html"), "utf8");
+html = html.replace('href="./styles.css"', `href="./styles.css?t=${timestamp}"`);
+html = html.replace('src="./assets/app.js"', `src="./assets/app.js?t=${timestamp}"`);
+await writeFile(path.join(outDir, "index.html"), html, "utf8");
+
 await cp(path.join(webSrc, "styles.css"), path.join(outDir, "styles.css"));
 try {
   await cp(path.join(webSrc, "web-index.json"), path.join(outDir, "web-index.json"));
