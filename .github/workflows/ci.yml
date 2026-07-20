@@ -67,10 +67,17 @@ jobs:
       # ライセンス不要な CLI バイナリを直接取得して実行する。
       - name: Run gitleaks
         env:
-          GITLEAKS_VERSION: 8.21.2
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_LINUX_X64_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         run: |
           set -euo pipefail
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz gitleaks
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors \
+            --output "${archive}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          printf '%s  %s\n' "${GITLEAKS_LINUX_X64_SHA256}" "${archive}" \
+            | sha256sum --check --strict
+          tar -xzf "${archive}" gitleaks
           ./gitleaks version
           ./gitleaks detect --source . --redact --verbose --exit-code 1
