@@ -16,6 +16,7 @@ const taxonomy: Taxonomy = {
       family_en: "Blues",
     },
     "custom-coral": { name_ja: "珊瑚色", name_en: "Coral", family: "orange" },
+    "h2v-vv": { name_ja: "鮮やかな赤", name_en: "Vivid red" },
   },
 };
 
@@ -55,6 +56,7 @@ describe("findColorValue", () => {
     expect(findColorValue("BLUES", taxonomy)).toBe("indigo");
     expect(findColorValue("珊瑚", taxonomy)).toBe("custom-coral");
     expect(findColorValue("custom-coral", taxonomy)).toBe("custom-coral");
+    expect(findColorValue("鮮やかな赤", taxonomy)).toBe("orange");
   });
 
   it("returns null for blank and unknown terms or missing taxonomy", () => {

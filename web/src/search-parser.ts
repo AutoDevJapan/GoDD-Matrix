@@ -1,6 +1,6 @@
 import type { Taxonomy } from "./lib.js";
 
-const STYLES = [
+export const SEARCH_STYLES = [
   { v: "minimal", ja: "ミニマル", en: "Minimal" },
   { v: "retro", ja: "レトロ", en: "Retro" },
   { v: "brutalist", ja: "ブルータリズム", en: "Brutalist" },
@@ -11,18 +11,21 @@ const STYLES = [
   { v: "playful", ja: "プレイフル", en: "Playful" },
 ] as const;
 
-const COLORS = [
-  { name: "Indigo / インディゴ", slug: "indigo" },
-  { name: "Sky / スカイ", slug: "light-blue" },
-  { name: "Emerald / エメラルド", slug: "green" },
-  { name: "Amber / アンバー", slug: "yellow" },
-  { name: "Rose / ローズ", slug: "orange" },
-  { name: "Violet / バイオレット", slug: "blue" },
-  { name: "Slate / スレート", slug: "warm-gray" },
-  { name: "Ink / インク", slug: "black" },
+export const SEARCH_COLORS = [
+  { hex: "#6366f1", name: "Indigo / インディゴ", slug: "indigo" },
+  { hex: "#0ea5e9", name: "Sky / スカイ", slug: "light-blue" },
+  { hex: "#10b981", name: "Emerald / エメラルド", slug: "green" },
+  { hex: "#f59e0b", name: "Amber / アンバー", slug: "yellow" },
+  { hex: "#f43f5e", name: "Rose / ローズ", slug: "orange" },
+  { hex: "#8b5cf6", name: "Violet / バイオレット", slug: "blue" },
+  { hex: "#64748b", name: "Slate / スレート", slug: "warm-gray" },
+  { hex: "#0f172a", name: "Ink / インク", slug: "black" },
 ] as const;
 
-const STYLE_TAXONOMY_MAP: Readonly<Record<string, string>> = {
+type StyleKey = (typeof SEARCH_STYLES)[number]["v"];
+type ColorKey = (typeof SEARCH_COLORS)[number]["slug"];
+
+const STYLE_TAXONOMY_MAP: Readonly<Record<string, StyleKey>> = {
   vintage: "retro",
   elegant: "glass",
   tech: "dark",
@@ -30,11 +33,11 @@ const STYLE_TAXONOMY_MAP: Readonly<Record<string, string>> = {
   organic: "playful",
 };
 
-const COLOR_TAXONOMY_MAP: Readonly<Record<string, string>> = {
+const COLOR_TAXONOMY_MAP: Readonly<Record<string, ColorKey>> = {
   "h17b-lt": "indigo",
   "h12s-sf": "green",
   "gray-3": "yellow",
-  "h2v-vv": "rose",
+  "h2v-vv": "orange",
   black: "black",
 };
 
@@ -43,7 +46,7 @@ export function findStyleValue(term: string, taxonomy?: Taxonomy): string | null
   const normalized = term.toLowerCase().trim();
   if (!normalized) return null;
 
-  for (const style of STYLES) {
+  for (const style of SEARCH_STYLES) {
     if (
       style.v === normalized ||
       style.ja.toLowerCase().includes(normalized) ||
@@ -70,7 +73,7 @@ export function findColorValue(term: string, taxonomy?: Taxonomy): string | null
   const normalized = term.toLowerCase().trim();
   if (!normalized) return null;
 
-  for (const color of COLORS) {
+  for (const color of SEARCH_COLORS) {
     if (
       color.slug === normalized ||
       color.name.toLowerCase().includes(normalized) ||

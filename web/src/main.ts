@@ -1,10 +1,12 @@
+import Handlebars from "handlebars";
+import { selectPartials } from "../../../src/compat/selector.js";
+import type { CompatTable, SelectionManifest } from "../../../src/compat/types.js";
+import { buildDesignDocument } from "../../../src/engine/document.js";
+import type { PartialSectionId } from "../../../src/partials/types.js";
 import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
 import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
-import { selectPartials } from "../../../src/compat/selector.js";
-import { buildDesignDocument } from "../../../src/engine/document.js";
-import Handlebars from "handlebars";
 import {
   DS_INDEX_URL,
   EMPTY_SELECTION,
@@ -25,7 +27,7 @@ import {
   labelForColor,
   labelForMood,
 } from "./lib.js";
-import { findColorValue, findStyleValue } from "./search-parser.js";
+import { SEARCH_COLORS, SEARCH_STYLES, findColorValue, findStyleValue } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
 
 // DOM helper to build elements cleanly
@@ -60,16 +62,7 @@ const CATEGORIES = [
   { v: "form", ja: "フォーム", en: "Form" },
 ];
 
-const STYLES = [
-  { v: "minimal", ja: "ミニマル", en: "Minimal" },
-  { v: "retro", ja: "レトロ", en: "Retro" },
-  { v: "brutalist", ja: "ブルータリズム", en: "Brutalist" },
-  { v: "glass", ja: "グラスモーフィズム", en: "Glassmorphism" },
-  { v: "corporate", ja: "コーポレート", en: "Corporate" },
-  { v: "dark", ja: "ダーク", en: "Dark" },
-  { v: "neu", ja: "ニューモーフィズム", en: "Neumorphism" },
-  { v: "playful", ja: "プレイフル", en: "Playful" },
-];
+const STYLES = SEARCH_STYLES;
 
 const INDUSTRIES = [
   { v: "saas", ja: "SaaS", en: "SaaS" },
@@ -91,16 +84,7 @@ const FONTS = [
   { v: "space", ja: "Space Grotesk", en: "Space Grotesk" },
 ];
 
-const COLOR_PALETTE = [
-  { hex: "#6366f1", name: "Indigo / インディゴ", slug: "indigo" },
-  { hex: "#0ea5e9", name: "Sky / スカイ", slug: "light-blue" },
-  { hex: "#10b981", name: "Emerald / エメラルド", slug: "green" },
-  { hex: "#f59e0b", name: "Amber / アンバー", slug: "yellow" },
-  { hex: "#f43f5e", name: "Rose / ローズ", slug: "orange" },
-  { hex: "#8b5cf6", name: "Violet / バイオレット", slug: "blue" },
-  { hex: "#64748b", name: "Slate / スレート", slug: "warm-gray" },
-  { hex: "#0f172a", name: "Ink / インク", slug: "black" },
-];
+const COLOR_PALETTE = SEARCH_COLORS;
 
 // App States
 let allEntries: readonly DesignIndexEntry[] = [];
@@ -112,18 +96,20 @@ let currentPage = 1;
 let selectedCellId: string | null = null;
 const PAGE_SIZE = 24;
 
-let templatesBundle: {
+interface TemplatesBundle {
   template: string;
   partials: Record<string, string>;
-  manifest: any;
-  compat: any;
-} | null = null;
+  manifest: SelectionManifest;
+  compat: CompatTable;
+}
+
+let templatesBundle: TemplatesBundle | null = null;
 
 async function loadTemplatesBundle(): Promise<void> {
   try {
     const res = await fetch("templates-bundle.json", { cache: "no-cache" });
     if (res.ok) {
-      templatesBundle = (await res.json()) as any;
+      templatesBundle = (await res.json()) as TemplatesBundle;
     }
   } catch (err) {
     console.error("Failed to load templates bundle:", err);
@@ -370,6 +356,8 @@ interface TranslationKeys {
   siteTitle: string;
   siteDescription: string;
   localeLabel: string;
+  pagerLabel: string;
+  previewLabel: string;
   brandSubtitle: string;
   heroTag: string;
   heroSub: string;
@@ -395,6 +383,7 @@ interface TranslationKeys {
   toastCopied: string;
   toastShareCopied: string;
   toastDownloadStarted: string;
+  toastCopyFailed: string;
   virtualNotice: string;
   labelVirtualBadge: string;
   catalogPrefix: string;
@@ -410,6 +399,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     siteTitle: "DESIGN.md Library",
     siteDescription: "1億件以上のDESIGNファイルを検索・共有",
     localeLabel: "言語",
+    pagerLabel: "ページ送り",
+    previewLabel: "プレビュー",
     brandSubtitle: "1億件以上のDESIGNファイルを検索・共有",
     heroTag: "世界最大のDESIGNファイルライブラリ",
     heroSub: "件のDESIGN.mdファイルが検索可能",
@@ -435,12 +426,13 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     toastCopied: "Markdownをクリップボードにコピーしました",
     toastShareCopied: "共有リンクをコピーしました",
     toastDownloadStarted: "ダウンロードを開始しました",
+    toastCopyFailed: "コピーに失敗しました",
     virtualNotice: "決定論的デザインエンジンによりリアルタイム合成されました。",
     labelVirtualBadge: "VIRTUAL",
     catalogPrefix: "OSS 材化済みカタログ: ",
     catalogSuffix: " 件",
     loading: "読み込み中...",
-    sampleCount: (shown, total) => `${total.toLocaleString()}件中 ${shown}件を表示中`,
+    sampleCount: (shown, total) => `${total.toLocaleString("ja-JP")}件中 ${shown}件を表示中`,
     materializationType: "リアルタイム合成",
     preGeneratedType: "OSS 材化済み",
   },
@@ -448,6 +440,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     siteTitle: "DESIGN.md Library",
     siteDescription: "Search and share more than 100 million DESIGN files",
     localeLabel: "Language",
+    pagerLabel: "Pagination",
+    previewLabel: "Preview",
     brandSubtitle: "Search & share 100M+ DESIGN files",
     heroTag: "World's largest DESIGN.md library",
     heroSub: "DESIGN.md files ready to search",
@@ -473,12 +467,13 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     toastCopied: "Markdown copied to clipboard",
     toastShareCopied: "Share link copied to clipboard",
     toastDownloadStarted: "Download started",
+    toastCopyFailed: "Copy failed",
     virtualNotice: "Synthesized in real-time by the deterministic design engine.",
     labelVirtualBadge: "VIRTUAL",
     catalogPrefix: "Pre-generated OSS Catalog: ",
     catalogSuffix: " files",
     loading: "Loading...",
-    sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString()} results`,
+    sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString("en-US")} results`,
     materializationType: "Virtual",
     preGeneratedType: "Pre-generated",
   },
@@ -512,7 +507,7 @@ function copyText(text: string, toastMsg: string): void {
         document.execCommand("copy");
         showToast(toastMsg);
       } catch {
-        showToast("Copy failed");
+        showToast(TRANSLATIONS[currentLocale].toastCopyFailed);
       }
       document.body.removeChild(ta);
     });
@@ -540,8 +535,12 @@ function translateUI(): void {
   const t = TRANSLATIONS[currentLocale];
   document.title = `GoDD Matrix — ${t.siteTitle}`;
   document.documentElement.lang = currentLocale;
-  document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", t.siteDescription);
+  document
+    .querySelector<HTMLMetaElement>('meta[name="description"]')
+    ?.setAttribute("content", t.siteDescription);
   byId("locale-select").setAttribute("aria-label", t.localeLabel);
+  byId("pager").setAttribute("aria-label", t.pagerLabel);
+  byId("label-preview-overlay").textContent = t.previewLabel;
 
   byId("label-brand-subtitle").textContent = t.brandSubtitle;
   byId("label-hero-tag").textContent = t.heroTag;
@@ -572,7 +571,10 @@ function translateUI(): void {
   if (catalogBadge) {
     catalogBadge.replaceChildren();
     const countSpan = el("span", {
-      text: allEntries.length > 0 ? allEntries.length.toLocaleString() : t.loading,
+      text:
+        allEntries.length > 0
+          ? allEntries.length.toLocaleString(currentLocale === "ja" ? "ja-JP" : "en-US")
+          : t.loading,
     });
     countSpan.id = "stat-materialized-count";
     catalogBadge.append(
@@ -612,14 +614,14 @@ function renderVirtualDesign(entry: DesignIndexEntry): string | undefined {
       variant: entry.variant || 0,
     });
     const env = Handlebars.create();
-    const selection: Record<string, string> = {};
+    const selection = {} as Record<PartialSectionId, string>;
     for (const [section, meta] of selectionMeta) {
       const source = templatesBundle.partials[meta.id] || "";
       env.registerPartial(section, env.compile(source, { noEscape: true }));
       selection[section] = meta.id;
     }
     const documentData = buildDesignDocument(ctx, {
-      selection: selection as any,
+      selection,
       title: getEntryTitle(entry, "ja"),
     });
     const compiled = env.compile(templatesBundle.template, { noEscape: true });
@@ -705,9 +707,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
   // Set file type and metadata
   const t = TRANSLATIONS[currentLocale];
-  byId("detail-downloads-val").textContent = isVirtual
-    ? t.materializationType
-    : t.preGeneratedType;
+  byId("detail-downloads-val").textContent = isVirtual ? t.materializationType : t.preGeneratedType;
   byId("detail-updated-val").textContent = entry.createdAt
     ? entry.createdAt.slice(0, 10)
     : "2026-07-20";
@@ -762,16 +762,14 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
     const thumb = el("div", { class: "related-thumb" });
     renderThumbnail(item, thumb);
-    thumb.appendChild(el("div", { class: "preview-overlay", text: "PREVIEW" }));
+    thumb.appendChild(el("div", { class: "preview-overlay", text: t.previewLabel }));
     card.appendChild(thumb);
 
     const body = el("div", { class: "related-body" });
     const mainTitle = getEntryTitle(item, currentLocale);
     const subTitle = `${item.jsic} × ${item.color} × ${item.mood}`;
     body.appendChild(el("div", { class: "related-card-title-ja", text: mainTitle }));
-    body.appendChild(
-      el("div", { class: "related-card-title-en", text: subTitle }),
-    );
+    body.appendChild(el("div", { class: "related-card-title-en", text: subTitle }));
     card.appendChild(body);
 
     relatedGrid.appendChild(card);
@@ -864,19 +862,19 @@ function getEntryTitle(entry: DesignIndexEntry, locale: Locale): string {
     }
     return entry.title;
   }
-  
+
   const colLabel = labelForColor(entry.color, taxonomy, locale);
   const mdLabel = labelForMood(entry.mood, taxonomy, locale);
 
   if (locale === "en") {
     const major = jsicMajor(entry.jsic);
     const indName = major.label_en || jsicName(entry.jsic) || entry.jsic;
-    if (entry.id?.startsWith("virtual_") || (entry.title && entry.title.startsWith("VIRTUAL DESIGN: "))) {
+    if (entry.id?.startsWith("virtual_") || entry.title?.startsWith("VIRTUAL DESIGN: ")) {
       return `Virtual Design: ${indName} / ${mdLabel} / ${colLabel}`;
     }
     return `Design System: ${indName} / ${mdLabel} / ${colLabel}`;
   }
-  
+
   return entry.title || `${jsicName(entry.jsic) || entry.jsic} × ${colLabel} × ${mdLabel}`;
 }
 
@@ -950,18 +948,20 @@ function applyState(): void {
         const overlay = JSIC_OVERLAY[s.code];
 
         return industryTerms.every((term) => {
-          if (s.code.includes(term) ||
-              name.toLowerCase().includes(term) ||
-              major.code.toLowerCase().includes(term) ||
-              major.label.toLowerCase().includes(term) ||
-              (major.label_en && major.label_en.toLowerCase().includes(term))) {
+          if (
+            s.code.includes(term) ||
+            name.toLowerCase().includes(term) ||
+            major.code.toLowerCase().includes(term) ||
+            major.label.toLowerCase().includes(term) ||
+            major.label_en?.toLowerCase().includes(term)
+          ) {
             return true;
           }
           if (overlay) {
-            if (overlay.aliases && overlay.aliases.some((a) => a.toLowerCase().includes(term))) {
+            if (overlay.aliases?.some((a) => a.toLowerCase().includes(term))) {
               return true;
             }
-            if (overlay.keywords && overlay.keywords.some((k) => k.toLowerCase().includes(term))) {
+            if (overlay.keywords?.some((k) => k.toLowerCase().includes(term))) {
               return true;
             }
           }
@@ -1017,12 +1017,19 @@ function applyState(): void {
 
     const pageItems: DesignIndexEntry[] = [];
     for (let idx = start; idx < Math.min(start + PAGE_SIZE, totalMatches); idx++) {
-      pageItems.push(getCombinationAtIndex(idx, {
-        category: parsedCategory,
-        style: parsedStyle,
-        industry: filters.industry,
-        color: parsedColor
-      }, matchingJsic, matchingColors));
+      pageItems.push(
+        getCombinationAtIndex(
+          idx,
+          {
+            category: parsedCategory,
+            style: parsedStyle,
+            industry: filters.industry,
+            color: parsedColor,
+          },
+          matchingJsic,
+          matchingColors,
+        ),
+      );
     }
 
     pageView = {
@@ -1143,7 +1150,9 @@ function applyState(): void {
 
       const thumb = el("div", { class: "card-thumbnail" });
       renderThumbnail(entry, thumb);
-      thumb.appendChild(el("div", { class: "preview-overlay", text: "PREVIEW" }));
+      thumb.appendChild(
+        el("div", { class: "preview-overlay", text: TRANSLATIONS[currentLocale].previewLabel }),
+      );
       card.appendChild(thumb);
 
       const body = el("div", { class: "card-body" });

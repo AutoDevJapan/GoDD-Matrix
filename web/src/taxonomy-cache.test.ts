@@ -37,9 +37,12 @@ describe("loadTaxonomy", () => {
   });
 
   it.each([
-    ["expired", JSON.stringify({ timestamp: NOW - TAXONOMY_CACHE_TTL_MS, data: {} })],
+    ["expired", JSON.stringify({ timestamp: NOW - TAXONOMY_CACHE_TTL_MS, data: RAW_TAXONOMY })],
     ["from the future", JSON.stringify({ timestamp: NOW + 1, data: {} })],
     ["malformed", "not json"],
+    ["missing data", JSON.stringify({ timestamp: NOW - 1 })],
+    ["null data", JSON.stringify({ timestamp: NOW - 1, data: null })],
+    ["scalar data", JSON.stringify({ timestamp: NOW - 1, data: "taxonomy" })],
   ])("refreshes a %s cache entry", async (_label, cached) => {
     const cache = storage(cached);
     const fetcher = successfulFetch();
@@ -79,5 +82,17 @@ describe("loadTaxonomy", () => {
     await expect(loadTaxonomy({ storage: storage(), fetcher, now: () => NOW })).resolves.toEqual(
       EMPTY_TAXONOMY,
     );
+  });
+
+  it("uses an expired taxonomy as a stale fallback when refresh fails", async () => {
+    const cache = storage(
+      JSON.stringify({ timestamp: NOW - TAXONOMY_CACHE_TTL_MS, data: RAW_TAXONOMY }),
+    );
+    const fetcher = vi.fn(async () => new Response(null, { status: 503 }));
+
+    const result = await loadTaxonomy({ storage: cache, fetcher, now: () => NOW });
+
+    expect(result.version).toBe("test");
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });

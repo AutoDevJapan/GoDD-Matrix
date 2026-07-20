@@ -28,6 +28,9 @@ function parseCacheEntry(value: string): TaxonomyCacheEntry | undefined {
     if (typeof entry.timestamp !== "number" || !Number.isFinite(entry.timestamp)) {
       return undefined;
     }
+    if (typeof entry.data !== "object" || entry.data === null || Array.isArray(entry.data)) {
+      return undefined;
+    }
     return { timestamp: entry.timestamp, data: entry.data };
   } catch {
     return undefined;
@@ -40,6 +43,7 @@ export async function loadTaxonomy(options: LoadTaxonomyOptions = {}): Promise<T
   const fetcher = options.fetcher ?? fetch;
   const now = options.now ?? Date.now;
   const timestamp = now();
+  let staleTaxonomy: Taxonomy | undefined;
 
   try {
     const cached = storage.getItem(TAXONOMY_CACHE_KEY);
@@ -49,6 +53,9 @@ export async function loadTaxonomy(options: LoadTaxonomyOptions = {}): Promise<T
       if (entry && age >= 0 && age < TAXONOMY_CACHE_TTL_MS) {
         return parseTaxonomy(entry.data);
       }
+      if (entry && age >= TAXONOMY_CACHE_TTL_MS) {
+        staleTaxonomy = parseTaxonomy(entry.data);
+      }
     }
   } catch {
     // Storage may be disabled; continue with a network request.
@@ -56,7 +63,7 @@ export async function loadTaxonomy(options: LoadTaxonomyOptions = {}): Promise<T
 
   try {
     const response = await fetcher(DS_TAXONOMY_URL, { cache: "no-cache" });
-    if (!response.ok) return EMPTY_TAXONOMY;
+    if (!response.ok) return staleTaxonomy ?? EMPTY_TAXONOMY;
 
     const data: unknown = await response.json();
     try {
@@ -66,6 +73,6 @@ export async function loadTaxonomy(options: LoadTaxonomyOptions = {}): Promise<T
     }
     return parseTaxonomy(data);
   } catch {
-    return EMPTY_TAXONOMY;
+    return staleTaxonomy ?? EMPTY_TAXONOMY;
   }
 }
