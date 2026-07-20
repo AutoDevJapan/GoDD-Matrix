@@ -836,10 +836,17 @@ async function bootstrap(): Promise<void> {
   animateCounter();
 
   // Load Data
-  const indexRes = await fetch(DS_INDEX_URL, { cache: "no-cache" });
-  if (!indexRes.ok) throw new Error(`HTTP ${indexRes.status}`);
-  const index = parseDesignIndex(await indexRes.text());
-  allEntries = index.entries;
+  let indexData: ReturnType<typeof parseDesignIndex>;
+  try {
+    const localRes = await fetch("web-index.json", { cache: "no-cache" });
+    if (!localRes.ok) throw new Error();
+    indexData = parseDesignIndex(await localRes.text());
+  } catch {
+    const remoteRes = await fetch(DS_INDEX_URL, { cache: "no-cache" });
+    if (!remoteRes.ok) throw new Error(`HTTP ${remoteRes.status}`);
+    indexData = parseDesignIndex(await remoteRes.text());
+  }
+  allEntries = indexData.entries;
 
   // Set Pre-generated Count
   byId("stat-materialized-count").textContent = allEntries.length.toLocaleString();

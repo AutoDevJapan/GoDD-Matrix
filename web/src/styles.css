@@ -150,6 +150,23 @@ body {
   margin-top: 4px;
 }
 
+.hero-catalog-badge {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  background: var(--bg-card);
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.hero-catalog-badge span {
+  font-weight: 700;
+  color: var(--text);
+}
+
 /* Search Bar */
 .search-bar-wrapper {
   max-width: 720px;

@@ -32,6 +32,9 @@ await build({
 
 await cp(path.join(webSrc, "index.html"), path.join(outDir, "index.html"));
 await cp(path.join(webSrc, "styles.css"), path.join(outDir, "styles.css"));
+try {
+  await cp(path.join(webSrc, "web-index.json"), path.join(outDir, "web-index.json"));
+} catch (err) {}
 // Jekyll を無効化 (アンダースコア始まりのパス等を素通しし、静的資産をそのまま配信)。
 await writeFile(path.join(outDir, ".nojekyll"), "");
 

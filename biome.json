@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["dist", "node_modules", "coverage"]
+    "ignore": ["dist", "node_modules", "coverage", "web-index.json"]
   },
   "formatter": {
     "enabled": true,
