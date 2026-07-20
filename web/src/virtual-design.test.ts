@@ -65,8 +65,13 @@ describe("buildVirtualDesign", () => {
       swatches: ["#112233"],
     };
 
-    expect(buildVirtualDesign({ ...entry, variant: 1 }, "en", labels)).not.toBe(
-      buildVirtualDesign({ ...entry, variant: 2 }, "en", labels),
+    const withoutVariantLine = (value: string) =>
+      value
+        .split("\n")
+        .filter((line) => !line.startsWith("- Variant:"))
+        .join("\n");
+    expect(withoutVariantLine(buildVirtualDesign({ ...entry, variant: 1 }, "en", labels))).not.toBe(
+      withoutVariantLine(buildVirtualDesign({ ...entry, variant: 13 }, "en", labels)),
     );
   });
 });

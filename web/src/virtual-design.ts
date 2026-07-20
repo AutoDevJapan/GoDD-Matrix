@@ -9,6 +9,15 @@ export interface VirtualDesignLabels {
   readonly swatches: readonly string[];
 }
 
+function stableHash(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
 /** Build a standalone, deterministic DESIGN.md specification without cross-repository assets. */
 export function buildVirtualDesign(
   entry: DesignIndexEntry,
@@ -18,6 +27,7 @@ export function buildVirtualDesign(
   const tags = entry.tags?.join(", ") || "—";
   const variant = Math.max(0, entry.variant ?? 0);
   const category = entry.tags?.[0] ?? "general";
+  const seed = stableHash(`${entry.id}|${entry.jsic}|${entry.color}|${entry.mood}|${variant}`);
   const layouts = ["single-column", "sidebar", "split-view", "modular-grid"] as const;
   const densities = ["comfortable", "compact", "spacious"] as const;
   const fontPairs = [
@@ -25,9 +35,37 @@ export function buildVirtualDesign(
     "ui-serif / system-ui",
     "system-ui / ui-monospace",
   ] as const;
-  const layout = layouts[variant % layouts.length];
-  const density = densities[(variant + entry.jsic.length) % densities.length];
-  const fontPair = fontPairs[(variant + entry.mood.length) % fontPairs.length];
+  const componentPatterns = ["task-first", "data-dense", "editorial", "guided-flow"] as const;
+  const radii = ["0px", "4px", "8px", "12px"] as const;
+  const layout = layouts[seed % layouts.length] ?? "single-column";
+  const density = densities[(seed >>> 3) % densities.length] ?? "comfortable";
+  const fontPair = fontPairs[(seed >>> 7) % fontPairs.length] ?? "system-ui / ui-sans-serif";
+  const componentPattern =
+    componentPatterns[(seed >>> 11) % componentPatterns.length] ?? "task-first";
+  const radius = radii[(seed >>> 15) % radii.length] ?? "4px";
+  const jaLayout = {
+    "single-column": "単一カラム",
+    sidebar: "サイドバー",
+    "split-view": "分割ビュー",
+    "modular-grid": "モジュラーグリッド",
+  }[layout];
+  const jaDensity = { comfortable: "標準", compact: "高密度", spacious: "ゆったり" }[density];
+  const jaCategory =
+    (
+      {
+        dashboard: "ダッシュボード",
+        landing: "ランディングページ",
+        ecommerce: "EC",
+        blog: "ブログ",
+        form: "フォーム",
+      } as Record<string, string>
+    )[category] ?? category;
+  const jaComponentPattern = {
+    "task-first": "タスク優先",
+    "data-dense": "情報高密度",
+    editorial: "編集コンテンツ型",
+    "guided-flow": "段階誘導型",
+  }[componentPattern];
   const palette =
     labels.swatches.length > 0
       ? labels.swatches.map((hex, index) => `- \`--color-${index + 1}\`: \`${hex}\``)
@@ -43,7 +81,7 @@ export function buildVirtualDesign(
       `- カラー: ${labels.color}（${entry.color}）`,
       `- ムード: ${labels.mood}（${entry.mood}）`,
       `- タグ: ${tags}`,
-      `- バリアント: ${variant}（${layout} / ${density}）`,
+      `- バリアント: ${variant}（${jaLayout} / ${jaDensity}）`,
       "",
       "## デザイン方針",
       "",
@@ -55,21 +93,23 @@ export function buildVirtualDesign(
       "",
       "## タイポグラフィ",
       "",
-      `- 書体ペア: ${fontPair}`,
+      `- 書体ペア（CSS）: \`${fontPair}\``,
       `- 本文: ${density === "compact" ? "15px" : "16px"}、行高 ${density === "spacious" ? "1.75" : "1.6"}`,
       "- 見出し: system-ui、700、本文とのコントラストを明確にする",
       "- 補助テキスト: 14px以上、背景とのコントラスト比 4.5:1 以上",
       "",
       "## レイアウトと間隔",
       "",
-      `- 構成: ${layout}（${category}の主要タスクを最短導線に置く）`,
+      `- 構成: ${jaLayout}（${jaCategory}の主要タスクを最短導線に置く）`,
+      `- 角丸トークン: \`${radius}\``,
       "- 4px基準のスペーシングスケールを使用する",
       "- コンテンツ幅を制限し、モバイルでは1カラムへ縮退する",
       "- 主要操作間に十分な余白を確保し、44px以上のタップ領域を保つ",
       "",
       "## コンポーネント",
       "",
-      `- ${category}向けの主要操作をprimary actionとして一つに絞る`,
+      `- ${jaCategory}向けの主要操作を主操作として一つに絞る`,
+      `- コンポーネント構成: ${jaComponentPattern}`,
       "- ボタン: primary / secondary / disabled / focus-visible を定義する",
       "- 入力: label、説明、エラーを関連付ける",
       "- カード: 見出し、本文、操作の順で一貫した構造にする",
@@ -112,6 +152,7 @@ export function buildVirtualDesign(
     "## Layout and spacing",
     "",
     `- Structure: ${layout}, placing the primary ${category} task on the shortest path`,
+    `- Corner-radius token: \`${radius}\``,
     "- Use a 4px-based spacing scale",
     "- Constrain content width and collapse to one column on mobile",
     "- Keep primary actions separated and provide tap targets of at least 44px",
@@ -119,6 +160,7 @@ export function buildVirtualDesign(
     "## Components",
     "",
     `- Keep one primary action for the core ${category} task`,
+    `- Component pattern: ${componentPattern}`,
     "- Buttons: define primary, secondary, disabled, and focus-visible states",
     "- Inputs: associate labels, descriptions, and errors programmatically",
     "- Cards: keep a consistent heading, content, and action structure",

@@ -1215,6 +1215,7 @@ function getCombinationAtIndex(
     mood,
     title,
     hash: "",
+    variant: extraIndex,
     createdAt: "2026-07-20",
     tags: [cat, style, getEntryIndustry({ jsic: jsicObj.code, path: "" } as DesignIndexEntry)],
   };
