@@ -2,16 +2,6 @@ import type { DesignIndexEntry } from "../../src/ds/types.js";
 
 export type ResultSortOrder = "popular" | "newest";
 
-/** Stable popularity proxy for catalog entries that do not carry analytics. */
-export function popularityScore(entry: DesignIndexEntry): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < entry.id.length; index++) {
-    hash ^= entry.id.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
 function createdAtMillis(entry: DesignIndexEntry): number {
   const value = entry.createdAt ? Date.parse(entry.createdAt) : Number.NaN;
   return Number.isFinite(value) ? value : 0;
@@ -22,16 +12,12 @@ export function sortDesignEntries(
   entries: readonly DesignIndexEntry[],
   order: ResultSortOrder,
 ): DesignIndexEntry[] {
+  if (order === "popular") return [...entries];
   return [...entries].sort((left, right) => {
-    if (order === "popular") {
-      const scoreDifference = popularityScore(right) - popularityScore(left);
-      if (scoreDifference !== 0) return scoreDifference;
-    } else {
-      const dateDifference = createdAtMillis(right) - createdAtMillis(left);
-      if (dateDifference !== 0) return dateDifference;
-      const variantDifference = (right.variant ?? 0) - (left.variant ?? 0);
-      if (variantDifference !== 0) return variantDifference;
-    }
+    const dateDifference = createdAtMillis(right) - createdAtMillis(left);
+    if (dateDifference !== 0) return dateDifference;
+    const variantDifference = (right.variant ?? 0) - (left.variant ?? 0);
+    if (variantDifference !== 0) return variantDifference;
     return left.id.localeCompare(right.id, "en");
   });
 }

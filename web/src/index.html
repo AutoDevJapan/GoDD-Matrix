@@ -86,8 +86,8 @@
               <div class="sample-label" id="sample-count-display">0件中 0件を表示中</div>
             </div>
             <div class="sort-actions" id="sort-actions">
-              <button id="sort-btn-popular" class="sort-btn active">人気順</button>
-              <button id="sort-btn-newest" class="sort-btn">新着順</button>
+              <button id="sort-btn-popular" class="sort-btn active" aria-pressed="true">人気順</button>
+              <button id="sort-btn-newest" class="sort-btn" aria-pressed="false">新着順</button>
             </div>
           </div>
 
@@ -111,6 +111,7 @@
               <div class="detail-code-section">
                 <div class="section-subtitle" id="label-code-preview">DESIGN.md プレビュー</div>
                 <div class="code-wrapper">
+                  <div id="detail-load-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
                   <pre><code id="detail-code-block"></code></pre>
                 </div>
               </div>

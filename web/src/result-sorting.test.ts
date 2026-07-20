@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
-import { popularityScore, sortDesignEntries, virtualIndexAtRank } from "./result-sorting.js";
+import { sortDesignEntries, virtualIndexAtRank } from "./result-sorting.js";
 
 function entry(id: string, createdAt: string, variant = 0): DesignIndexEntry {
   return {
@@ -22,11 +22,12 @@ describe("sortDesignEntries", () => {
     { ...entry("virtual-c", "2026-01-01", 3), hash: "" },
   ];
 
-  it("defines Popular as descending stable ID-derived popularity", () => {
-    const expected = [...entries]
-      .sort((left, right) => popularityScore(right) - popularityScore(left))
-      .map(({ id }) => id);
-    expect(sortDesignEntries(entries, "popular").map(({ id }) => id)).toEqual(expected);
+  it("defines Popular as the curated catalog rank when analytics are unavailable", () => {
+    expect(sortDesignEntries(entries, "popular").map(({ id }) => id)).toEqual([
+      "materialized-a",
+      "materialized-b",
+      "virtual-c",
+    ]);
     expect(entries.map(({ id }) => id)).toEqual(["materialized-a", "materialized-b", "virtual-c"]);
   });
 
