@@ -871,63 +871,105 @@ function applyState(): void {
   renderPager(pageView);
 }
 
-function generateVirtualMatch(filters: Filters): DesignIndexEntry {
-  // Resolve JSIC code
-  let jsic = "6061";
+function generateVirtualMatches(
+  filters: Filters,
+  query: string,
+  targetCount: number,
+): DesignIndexEntry[] {
+  const matches: DesignIndexEntry[] = [];
+  const q = query.toLowerCase().trim();
+
+  // Find matching JSIC subclasses
+  let matchingJsic = JSIC_SUBCLASSES;
   if (filters.industry) {
-    if (filters.industry === "saas") jsic = "6061";
-    else if (filters.industry === "ec") jsic = "5811";
-    else if (filters.industry === "finance") jsic = "7281";
-    else {
-      // Find a JSIC subclass code that hashes to this industry
-      const subclass = JSIC_SUBCLASSES.find((s) => {
-        const hash = s.code.charCodeAt(s.code.length - 1) % INDUSTRIES.length;
-        return INDUSTRIES[hash]?.v === filters.industry;
-      });
-      if (subclass) jsic = subclass.code;
+    matchingJsic = JSIC_SUBCLASSES.filter((s) => {
+      const hash = s.code.charCodeAt(s.code.length - 1) % INDUSTRIES.length;
+      return INDUSTRIES[hash]?.v === filters.industry;
+    });
+  }
+  if (q) {
+    matchingJsic = matchingJsic.filter((s) => {
+      const name = jsicName(s.code) || "";
+      return s.code.includes(q) || name.toLowerCase().includes(q);
+    });
+  }
+
+  // Fallback if search narrowed down too much
+  if (matchingJsic.length === 0) {
+    matchingJsic = JSIC_SUBCLASSES.slice(0, 10);
+  }
+
+  // Get matching colors
+  let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
+  if (filters.color) {
+    if (filters.color === "indigo" || filters.color === "blue" || filters.color === "light-blue") {
+      matchingColors = ["h17b-lt"];
+    } else if (filters.color === "green") {
+      matchingColors = ["h12s-sf"];
+    } else if (filters.color === "yellow" || filters.color === "warm-gray") {
+      matchingColors = ["gray-3"];
+    } else if (filters.color === "orange") {
+      matchingColors = ["h2v-vv"];
+    } else if (filters.color === "black") {
+      matchingColors = ["black"];
     }
   }
 
-  // Resolve Color Key (map UI palette slugs to actual supported PCCS keys in MINIMAL_COLORS)
-  let color = "h17b-lt";
-  if (filters.color) {
-    if (filters.color === "indigo") color = "h17b-lt";
-    else if (filters.color === "light-blue") color = "h17b-lt";
-    else if (filters.color === "green") color = "h12s-sf";
-    else if (filters.color === "yellow") color = "gray-3";
-    else if (filters.color === "orange") color = "h2v-vv";
-    else if (filters.color === "blue") color = "h17b-lt";
-    else if (filters.color === "warm-gray") color = "gray-3";
-    else if (filters.color === "black") color = "black";
-  }
-
-  // Resolve Mood Key
-  let mood = "minimal";
+  // Get matching moods
+  let matchingMoods = [
+    "minimal",
+    "vintage",
+    "brutalist",
+    "elegant",
+    "corporate",
+    "tech",
+    "warm",
+    "organic",
+  ];
   if (filters.style) {
-    if (filters.style === "minimal") mood = "minimal";
-    else if (filters.style === "retro") mood = "vintage";
-    else if (filters.style === "brutalist") mood = "brutalist";
-    else if (filters.style === "glass") mood = "elegant";
-    else if (filters.style === "corporate") mood = "corporate";
-    else if (filters.style === "dark") mood = "tech";
-    else if (filters.style === "neu") mood = "warm";
-    else if (filters.style === "playful") mood = "organic";
+    if (filters.style === "minimal") matchingMoods = ["minimal"];
+    else if (filters.style === "retro") matchingMoods = ["vintage"];
+    else if (filters.style === "brutalist") matchingMoods = ["brutalist"];
+    else if (filters.style === "glass") matchingMoods = ["elegant"];
+    else if (filters.style === "corporate") matchingMoods = ["corporate"];
+    else if (filters.style === "dark") matchingMoods = ["tech"];
+    else if (filters.style === "neu") matchingMoods = ["warm"];
+    else if (filters.style === "playful") matchingMoods = ["organic"];
   }
 
-  const id = `virtual_${jsic}_${color}_${mood}`;
-  const title = `VIRTUAL DESIGN: ${jsicName(jsic)} × ${color} × ${mood}`;
+  // Create deterministic combinations
+  for (const jsicObj of matchingJsic) {
+    for (const color of matchingColors) {
+      for (const mood of matchingMoods) {
+        if (matches.length >= targetCount) break;
 
-  return {
-    id,
-    path: `design-md/${jsic}/${color}/${mood}/DESIGN.md`,
-    jsic,
-    color,
-    mood,
-    title,
-    hash: "",
-    createdAt: "2026-07-20",
-    tags: [filters.category || "Dashboard", filters.style || "Minimal", filters.industry || "SaaS"],
-  };
+        const id = `virtual_${jsicObj.code}_${color}_${mood}`;
+        // Skip if this is already pre-generated in allEntries
+        if (allEntries.some((e) => e.id === id)) continue;
+
+        const title = `VIRTUAL DESIGN: ${jsicName(jsicObj.code)} × ${color} × ${mood}`;
+        matches.push({
+          id,
+          path: `design-md/${jsicObj.code}/${color}/${mood}/DESIGN.md`,
+          jsic: jsicObj.code,
+          color,
+          mood,
+          title,
+          hash: "",
+          createdAt: "2026-07-20",
+          tags: [
+            filters.category || "Dashboard",
+            filters.style || "Minimal",
+            filters.industry || "SaaS",
+          ],
+        });
+      }
+      if (matches.length >= targetCount) break;
+    }
+    if (matches.length >= targetCount) break;
+  }
+
+  return matches;
 }
 
 function matchColorFamily(entryColor: string, paletteSlug: string): boolean {
@@ -989,8 +1031,9 @@ function getFilteredList(): readonly DesignIndexEntry[] {
   if (filters.industry) {
     list = list.filter((item) => getEntryIndustry(item) === filters.industry);
   }
-  if (filters.color) {
-    list = list.filter((item) => matchColorFamily(item.color, filters.color));
+  const colFilter = filters.color;
+  if (colFilter) {
+    list = list.filter((item) => matchColorFamily(item.color, colFilter));
   }
 
   // Sort
@@ -1002,12 +1045,17 @@ function getFilteredList(): readonly DesignIndexEntry[] {
     );
   }
 
-  // If list is empty but we have active filters, generate a virtual matching cell!
-  if (
-    list.length === 0 &&
-    (filters.category || filters.style || filters.industry || filters.color)
-  ) {
-    return [generateVirtualMatch(filters)];
+  // If we have active filters/query, append virtual matches to fill the list up to 120 items!
+  const hasActiveFilters = !!(
+    filters.category ||
+    filters.style ||
+    filters.industry ||
+    filters.color ||
+    q
+  );
+  if (hasActiveFilters && list.length < 120) {
+    const virtualMatches = generateVirtualMatches(filters, q, 120 - list.length);
+    list = [...list, ...virtualMatches];
   }
 
   return list;
