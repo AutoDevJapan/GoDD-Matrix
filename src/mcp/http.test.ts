@@ -156,6 +156,43 @@ describe("createMcpRequestHandler", () => {
     expect(built).toBe(false);
   });
 
+  it("Content-Length がなくても実ボディが maxBodyBytes 超過なら 413", async () => {
+    let built = false;
+    const handle = createMcpRequestHandler({
+      maxBodyBytes: 32,
+      runtimeFactory: async () => {
+        built = true;
+        return makeRuntime();
+      },
+    });
+    const request = mcpRequest(INITIALIZE);
+    expect(request.headers.has("content-length")).toBe(false);
+
+    const res = await handle(request);
+
+    expect(res.status).toBe(413);
+    expect((await readJson(res)).error).toMatchObject({ code: -32600 });
+    expect(built).toBe(false);
+  });
+
+  it("未認証でも過大ボディは認証・メタデータ解析より前に 413", async () => {
+    const handle = createMcpRequestHandler({
+      apiKey: "secret-key",
+      maxBodyBytes: 8,
+      runtimeFactory: async () => makeRuntime(),
+    });
+    const request = new Request("https://example.test/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "not-json-but-too-large",
+    });
+
+    const res = await handle(request);
+
+    expect(res.status).toBe(413);
+    expect((await readJson(res)).error).toMatchObject({ code: -32600 });
+  });
+
   it("maxBodyBytes 以内なら通常どおり処理する", async () => {
     const handle = createMcpRequestHandler({
       maxBodyBytes: 1_048_576,
