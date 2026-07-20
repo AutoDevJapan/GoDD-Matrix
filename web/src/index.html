@@ -12,12 +12,24 @@
   </head>
   <body>
     <header class="site-header">
-      <h1>GoDD Matrix — デザイン検索 &amp; プロンプト</h1>
-      <p class="lede">
-        業種 (JSIC) × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude
-        用プロンプトをブラウザ内で合成してコピーします。データは公開リポジトリから直接取得し、
-        サーバや秘密は一切使いません (完全クライアントサイド)。
-      </p>
+      <div class="site-header-content">
+        <h1>GoDD Matrix — デザイン検索 &amp; プロンプト</h1>
+        <p class="lede">
+          業種 (JSIC) × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude
+          用プロンプトをブラウザ内で合成してコピーします。データは公開リポジトリから直接取得し、
+          サーバや秘密は一切使いません (完全クライアントサイド)。
+        </p>
+      </div>
+      <div class="stats-card">
+        <div class="stat-item">
+          <span class="stat-label">理論空間 (直積×バリアント)</span>
+          <span class="stat-value highlight">1.16億件以上</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">生成済み実数 (DESIGN.md)</span>
+          <span class="stat-value" id="stat-materialized-count">読み込み中…</span>
+        </div>
+      </div>
     </header>
 
     <main class="layout">
