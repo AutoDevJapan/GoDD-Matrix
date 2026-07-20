@@ -3,129 +3,177 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GoDD Matrix — Design Synthesizer & Prompts</title>
+    <title>GoDD Matrix — DESIGN.md Library</title>
     <meta
       name="description"
-      content="業種 × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude 用プロンプトを生成・コピーする静的ツール。完全クライアントサイド。"
+      content="1億件以上のDESIGNファイルを検索・共有 / Search & share 100M+ DESIGN files"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <!-- Premium Ambient Backdrop Glows -->
-    <div class="bg-glows">
-      <div class="glow glow-1"></div>
-      <div class="glow glow-2"></div>
-    </div>
-
-    <header class="site-header">
-      <div class="site-header-content">
-        <div class="brand-badge">GODD ENGINE v2.0</div>
-        <h1>DESIGN SYNTHESIZER</h1>
-        <p class="lede">
-          業種 (JSIC) × カラー × ムードから確定デザイン仕様を即座に抽出し、Claude用システムプロンプトを決定論的に合成するプロフェッショナル・ダッシュボード。
-        </p>
-      </div>
-      <div class="stats-card">
-        <div class="locale-select-container">
+    <div class="app-container">
+      <!-- Sticky Navigation Bar -->
+      <nav class="nav-bar">
+        <div class="nav-brand">
+          <div class="brand-logo">D.md</div>
+          <div>
+            <div class="brand-title">DESIGN.md Library</div>
+            <div class="brand-subtitle" id="label-brand-subtitle">1億件以上のDESIGNファイルを検索・共有 / Search & share 100M+ DESIGN files</div>
+          </div>
+        </div>
+        <div class="nav-actions">
           <select id="locale-select" class="locale-select" aria-label="Language / 言語">
             <option value="ja">日本語</option>
             <option value="en">English</option>
           </select>
         </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-label" id="stat-label-theoretical">設計可能空間（直積）</span>
-          <span class="stat-value highlight" id="stat-value-theoretical">172,635,600</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-label" id="stat-label-materialized">事前生成仕様（DESIGN.md）</span>
-          <span class="stat-value" id="stat-materialized-count">Loading...</span>
-        </div>
-      </div>
-    </header>
+      </nav>
 
-    <main class="layout">
-      <!-- Sidebar Control Room -->
-      <form id="search-form" class="search" autocomplete="off">
-        <div class="control-header">
-          <span class="pulse-indicator"></span>
-          <h2 class="section-title">CONTROL PANEL</h2>
-        </div>
-        
-        <div class="field">
-          <label for="q-industry">業種 (名称 / キーワード / JSIC)</label>
-          <input id="q-industry" type="text" placeholder="例: コンサル / 書店 / 7281" />
-        </div>
-        <div class="field">
-          <label for="q-color">カラー (PCCS色相 / トーン / 色名)</label>
-          <input id="q-color" type="text" placeholder="例: 青 / ライトブルー / white" />
-        </div>
-        <div class="field">
-          <label for="q-mood">ムード (印象キーワード)</label>
-          <input id="q-mood" type="text" placeholder="例: 信頼 / ミニマル" />
-        </div>
-        <div class="field">
-          <label for="q-tags">タグ (カンマ区切り / AND)</label>
-          <input id="q-tags" type="text" placeholder="例: editorial, serif-display" />
-        </div>
-        <div class="field">
-          <label for="q-text">自由文クロス検索</label>
-          <input id="q-text" type="text" placeholder="タイトル・タグ・名称を横断検索" />
-        </div>
-        <div class="field">
-          <label for="q-output-lang">出力サイト言語 (任意)</label>
-          <input
-            id="q-output-lang"
-            type="text"
-            list="output-lang-suggestions"
-            placeholder="例: English / 日本語"
-          />
-          <datalist id="output-lang-suggestions">
-            <option value="日本語"></option>
-            <option value="English"></option>
-            <option value="简体中文"></option>
-            <option value="繁體中文"></option>
-            <option value="한국어"></option>
-            <option value="Español"></option>
-            <option value="Français"></option>
-          </datalist>
-          <p class="field-hint">
-            生成プロンプトに「この言語で作れ」と注入します。空なら仕様の言語のまま。
-          </p>
-        </div>
-        
-        <div class="actions">
-          <button type="submit" class="primary">SYNTHESIZE</button>
-          <button type="button" id="reset-btn" class="ghost">RESET</button>
-        </div>
-        <p id="status" class="status" role="status" aria-live="polite">Initializing...</p>
-      </form>
+      <!-- Main Layout Container -->
+      <main class="main-content">
+        <!-- SEARCH VIEW -->
+        <div id="search-view" class="view-section">
+          <!-- Banner Hero -->
+          <header class="hero-banner">
+            <div class="hero-tag" id="label-hero-tag">世界最大のDESIGNファイルライブラリ / World's largest DESIGN.md library</div>
+            <div class="hero-counter" id="live-total-counter">0</div>
+            <div class="hero-sub" id="label-hero-sub">件のDESIGN.mdファイルが検索可能 / DESIGN.md files ready to search</div>
+          </header>
 
-      <!-- Center Workspace (Candidates & Filters) -->
-      <section class="content">
-        <div id="axes" class="axes"></div>
-        <section id="facets" class="facets" aria-label="ファセット絞り込み"></section>
-        
-        <div class="catalog-header">
-          <h2 class="section-title">SPECIFICATION CATALOG</h2>
+          <!-- Centered Search Bar -->
+          <div class="search-bar-wrapper">
+            <span class="search-bar-icon">⌕</span>
+            <input type="text" id="main-search-input" placeholder="検索 / Search e.g. 'ミニマル ダッシュボード'" />
+          </div>
+
+          <!-- Facets Accordion / Filters -->
+          <div class="facets-container">
+            <div class="facet-row" id="facet-row-category">
+              <div class="facet-label" id="label-facet-category">カテゴリ / Category</div>
+              <div class="facet-list" id="facet-list-category"></div>
+            </div>
+            <div class="facet-row" id="facet-row-style">
+              <div class="facet-label" id="label-facet-style">スタイル / Style</div>
+              <div class="facet-list" id="facet-list-style"></div>
+            </div>
+            <div class="facet-row" id="facet-row-industry">
+              <div class="facet-label" id="label-facet-industry">業界 / Industry</div>
+              <div class="facet-list" id="facet-list-industry"></div>
+            </div>
+            <div class="facet-row" id="facet-row-color">
+              <div class="facet-label" id="label-facet-color">カラー / Color</div>
+              <div class="facet-list" id="facet-list-color"></div>
+            </div>
+          </div>
+
+          <!-- Active Filter Pills -->
+          <div id="active-pills-bar" class="active-pills-bar hidden">
+            <span class="pills-label" id="label-active-pills">適用中 / Active:</span>
+            <div class="pills-container" id="pills-container"></div>
+            <button id="clear-all-btn" class="clear-all-btn">すべてクリア / Clear all</button>
+          </div>
+
+          <!-- Matches Summary & Sort -->
+          <div class="matches-header">
+            <div>
+              <div class="matches-count" id="matches-count-display">
+                0 <span class="matches-count-label" id="label-matches-count">件が一致 / files match</span>
+              </div>
+              <div class="sample-label" id="sample-count-display">0件のサンプルを表示中 / Showing 0 sample results</div>
+            </div>
+            <div class="sort-actions" id="sort-actions">
+              <button id="sort-btn-popular" class="sort-btn active">人気順 / Popular</button>
+              <button id="sort-btn-newest" class="sort-btn">新着順 / Newest</button>
+            </div>
+          </div>
+
+          <!-- Candidates Catalog Grid -->
+          <div id="results" class="results-grid"></div>
+
+          <!-- Pagination -->
+          <nav id="pager" class="pager" aria-label="ページ送り"></nav>
         </div>
-        <div id="results" class="results"></div>
-        <nav id="pager" class="pager" aria-label="ページ送り"></nav>
-      </section>
 
-      <!-- Right Column (Specification Terminal) -->
-      <div id="detail" class="detail"></div>
-    </main>
+        <!-- DETAIL VIEW (Initially Hidden) -->
+        <div id="detail-view" class="view-section hidden">
+          <button id="back-btn" class="back-btn">← 検索に戻る / Back to search</button>
 
-    <footer class="site-footer">
-      <p>
-        DATA SOURCE: GoDD Design System Public Corpus (index.json / DESIGN.md) raw client-side fetch.
-      </p>
-    </footer>
+          <div class="detail-grid">
+            <!-- Left Side: Preview & Markdown Code -->
+            <div class="detail-main">
+              <div class="detail-preview-box" id="detail-preview-box">
+                <div class="preview-overlay">PREVIEW IMAGE</div>
+              </div>
+              <div class="detail-code-section">
+                <div class="section-subtitle" id="label-code-preview">DESIGN.md プレビュー / Preview</div>
+                <div class="code-wrapper">
+                  <pre><code id="detail-code-block"></code></pre>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: Details & Action Buttons -->
+            <div class="detail-sidebar">
+              <div class="detail-filename" id="detail-filename">filename.design.md</div>
+              <h1 class="detail-title-ja" id="detail-title-ja">日本語タイトル</h1>
+              <div class="detail-title-en" id="detail-title-en">English Title</div>
+
+              <div class="detail-badges" id="detail-badges"></div>
+
+              <div class="detail-swatches" id="detail-swatches"></div>
+
+              <p class="detail-desc-ja" id="detail-desc-ja">日本語の説明文</p>
+              <p class="detail-desc-en" id="detail-desc-en">English description text</p>
+
+              <!-- Synthesis Notice if Virtual -->
+              <div id="detail-virtual-notice" class="detail-virtual-notice hidden">
+                <span class="badge warn" id="label-virtual-badge">VIRTUAL</span>
+                <span id="detail-virtual-notice-text">決定論的デザインエンジンによりリアルタイム合成されました。</span>
+              </div>
+
+              <!-- Metadata Table -->
+              <div class="meta-table">
+                <div class="meta-row">
+                  <span class="meta-key" id="label-meta-downloads">ダウンロード数 / Downloads</span>
+                  <span class="meta-val" id="detail-downloads-val">0</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-key" id="label-meta-updated">更新日 / Updated</span>
+                  <span class="meta-val" id="detail-updated-val">2026-07-20</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-key" id="label-meta-license">ライセンス / License</span>
+                  <span class="meta-val" id="detail-license-val">MIT</span>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="detail-action-buttons">
+                <button id="btn-download" class="action-btn primary">ダウンロード / Download</button>
+                <button id="btn-copy" class="action-btn">コピー / Copy</button>
+                <button id="btn-share" class="action-btn">共有リンク / Share</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Related Files -->
+          <div class="related-section">
+            <div class="related-title" id="label-related-title">関連するDESIGNファイル / Related files</div>
+            <div class="related-grid" id="related-grid"></div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <p>DATA SOURCE: GoDD Design System Public Corpus (index.json / DESIGN.md) client-side fetch.</p>
+      </footer>
+
+      <!-- Toast Notification -->
+      <div id="toast" class="toast"></div>
+    </div>
 
     <script type="module" src="./assets/app.js"></script>
   </body>
