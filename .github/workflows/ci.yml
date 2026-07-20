@@ -44,6 +44,9 @@ jobs:
       - name: Typecheck web
         run: pnpm typecheck:web
 
+      - name: Typecheck browser tests
+        run: pnpm typecheck:e2e
+
       - name: Test (vitest)
         run: pnpm test
 
@@ -52,6 +55,13 @@ jobs:
 
       - name: Build static web
         run: pnpm build:web
+
+      # Chromium 1種・1 worker の小さな built-site suite に限定して実行時間を抑える。
+      - name: Install Chromium for browser tests
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser regression tests
+        run: pnpm test:e2e
 
   gitleaks:
     name: シークレット走査 (gitleaks)
