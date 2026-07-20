@@ -150,8 +150,13 @@ function getEntryFont(entry: DesignIndexEntry): string {
 }
 
 function getDownloadsCount(entry: DesignIndexEntry): number {
-  const hash = entry.id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return (hash % 100) * 15000 + 8200;
+  let hash = 0;
+  for (let i = 0; i < entry.id.length; i++) {
+    hash = (hash * 31 + entry.id.charCodeAt(i)) | 0;
+  }
+  hash = Math.abs(hash);
+  const u = (hash % 10000) / 10000;
+  return Math.floor(150 + 800 / (u * 0.95 + 0.02) ** 1.8);
 }
 
 function formatDownloads(n: number): string {
@@ -170,6 +175,115 @@ function getSwatchHexes(entry: DesignIndexEntry): string[] {
 function getThumbnailBg(entry: DesignIndexEntry): string {
   const colors = getSwatchHexes(entry);
   return `repeating-linear-gradient(135deg, ${colors[0]} 0px, ${colors[0]} 22px, ${colors[1]} 22px, ${colors[1]} 44px)`;
+}
+
+function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void {
+  const colors = getSwatchHexes(entry);
+  const primaryColor = colors[0] || "#6366f1";
+  const accentColor = colors[1] || primaryColor;
+  const isDark = entry.mood === "dark" || entry.mood === "futuristic" || entry.mood === "brutalist";
+
+  const bg = isDark ? "#16171f" : "#f8f9fa";
+  const border = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)";
+  const muted = isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)";
+  const cardBg = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
+
+  container.replaceChildren();
+  container.style.background = bg;
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.gap = "8px";
+  container.style.padding = "12px";
+  container.style.height = "100%";
+  container.style.width = "100%";
+  container.style.boxSizing = "border-box";
+  container.style.overflow = "hidden";
+  container.style.position = "relative";
+
+  // Header Bar
+  const header = el("div");
+  header.style.display = "flex";
+  header.style.justifyContent = "space-between";
+  header.style.alignItems = "center";
+  header.style.borderBottom = `1px solid ${border}`;
+  header.style.paddingBottom = "6px";
+
+  const dot = el("div");
+  dot.style.width = "8px";
+  dot.style.height = "8px";
+  dot.style.borderRadius = "50%";
+  dot.style.background = primaryColor;
+  header.appendChild(dot);
+
+  const right = el("div");
+  right.style.display = "flex";
+  right.style.gap = "4px";
+  for (let i = 0; i < 3; i++) {
+    const line = el("div");
+    line.style.width = "12px";
+    line.style.height = "2px";
+    line.style.background = muted;
+    right.appendChild(line);
+  }
+  header.appendChild(right);
+  container.appendChild(header);
+
+  // Content Area
+  const body = el("div");
+  body.style.display = "flex";
+  body.style.gap = "8px";
+  body.style.flex = "1";
+
+  const sidebar = el("div");
+  sidebar.style.width = "16px";
+  sidebar.style.background = isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)";
+  sidebar.style.borderRadius = "4px";
+  sidebar.style.padding = "4px";
+  sidebar.style.display = "flex";
+  sidebar.style.flexDirection = "column";
+  sidebar.style.gap = "4px";
+  for (let i = 0; i < 3; i++) {
+    const item = el("div");
+    item.style.height = "3px";
+    item.style.background = i === 0 ? accentColor : muted;
+    item.style.borderRadius = "1px";
+    sidebar.appendChild(item);
+  }
+  body.appendChild(sidebar);
+
+  const main = el("div");
+  main.style.flex = "1";
+  main.style.display = "flex";
+  main.style.flexDirection = "column";
+  main.style.gap = "6px";
+
+  const mockCard = el("div");
+  mockCard.style.flex = "1";
+  mockCard.style.background = cardBg;
+  mockCard.style.border = `1px solid ${border}`;
+  mockCard.style.borderRadius = "4px";
+  mockCard.style.padding = "6px";
+  mockCard.style.display = "flex";
+  mockCard.style.flexDirection = "column";
+  mockCard.style.justifyContent = "space-between";
+
+  const topBar = el("div");
+  topBar.style.width = "50%";
+  topBar.style.height = "3px";
+  topBar.style.background = primaryColor;
+  topBar.style.borderRadius = "1px";
+  mockCard.appendChild(topBar);
+
+  const btn = el("div");
+  btn.style.width = "30px";
+  btn.style.height = "10px";
+  btn.style.background = accentColor;
+  btn.style.borderRadius = "3px";
+  mockCard.appendChild(btn);
+
+  main.appendChild(mockCard);
+  body.appendChild(main);
+  container.appendChild(body);
 }
 
 // Translations Structure
@@ -489,7 +603,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     };
 
     const thumb = el("div", { class: "related-thumb" });
-    thumb.style.background = getThumbnailBg(item);
+    renderThumbnail(item, thumb);
     thumb.appendChild(el("div", { class: "preview-overlay", text: "PREVIEW" }));
     card.appendChild(thumb);
 
@@ -697,7 +811,7 @@ function applyState(): void {
       };
 
       const thumb = el("div", { class: "card-thumbnail" });
-      thumb.style.background = getThumbnailBg(entry);
+      renderThumbnail(entry, thumb);
       thumb.appendChild(el("div", { class: "preview-overlay", text: "PREVIEW" }));
       card.appendChild(thumb);
 
