@@ -3,24 +3,29 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GoDD Matrix — デザイン検索 & プロンプト</title>
+    <title>GoDD Matrix — Design Synthesizer & Prompts</title>
     <meta
       name="description"
       content="業種 × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude 用プロンプトを生成・コピーする静的ツール。完全クライアントサイド。"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <!-- Premium Ambient Backdrop Glows -->
+    <div class="bg-glows">
+      <div class="glow glow-1"></div>
+      <div class="glow glow-2"></div>
+    </div>
+
     <header class="site-header">
       <div class="site-header-content">
-        <h1>GoDD Matrix — デザイン検索 &amp; プロンプト</h1>
+        <div class="brand-badge">GODD ENGINE v2.0</div>
+        <h1>DESIGN SYNTHESIZER</h1>
         <p class="lede">
-          業種 (JSIC) × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude
-          用プロンプトをブラウザ内で合成してコピーします。データは公開リポジトリから直接取得し、
-          サーバや秘密は一切使いません (完全クライアントサイド)。
+          業種 (JSIC) × カラー × ムードから確定デザイン仕様を即座に抽出し、Claude用システムプロンプトを決定論的に合成するプロフェッショナル・ダッシュボード。
         </p>
       </div>
       <div class="stats-card">
@@ -30,30 +35,37 @@
             <option value="en">English</option>
           </select>
         </div>
+        <div class="stat-divider"></div>
         <div class="stat-item">
-          <span class="stat-label" id="stat-label-theoretical">理論空間 (直積×バリアント)</span>
-          <span class="stat-value highlight" id="stat-value-theoretical">1.16億件以上</span>
+          <span class="stat-label" id="stat-label-theoretical">設計可能空間（直積）</span>
+          <span class="stat-value highlight" id="stat-value-theoretical">172,635,600</span>
         </div>
+        <div class="stat-divider"></div>
         <div class="stat-item">
-          <span class="stat-label" id="stat-label-materialized">生成済み実数 (DESIGN.md)</span>
-          <span class="stat-value" id="stat-materialized-count">読み込み中…</span>
+          <span class="stat-label" id="stat-label-materialized">事前生成仕様（DESIGN.md）</span>
+          <span class="stat-value" id="stat-materialized-count">Loading...</span>
         </div>
       </div>
     </header>
 
     <main class="layout">
+      <!-- Sidebar Control Room -->
       <form id="search-form" class="search" autocomplete="off">
-        <h2 class="section-title">要望で検索</h2>
+        <div class="control-header">
+          <span class="pulse-indicator"></span>
+          <h2 class="section-title">CONTROL PANEL</h2>
+        </div>
+        
         <div class="field">
-          <label for="q-industry">業種 (名称 / キーワード / JSIC コード)</label>
+          <label for="q-industry">業種 (名称 / キーワード / JSIC)</label>
           <input id="q-industry" type="text" placeholder="例: コンサル / 書店 / 7281" />
         </div>
         <div class="field">
-          <label for="q-color">カラー</label>
+          <label for="q-color">カラー (PCCS色相 / トーン / 色名)</label>
           <input id="q-color" type="text" placeholder="例: 青 / ライトブルー / white" />
         </div>
         <div class="field">
-          <label for="q-mood">ムード</label>
+          <label for="q-mood">ムード (印象キーワード)</label>
           <input id="q-mood" type="text" placeholder="例: 信頼 / ミニマル" />
         </div>
         <div class="field">
@@ -61,16 +73,16 @@
           <input id="q-tags" type="text" placeholder="例: editorial, serif-display" />
         </div>
         <div class="field">
-          <label for="q-text">自由文</label>
+          <label for="q-text">自由文クロス検索</label>
           <input id="q-text" type="text" placeholder="タイトル・タグ・名称を横断検索" />
         </div>
         <div class="field">
-          <label for="q-output-lang">作りたいサイトの言語（任意）</label>
+          <label for="q-output-lang">出力サイト言語 (任意)</label>
           <input
             id="q-output-lang"
             type="text"
             list="output-lang-suggestions"
-            placeholder="例: English / 日本語 / Français / 简体中文"
+            placeholder="例: English / 日本語"
           />
           <datalist id="output-lang-suggestions">
             <option value="日本語"></option>
@@ -80,42 +92,38 @@
             <option value="한국어"></option>
             <option value="Español"></option>
             <option value="Français"></option>
-            <option value="Deutsch"></option>
-            <option value="Português"></option>
-            <option value="Italiano"></option>
-            <option value="Русский"></option>
-            <option value="العربية"></option>
-            <option value="हिन्दी"></option>
-            <option value="Bahasa Indonesia"></option>
-            <option value="Tiếng Việt"></option>
-            <option value="ไทย"></option>
           </datalist>
           <p class="field-hint">
             生成プロンプトに「この言語で作れ」と注入します。空なら仕様の言語のまま。
           </p>
         </div>
+        
         <div class="actions">
-          <button type="submit" class="primary">検索</button>
-          <button type="button" id="reset-btn" class="ghost">リセット</button>
+          <button type="submit" class="primary">SYNTHESIZE</button>
+          <button type="button" id="reset-btn" class="ghost">RESET</button>
         </div>
-        <p id="status" class="status" role="status" aria-live="polite">読み込み中…</p>
+        <p id="status" class="status" role="status" aria-live="polite">Initializing...</p>
       </form>
 
+      <!-- Center Workspace (Candidates & Filters) -->
       <section class="content">
         <div id="axes" class="axes"></div>
         <section id="facets" class="facets" aria-label="ファセット絞り込み"></section>
-        <h2 class="section-title">候補セル</h2>
+        
+        <div class="catalog-header">
+          <h2 class="section-title">SPECIFICATION CATALOG</h2>
+        </div>
         <div id="results" class="results"></div>
         <nav id="pager" class="pager" aria-label="ページ送り"></nav>
       </section>
 
+      <!-- Right Column (Specification Terminal) -->
       <div id="detail" class="detail"></div>
     </main>
 
     <footer class="site-footer">
       <p>
-        データ出典: 公開 Design-Systems リポジトリ (index.json / DESIGN.md) を raw から直接取得。
-        本ツールはクライアントサイドのみで動作します。
+        DATA SOURCE: GoDD Design System Public Corpus (index.json / DESIGN.md) raw client-side fetch.
       </p>
     </footer>
 
