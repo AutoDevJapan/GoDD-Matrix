@@ -31,6 +31,7 @@ import {
   resolveMoodSlug,
 } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
+import { buildVirtualDesign } from "./virtual-design.js";
 
 // DOM helper to build elements cleanly
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -589,27 +590,19 @@ function downloadMarkdown(filename: string, content: string): void {
   showToast(TRANSLATIONS[currentLocale].toastDownloadStarted);
 }
 
-export function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
-  const title = getEntryTitle(entry, locale);
-  const industry = jsicName(entry.jsic) || entry.jsic;
-  const color = labelForColor(entry.color, taxonomy, locale);
-  const mood = labelForMood(entry.mood, taxonomy, locale);
-  const tags = entry.tags?.join(", ") || "—";
-
-  return [
-    `# ${title}`,
-    "",
-    `- JSIC: ${entry.jsic} (${industry})`,
-    `- Color: ${color} (${entry.color})`,
-    `- Mood: ${mood} (${entry.mood})`,
-    `- Tags: ${tags}`,
-    "",
-    "## Design direction",
-    "",
+function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
+  const major = jsicMajor(entry.jsic);
+  const industry =
     locale === "ja"
-      ? `${industry}向けに、${color}の配色と${mood}のムードを一貫して適用する。`
-      : `Apply the ${color} palette and ${mood} mood consistently for ${industry}.`,
-  ].join("\n");
+      ? jsicName(entry.jsic) || entry.jsic
+      : major.label_en || major.label || entry.jsic;
+  return buildVirtualDesign(entry, locale, {
+    title: getEntryTitle(entry, locale),
+    industry,
+    color: labelForColor(entry.color, taxonomy, locale),
+    mood: labelForMood(entry.mood, taxonomy, locale),
+    swatches: getSwatchHexes(entry),
+  });
 }
 
 // Render the detailed view of a resolved specification
