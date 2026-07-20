@@ -24,6 +24,17 @@ describe("validateDesignIndex", () => {
     expect(index.generatedAt).toBe("2026-07-11T00:00:00Z");
   });
 
+  it("variant 属性と _v{n} 付きの ID / パス形式を許容する", () => {
+    const entryWithVariant = {
+      ...validEntry,
+      id: "7281_h17b-lt_trustworthy_v1",
+      path: "design-md/7281/h17b-lt/trustworthy/v1/DESIGN.md",
+      variant: 1,
+    };
+    const index = validateDesignIndex({ version: 2, entries: [entryWithVariant] });
+    expect(index.entries[0]?.variant).toBe(1);
+  });
+
   it("tags 省略を許容する", () => {
     const { tags: _tags, ...noTags } = validEntry;
     const index = validateDesignIndex({ version: 1, entries: [noTags] });

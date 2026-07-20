@@ -7,9 +7,9 @@ import type { ColorKey, JsicCode, MoodKey } from "../axes/index.js";
 
 /** index.json の 1 エントリ (材化済みセルのメタ)。id で一意。accrete で不変。 */
 export interface DesignIndexEntry {
-  /** セルの安定 ID。形式 `{jsic}_{color}_{mood}`。 */
+  /** セルの安定 ID。形式 `{jsic}_{color}_{mood}`。variant>0 は `_v{n}` 接尾。 */
   id: string;
-  /** リポジトリ相対の DESIGN.md パス (design-md/{jsic}/{color}/{mood}/DESIGN.md)。 */
+  /** リポジトリ相対の DESIGN.md パス (design-md/{jsic}/{color}/{mood}[/v{n}]/DESIGN.md)。 */
   path: string;
   /** JSIC 細分類コード (4桁)。 */
   jsic: JsicCode;
@@ -17,6 +17,8 @@ export interface DesignIndexEntry {
   color: ColorKey;
   /** ムード軸 slug。 */
   mood: MoodKey;
+  /** バリアント番号。基底セルは 0、変種は 1 以上の整数。任意。 */
+  variant?: number;
   /** タイポ体系・レイアウト原型など、軸に掛けない差別化/検索用タグ。任意。 */
   tags?: readonly string[];
   /** 人間可読の見出し (ブラウズ/SEO 用)。 */
