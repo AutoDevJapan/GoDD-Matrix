@@ -25,6 +25,7 @@ import {
   labelForColor,
   labelForMood,
 } from "./lib.js";
+import { findColorValue, findStyleValue } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
 
 // DOM helper to build elements cleanly
@@ -854,63 +855,6 @@ function findCategoryValue(term: string): string | null {
   return null;
 }
 
-function findStyleValue(term: string): string | null {
-  const t = term.toLowerCase().trim();
-  if (!t) return null;
-  for (const s of STYLES) {
-    if (s.v === t || s.ja.toLowerCase().includes(t) || s.en.toLowerCase().includes(t)) {
-      return s.v;
-    }
-  }
-  if (taxonomy && taxonomy.moods) {
-    for (const [slug, item] of Object.entries(taxonomy.moods)) {
-      if (
-        slug === t ||
-        item.name_ja?.toLowerCase().includes(t) ||
-        item.name_en?.toLowerCase().includes(t)
-      ) {
-        if (slug === "vintage") return "retro";
-        if (slug === "elegant") return "glass";
-        if (slug === "tech") return "dark";
-        if (slug === "warm") return "neu";
-        if (slug === "organic") return "playful";
-        return slug;
-      }
-    }
-  }
-  return null;
-}
-
-function findColorValue(term: string): string | null {
-  const t = term.toLowerCase().trim();
-  if (!t) return null;
-  for (const c of COLOR_PALETTE) {
-    if (c.slug === t || c.name.toLowerCase().includes(t) || c.slug.replace("-", "").toLowerCase().includes(t)) {
-      return c.slug;
-    }
-  }
-  if (taxonomy && taxonomy.colors) {
-    for (const [slug, item] of Object.entries(taxonomy.colors)) {
-      if (
-        slug === t ||
-        item.name_ja?.toLowerCase().includes(t) ||
-        item.name_en?.toLowerCase().includes(t) ||
-        item.family?.toLowerCase().includes(t) ||
-        item.family_ja?.toLowerCase().includes(t) ||
-        item.family_en?.toLowerCase().includes(t)
-      ) {
-        if (slug === "h17b-lt") return "indigo";
-        if (slug === "h12s-sf") return "green";
-        if (slug === "gray-3") return "yellow";
-        if (slug === "h2v-vv") return "rose";
-        if (slug === "black") return "black";
-        return slug;
-      }
-    }
-  }
-  return null;
-}
-
 function getEntryTitle(entry: DesignIndexEntry, locale: Locale): string {
   if (entry.title && locale === "ja") {
     if (entry.title.startsWith("VIRTUAL DESIGN: ")) {
@@ -959,12 +903,12 @@ function applyState(): void {
         parsedCategory = catMatch;
         continue;
       }
-      const styleMatch = findStyleValue(term);
+      const styleMatch = findStyleValue(term, taxonomy);
       if (styleMatch && !parsedStyle) {
         parsedStyle = styleMatch;
         continue;
       }
-      const colorMatch = findColorValue(term);
+      const colorMatch = findColorValue(term, taxonomy);
       if (colorMatch && !parsedColor) {
         parsedColor = colorMatch;
         continue;
