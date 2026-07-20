@@ -120,15 +120,15 @@ const TOTAL_LIBRARY = 172635600;
 
 // Deterministic property mapping from index entries to reference facets
 function getEntryCategory(entry: DesignIndexEntry): string {
-  if (entry.id.startsWith("virtual_")) {
+  if (entry.id?.startsWith("virtual_")) {
     return entry.tags?.[0] || "";
   }
-  const hash = entry.id.charCodeAt(0) % CATEGORIES.length;
+  const hash = (entry.id || "").charCodeAt(0) % CATEGORIES.length;
   return CATEGORIES[hash]?.v || "";
 }
 
 function getEntryStyle(entry: DesignIndexEntry): string {
-  if (entry.id.startsWith("virtual_")) {
+  if (entry.id?.startsWith("virtual_")) {
     return entry.tags?.[1] || "";
   }
   const mood = entry.mood;
@@ -145,7 +145,7 @@ function getEntryStyle(entry: DesignIndexEntry): string {
 
 function getEntryIndustry(entry: DesignIndexEntry): string {
   const jsic = entry.jsic;
-  if (entry.id.startsWith("virtual_")) {
+  if (entry.id?.startsWith("virtual_")) {
     return entry.tags?.[2] || "saas";
   }
   if (
