@@ -25,7 +25,10 @@ function localizeNotice(notice: string): string {
     return "This cell is not materialized; using the Generator-rendered fallback body.";
   }
   if (notice.startsWith("確定 DESIGN.md 本文がありません:")) {
-    return "The resolved DESIGN.md body is unavailable.";
+    const reason = notice.slice("確定 DESIGN.md 本文がありません:".length).trim();
+    return /^[\x20-\x7e]+$/.test(reason)
+      ? `The resolved DESIGN.md body is unavailable: ${reason}`
+      : "The resolved DESIGN.md body is unavailable.";
   }
   const color = /^カラー軸は要望で未指定のため、推定 slug '(.+)' を適用しました。$/.exec(notice);
   if (color) return `No color was requested; inferred slug '${color[1]}' is applied.`;

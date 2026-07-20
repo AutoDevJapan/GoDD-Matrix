@@ -64,6 +64,17 @@ describe("detail prompt localization", () => {
     expect(result).not.toContain("未材化セル");
   });
 
+  it("preserves an actionable unavailable reason that is already English", () => {
+    const unavailable = {
+      ...prompt,
+      notices: ["確定 DESIGN.md 本文がありません: DESIGN.md not pre-materialized in Git"],
+    };
+
+    expect(localizePromptPreview(unavailable, "en")).toContain(
+      "The resolved DESIGN.md body is unavailable: DESIGN.md not pre-materialized in Git",
+    );
+  });
+
   it("keeps the Japanese prompt byte-for-byte apart from the existing separator", () => {
     expect(localizePromptPreview(prompt, "ja")).toBe(
       `${prompt.systemPrompt}\n\n${prompt.userPrompt}`,
