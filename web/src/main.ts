@@ -101,6 +101,7 @@ let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let searchQuery = "";
 let sortOrder: "popular" | "newest" = "popular";
 let currentPage = 1;
+let selectedCellId: string | null = null;
 const PAGE_SIZE = 24;
 
 interface Filters {
@@ -388,7 +389,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   if (opts.scroll !== false) window.scrollTo(0, 0);
 
   // Sync URL permalink
-  const permalink = buildCellPermalink(entry);
+  const permalink = buildCellPermalink(window.location.href, entry.id);
   window.history.replaceState(null, "", permalink);
 
   // Resolve detailed fields
@@ -460,9 +461,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   }
 
   // Synthesize Markdown Content
-  const prompt = composePromptForCell(entry, taxonomy, {
-    outputLang: undefined,
-  });
+  const prompt = composePromptForCell({ entry, taxonomy });
 
   // Combine system prompt and markdown preview
   const finalMarkdown = `${prompt.systemPrompt}\n\n${prompt.userPrompt}`;
