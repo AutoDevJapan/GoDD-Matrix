@@ -367,6 +367,8 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
 // Translations Structure
 interface TranslationKeys {
   siteTitle: string;
+  siteDescription: string;
+  localeLabel: string;
   brandSubtitle: string;
   heroTag: string;
   heroSub: string;
@@ -394,45 +396,61 @@ interface TranslationKeys {
   toastDownloadStarted: string;
   virtualNotice: string;
   labelVirtualBadge: string;
+  catalogPrefix: string;
+  catalogSuffix: string;
+  loading: string;
+  sampleCount: (shown: number, total: number) => string;
+  materializationType: string;
+  preGeneratedType: string;
 }
 
 const TRANSLATIONS: Record<Locale, TranslationKeys> = {
   ja: {
     siteTitle: "DESIGN.md Library",
-    brandSubtitle: "1億件以上のDESIGNファイルを検索・共有 / Search & share 100M+ DESIGN files",
-    heroTag: "世界最大のDESIGNファイルライブラリ / World's largest DESIGN.md library",
-    heroSub: "件のDESIGN.mdファイルが検索可能 / DESIGN.md files ready to search",
-    placeholderSearch: "検索 / Search e.g. 'ミニマル ダッシュボード'",
-    labelFacetCategory: "カテゴリ / Category",
-    labelFacetStyle: "スタイル / Style",
-    labelFacetIndustry: "業界 / Industry",
-    labelFacetColor: "カラー / Color",
-    labelActivePills: "適用中 / Active:",
-    clearAll: "すべてクリア / Clear all",
-    labelMatches: "件が一致 / files match",
-    btnPopular: "人気順 / Popular",
-    btnNewest: "新着順 / Newest",
-    detailBack: "← 検索に戻る / Back to search",
-    labelCodePreview: "DESIGN.md プレビュー / Preview",
-    labelDownloads: "提供形式 / Type",
-    labelUpdated: "更新日 / Updated",
-    labelLicense: "ライセンス / License",
-    btnDownload: "ダウンロード / Download",
-    btnCopy: "コピー / Copy",
-    btnShare: "共有リンク / Share",
-    labelRelated: "関連するDESIGNファイル / Related files",
+    siteDescription: "1億件以上のDESIGNファイルを検索・共有",
+    localeLabel: "言語",
+    brandSubtitle: "1億件以上のDESIGNファイルを検索・共有",
+    heroTag: "世界最大のDESIGNファイルライブラリ",
+    heroSub: "件のDESIGN.mdファイルが検索可能",
+    placeholderSearch: "検索例: ミニマル ダッシュボード",
+    labelFacetCategory: "カテゴリ",
+    labelFacetStyle: "スタイル",
+    labelFacetIndustry: "業界",
+    labelFacetColor: "カラー",
+    labelActivePills: "適用中:",
+    clearAll: "すべてクリア",
+    labelMatches: "件が一致",
+    btnPopular: "人気順",
+    btnNewest: "新着順",
+    detailBack: "← 検索に戻る",
+    labelCodePreview: "DESIGN.md プレビュー",
+    labelDownloads: "提供形式",
+    labelUpdated: "更新日",
+    labelLicense: "ライセンス",
+    btnDownload: "ダウンロード",
+    btnCopy: "コピー",
+    btnShare: "共有リンク",
+    labelRelated: "関連するDESIGNファイル",
     toastCopied: "Markdownをクリップボードにコピーしました",
     toastShareCopied: "共有リンクをコピーしました",
     toastDownloadStarted: "ダウンロードを開始しました",
     virtualNotice: "決定論的デザインエンジンによりリアルタイム合成されました。",
     labelVirtualBadge: "VIRTUAL",
+    catalogPrefix: "OSS 材化済みカタログ: ",
+    catalogSuffix: " 件",
+    loading: "読み込み中...",
+    sampleCount: (shown, total) => `${total.toLocaleString()}件中 ${shown}件を表示中`,
+    materializationType: "リアルタイム合成",
+    preGeneratedType: "OSS 材化済み",
   },
   en: {
     siteTitle: "DESIGN.md Library",
+    siteDescription: "Search and share more than 100 million DESIGN files",
+    localeLabel: "Language",
     brandSubtitle: "Search & share 100M+ DESIGN files",
     heroTag: "World's largest DESIGN.md library",
     heroSub: "DESIGN.md files ready to search",
-    placeholderSearch: "Search / 検索 e.g. 'Minimal Dashboard'",
+    placeholderSearch: "Search e.g. 'Minimal Dashboard'",
     labelFacetCategory: "Category",
     labelFacetStyle: "Style",
     labelFacetIndustry: "Industry",
@@ -456,6 +474,12 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     toastDownloadStarted: "Download started",
     virtualNotice: "Synthesized in real-time by the deterministic design engine.",
     labelVirtualBadge: "VIRTUAL",
+    catalogPrefix: "Pre-generated OSS Catalog: ",
+    catalogSuffix: " files",
+    loading: "Loading...",
+    sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString()} results`,
+    materializationType: "Virtual",
+    preGeneratedType: "Pre-generated",
   },
 };
 
@@ -513,8 +537,10 @@ function animateCounter(): void {
 // Dynamic UI Text Localization updates
 function translateUI(): void {
   const t = TRANSLATIONS[currentLocale];
-  document.title = "GoDD Matrix — DESIGN.md Library";
+  document.title = `GoDD Matrix — ${t.siteTitle}`;
   document.documentElement.lang = currentLocale;
+  document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", t.siteDescription);
+  byId("locale-select").setAttribute("aria-label", t.localeLabel);
 
   byId("label-brand-subtitle").textContent = t.brandSubtitle;
   byId("label-hero-tag").textContent = t.heroTag;
@@ -544,13 +570,15 @@ function translateUI(): void {
   const catalogBadge = byId("label-hero-catalog");
   if (catalogBadge) {
     catalogBadge.replaceChildren();
-    const countSpan = el("span", { text: allEntries.length > 0 ? allEntries.length.toLocaleString() : "Loading..." });
+    const countSpan = el("span", {
+      text: allEntries.length > 0 ? allEntries.length.toLocaleString() : t.loading,
+    });
     countSpan.id = "stat-materialized-count";
-    if (currentLocale === "ja") {
-      catalogBadge.append(document.createTextNode("OSS 材化済みカタログ: "), countSpan, document.createTextNode(" 件"));
-    } else {
-      catalogBadge.append(document.createTextNode("Pre-generated OSS Catalog: "), countSpan, document.createTextNode(" files"));
-    }
+    catalogBadge.append(
+      document.createTextNode(t.catalogPrefix),
+      countSpan,
+      document.createTextNode(t.catalogSuffix),
+    );
   }
 }
 
@@ -675,13 +703,10 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
 
   // Set file type and metadata
+  const t = TRANSLATIONS[currentLocale];
   byId("detail-downloads-val").textContent = isVirtual
-    ? currentLocale === "ja"
-      ? "リアルタイム合成 / Virtual"
-      : "Virtual (Synthesized)"
-    : currentLocale === "ja"
-      ? "OSS 材化済み / Pre-generated"
-      : "Pre-generated (OSS)";
+    ? t.materializationType
+    : t.preGeneratedType;
   byId("detail-updated-val").textContent = entry.createdAt
     ? entry.createdAt.slice(0, 10)
     : "2026-07-20";
@@ -717,7 +742,6 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   codeBlock.textContent = finalMarkdown;
 
   // Bind sidebar action buttons
-  const t = TRANSLATIONS[currentLocale];
   byId("btn-download").onclick = () => downloadMarkdown(`${entry.id}.design.md`, finalMarkdown);
   byId("btn-copy").onclick = () => copyText(finalMarkdown, t.toastCopied);
   byId("btn-share").onclick = () => copyText(window.location.href, t.toastShareCopied);
@@ -1147,10 +1171,10 @@ function applyState(): void {
 
   // Exact sample counts matching the pagination grid display
   const itemsCount = pageView.items.length;
-  byId("sample-count-display").textContent =
-    currentLocale === "ja"
-      ? `${totalMatches.toLocaleString()}件中 ${itemsCount}件を表示中 / Showing ${itemsCount} of ${totalMatches.toLocaleString()} results`
-      : `Showing ${itemsCount} of ${totalMatches.toLocaleString()} results`;
+  byId("sample-count-display").textContent = TRANSLATIONS[currentLocale].sampleCount(
+    itemsCount,
+    totalMatches,
+  );
 
   // Draw Candidates Grid
   const resultsGrid = byId("results");
@@ -1207,12 +1231,8 @@ function applyState(): void {
       const footer = el("div", { class: "card-footer" });
       const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
       const typeText = isVirtual
-        ? currentLocale === "ja"
-          ? "リアルタイム合成"
-          : "Virtual"
-        : currentLocale === "ja"
-          ? "OSS 材化済み"
-          : "Pre-generated";
+        ? TRANSLATIONS[currentLocale].materializationType
+        : TRANSLATIONS[currentLocale].preGeneratedType;
       footer.appendChild(el("span", { class: "card-type-label", text: typeText }));
       footer.appendChild(
         el("span", { text: entry.createdAt ? entry.createdAt.slice(0, 10) : "2026-07-20" }),

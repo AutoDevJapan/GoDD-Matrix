@@ -6,7 +6,7 @@
     <title>GoDD Matrix — DESIGN.md Library</title>
     <meta
       name="description"
-      content="1億件以上のDESIGNファイルを検索・共有 / Search & share 100M+ DESIGN files"
+      content="1億件以上のDESIGNファイルを検索・共有"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,11 +21,11 @@
           <div class="brand-logo">D.md</div>
           <div>
             <div class="brand-title">DESIGN.md Library</div>
-            <div class="brand-subtitle" id="label-brand-subtitle">1億件以上のDESIGNファイルを検索・共有 / Search & share 100M+ DESIGN files</div>
+            <div class="brand-subtitle" id="label-brand-subtitle">1億件以上のDESIGNファイルを検索・共有</div>
           </div>
         </div>
         <div class="nav-actions">
-          <select id="locale-select" class="locale-select" aria-label="Language / 言語">
+          <select id="locale-select" class="locale-select" aria-label="言語">
             <option value="ja">日本語</option>
             <option value="en">English</option>
           </select>
@@ -38,56 +38,56 @@
         <div id="search-view" class="view-section">
           <!-- Banner Hero -->
           <header class="hero-banner">
-            <div class="hero-tag" id="label-hero-tag">世界最大のDESIGNファイルライブラリ / World's largest DESIGN.md library</div>
+            <div class="hero-tag" id="label-hero-tag">世界最大のDESIGNファイルライブラリ</div>
             <div class="hero-counter" id="live-total-counter">0</div>
-            <div class="hero-sub" id="label-hero-sub">件のDESIGN.mdファイルが検索可能 / DESIGN.md files ready to search</div>
-            <div class="hero-catalog-badge" id="label-hero-catalog">Pre-generated OSS Catalog: <span id="stat-materialized-count">Loading...</span> files</div>
+            <div class="hero-sub" id="label-hero-sub">件のDESIGN.mdファイルが検索可能</div>
+            <div class="hero-catalog-badge" id="label-hero-catalog">OSS 材化済みカタログ: <span id="stat-materialized-count">読み込み中...</span> 件</div>
           </header>
 
           <!-- Centered Search Bar -->
           <div class="search-bar-wrapper">
             <span class="search-bar-icon">⌕</span>
-            <input type="text" id="main-search-input" placeholder="検索 / Search e.g. 'ミニマル ダッシュボード'" />
+            <input type="text" id="main-search-input" placeholder="検索例: ミニマル ダッシュボード" />
           </div>
 
           <!-- Facets Accordion / Filters -->
           <div class="facets-container">
             <div class="facet-row" id="facet-row-category">
-              <div class="facet-label" id="label-facet-category">カテゴリ / Category</div>
+              <div class="facet-label" id="label-facet-category">カテゴリ</div>
               <div class="facet-list" id="facet-list-category"></div>
             </div>
             <div class="facet-row" id="facet-row-style">
-              <div class="facet-label" id="label-facet-style">スタイル / Style</div>
+              <div class="facet-label" id="label-facet-style">スタイル</div>
               <div class="facet-list" id="facet-list-style"></div>
             </div>
             <div class="facet-row" id="facet-row-industry">
-              <div class="facet-label" id="label-facet-industry">業界 / Industry</div>
+              <div class="facet-label" id="label-facet-industry">業界</div>
               <div class="facet-list" id="facet-list-industry"></div>
             </div>
             <div class="facet-row" id="facet-row-color">
-              <div class="facet-label" id="label-facet-color">カラー / Color</div>
+              <div class="facet-label" id="label-facet-color">カラー</div>
               <div class="facet-list" id="facet-list-color"></div>
             </div>
           </div>
 
           <!-- Active Filter Pills -->
           <div id="active-pills-bar" class="active-pills-bar hidden">
-            <span class="pills-label" id="label-active-pills">適用中 / Active:</span>
+            <span class="pills-label" id="label-active-pills">適用中:</span>
             <div class="pills-container" id="pills-container"></div>
-            <button id="clear-all-btn" class="clear-all-btn">すべてクリア / Clear all</button>
+            <button id="clear-all-btn" class="clear-all-btn">すべてクリア</button>
           </div>
 
           <!-- Matches Summary & Sort -->
           <div class="matches-header">
             <div>
               <div class="matches-count" id="matches-count-display">
-                0 <span class="matches-count-label" id="label-matches-count">件が一致 / files match</span>
+                0 <span class="matches-count-label" id="label-matches-count">件が一致</span>
               </div>
-              <div class="sample-label" id="sample-count-display">0件のサンプルを表示中 / Showing 0 sample results</div>
+              <div class="sample-label" id="sample-count-display">0件中 0件を表示中</div>
             </div>
             <div class="sort-actions" id="sort-actions">
-              <button id="sort-btn-popular" class="sort-btn active">人気順 / Popular</button>
-              <button id="sort-btn-newest" class="sort-btn">新着順 / Newest</button>
+              <button id="sort-btn-popular" class="sort-btn active">人気順</button>
+              <button id="sort-btn-newest" class="sort-btn">新着順</button>
             </div>
           </div>
 
@@ -100,7 +100,7 @@
 
         <!-- DETAIL VIEW (Initially Hidden) -->
         <div id="detail-view" class="view-section hidden">
-          <button id="back-btn" class="back-btn">← 検索に戻る / Back to search</button>
+          <button id="back-btn" class="back-btn">← 検索に戻る</button>
 
           <div class="detail-grid">
             <!-- Left Side: Preview & Markdown Code -->
@@ -109,7 +109,7 @@
                 <div class="preview-overlay">PREVIEW IMAGE</div>
               </div>
               <div class="detail-code-section">
-                <div class="section-subtitle" id="label-code-preview">DESIGN.md プレビュー / Preview</div>
+                <div class="section-subtitle" id="label-code-preview">DESIGN.md プレビュー</div>
                 <div class="code-wrapper">
                   <pre><code id="detail-code-block"></code></pre>
                 </div>
@@ -138,31 +138,31 @@
               <!-- Metadata Table -->
               <div class="meta-table">
                 <div class="meta-row">
-                  <span class="meta-key" id="label-meta-downloads">ダウンロード数 / Downloads</span>
+                  <span class="meta-key" id="label-meta-downloads">提供形式</span>
                   <span class="meta-val" id="detail-downloads-val">0</span>
                 </div>
                 <div class="meta-row">
-                  <span class="meta-key" id="label-meta-updated">更新日 / Updated</span>
+                  <span class="meta-key" id="label-meta-updated">更新日</span>
                   <span class="meta-val" id="detail-updated-val">2026-07-20</span>
                 </div>
                 <div class="meta-row">
-                  <span class="meta-key" id="label-meta-license">ライセンス / License</span>
+                  <span class="meta-key" id="label-meta-license">ライセンス</span>
                   <span class="meta-val" id="detail-license-val">MIT</span>
                 </div>
               </div>
 
               <!-- Action Buttons -->
               <div class="detail-action-buttons">
-                <button id="btn-download" class="action-btn primary">ダウンロード / Download</button>
-                <button id="btn-copy" class="action-btn">コピー / Copy</button>
-                <button id="btn-share" class="action-btn">共有リンク / Share</button>
+                <button id="btn-download" class="action-btn primary">ダウンロード</button>
+                <button id="btn-copy" class="action-btn">コピー</button>
+                <button id="btn-share" class="action-btn">共有リンク</button>
               </div>
             </div>
           </div>
 
           <!-- Related Files -->
           <div class="related-section">
-            <div class="related-title" id="label-related-title">関連するDESIGNファイル / Related files</div>
+            <div class="related-title" id="label-related-title">関連するDESIGNファイル</div>
             <div class="related-grid" id="related-grid"></div>
           </div>
         </div>
