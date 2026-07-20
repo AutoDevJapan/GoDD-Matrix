@@ -35,6 +35,11 @@ import {
 import { loadTaxonomy } from "./taxonomy-cache.js";
 import { localizePromptPreview, localizedColorName } from "./ui-localization.js";
 import { buildVirtualDesign } from "./virtual-design.js";
+import {
+  buildVirtualPermalinkId,
+  parseVirtualPermalinkId,
+  validateVirtualPermalinkAxes,
+} from "./virtual-permalink.js";
 
 // DOM helper to build elements cleanly
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -1237,15 +1242,14 @@ function getCombinationAtIndex(
 
   const mood = resolveMoodSlug(style);
 
-  // Vary typography and layouts based on extraIndex
-  const layoutIdx = extraIndex % 4;
-  const fontObj = FONTS[(extraIndex + 3) % FONTS.length] || {
-    v: "inter",
-    ja: "Inter",
-    en: "Inter",
-  };
-
-  const id = `virtual_${jsicObj.code}_${color}_${mood}_l${layoutIdx}_f${fontObj.v}`;
+  const id = buildVirtualPermalinkId({
+    jsic: jsicObj.code,
+    color,
+    mood,
+    category: cat,
+    style,
+    variant: extraIndex,
+  });
   const title = `VIRTUAL DESIGN: ${jsicName(jsicObj.code)} × ${color} × ${mood}`;
 
   const entry: DesignIndexEntry = {
@@ -1262,6 +1266,49 @@ function getCombinationAtIndex(
   };
 
   return entry;
+}
+
+function restoreVirtualEntry(id: string): DesignIndexEntry | undefined {
+  const axes = parseVirtualPermalinkId(id);
+  if (!axes) return undefined;
+
+  const knownColors = new Set([
+    "h17b-lt",
+    "gray-3",
+    "h12s-sf",
+    "h2v-vv",
+    "white",
+    "black",
+    ...Object.keys(taxonomy.colors),
+  ]);
+  if (
+    !validateVirtualPermalinkAxes(axes, {
+      jsic: new Set(JSIC_SUBCLASSES.map((item) => item.code)),
+      colors: knownColors,
+      categories: new Set(CATEGORIES.map((item) => item.v)),
+      styles: new Set(STYLES.map((item) => item.v)),
+      moodForStyle: resolveMoodSlug,
+    })
+  ) {
+    return undefined;
+  }
+
+  return {
+    id,
+    path: `design-md/${axes.jsic}/${axes.color}/${axes.mood}/DESIGN.md`,
+    jsic: axes.jsic,
+    color: axes.color,
+    mood: axes.mood,
+    title: `VIRTUAL DESIGN: ${jsicName(axes.jsic)} × ${axes.color} × ${axes.mood}`,
+    hash: "",
+    variant: axes.variant,
+    createdAt: "2026-07-20",
+    tags: [
+      axes.category,
+      axes.style,
+      getEntryIndustry({ jsic: axes.jsic, path: "" } as DesignIndexEntry),
+    ],
+  };
 }
 
 function matchColorFamily(entryColor: string, paletteSlug: string): boolean {
@@ -1419,7 +1466,7 @@ async function bootstrap(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const cellParam = params.get("cell");
   if (cellParam) {
-    const entry = findEntryById(allEntries, cellParam);
+    const entry = findEntryById(allEntries, cellParam) ?? restoreVirtualEntry(cellParam);
     if (entry) {
       void openDetail(entry);
     }
