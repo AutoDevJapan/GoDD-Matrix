@@ -2,13 +2,13 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": [],
-    "rootDir": "..",
+    "types": ["node"],
+    "rootDir": "../../..",
     "outDir": "./dist-tsc",
     "noEmit": true,
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src", "../src/axes", "../src/ds", "../src/prompt"],
-  "exclude": ["dist", "dist-tsc", "node_modules", "**/*.test.ts"]
+  "include": ["src", "../src/axes", "../src/ds", "../src/prompt", "../src/compat", "../src/engine", "../src/partials"],
+  "exclude": ["dist", "dist-tsc", "node_modules", "**/*.test.ts", "../src/**/*.test.ts"]
 }

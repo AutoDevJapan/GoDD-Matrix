@@ -1,6 +1,10 @@
 import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
+import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
+import { selectPartials } from "../../../src/compat/selector.js";
+import { buildDesignDocument } from "../../../src/engine/document.js";
+import Handlebars from "handlebars";
 import {
   DS_INDEX_URL,
   DS_TAXONOMY_URL,
@@ -17,6 +21,7 @@ import {
   composePromptForCell,
   findEntryById,
   highlightTermsFromText,
+  jsicMajor,
   jsicName,
   labelForColor,
   labelForMood,
@@ -106,6 +111,24 @@ let sortOrder: "popular" | "newest" = "popular";
 let currentPage = 1;
 let selectedCellId: string | null = null;
 const PAGE_SIZE = 24;
+
+let templatesBundle: {
+  template: string;
+  partials: Record<string, string>;
+  manifest: any;
+  compat: any;
+} | null = null;
+
+async function loadTemplatesBundle(): Promise<void> {
+  try {
+    const res = await fetch("templates-bundle.json", { cache: "no-cache" });
+    if (res.ok) {
+      templatesBundle = (await res.json()) as any;
+    }
+  } catch (err) {
+    console.error("Failed to load templates bundle:", err);
+  }
+}
 
 interface Filters {
   category: string | null;
@@ -545,6 +568,39 @@ function downloadMarkdown(filename: string, content: string): void {
   showToast(TRANSLATIONS[currentLocale].toastDownloadStarted);
 }
 
+function renderVirtualDesign(entry: DesignIndexEntry): string | undefined {
+  if (!templatesBundle) return undefined;
+  try {
+    const ctx = {
+      jsic: { code: entry.jsic },
+      colorId: entry.color,
+      moodId: entry.mood,
+      tags: entry.tags || [],
+    };
+    const selectionMeta = selectPartials(ctx, {
+      manifest: templatesBundle.manifest,
+      compat: templatesBundle.compat,
+      variant: entry.variant || 0,
+    });
+    const env = Handlebars.create();
+    const selection: Record<string, string> = {};
+    for (const [section, meta] of selectionMeta) {
+      const source = templatesBundle.partials[meta.id] || "";
+      env.registerPartial(section, env.compile(source, { noEscape: true }));
+      selection[section] = meta.id;
+    }
+    const documentData = buildDesignDocument(ctx, {
+      selection: selection as any,
+      title: getEntryTitle(entry, "ja"),
+    });
+    const compiled = env.compile(templatesBundle.template, { noEscape: true });
+    return compiled(documentData);
+  } catch (err) {
+    console.error("Failed to render virtual design client-side:", err);
+    return undefined;
+  }
+}
+
 // Render the detailed view of a resolved specification
 async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = {}): Promise<void> {
   selectedCellId = entry.id;
@@ -571,18 +627,26 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   const fontText = fLabel ? (currentLocale === "ja" ? fLabel.ja : fLabel.en) : "";
 
   // Title & Filename
-  const titleJa =
-    entry.title ||
-    `${jsicName(entry.jsic) || entry.jsic} × ${labelForColor(entry.color, taxonomy)} × ${labelForMood(entry.mood, taxonomy)}`;
+  const mainTitle = getEntryTitle(entry, currentLocale);
+  const subTitle = currentLocale === "ja"
+    ? `${entry.jsic} × ${entry.color} × ${entry.mood}`
+    : getEntryTitle(entry, "ja");
   byId("detail-filename").textContent = `${entry.id}.design.md`;
-  byId("detail-title-ja").textContent = titleJa;
-  byId("detail-title-en").textContent = `${entry.jsic} × ${entry.color} × ${entry.mood}`;
+  byId("detail-title-ja").textContent = mainTitle;
+  byId("detail-title-en").textContent = subTitle;
 
   // Description text
-  byId("detail-desc-ja").textContent =
-    `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy)}」とムード「${labelForMood(entry.mood, taxonomy)}」の決定論的デザイン仕様書。`;
-  byId("detail-desc-en").textContent =
-    `Deterministic design specification matching industry code ${entry.jsic}, color tone ${entry.color}, and design mood ${entry.mood}.`;
+  if (currentLocale === "ja") {
+    byId("detail-desc-ja").textContent =
+      `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」の決定論的デザイン仕様書。`;
+    byId("detail-desc-en").textContent =
+      `Deterministic design specification matching industry code ${entry.jsic}, color tone ${entry.color}, and design mood ${entry.mood}.`;
+  } else {
+    byId("detail-desc-ja").textContent =
+      `Deterministic design specification matching industry code ${entry.jsic} (${jsicMajor(entry.jsic).label_en || jsicName(entry.jsic)}), color tone "${labelForColor(entry.color, taxonomy, "en")}", and design mood "${labelForMood(entry.mood, taxonomy, "en")}".`;
+    byId("detail-desc-en").textContent =
+      `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」の決定論的デザイン仕様書。`;
+  }
 
   // Draw swatches
   const swatches = getSwatchHexes(entry);
@@ -634,8 +698,19 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     virtualNotice.classList.add("hidden");
   }
 
+  // Render DESIGN.md if virtual or missing in index
+  let renderedMarkdown: string | undefined = undefined;
+  if (isVirtual) {
+    renderedMarkdown = renderVirtualDesign(entry);
+  }
+
   // Synthesize Markdown Content
-  const prompt = composePromptForCell({ entry, hashVerified: !isVirtual });
+  const prompt = composePromptForCell({
+    entry,
+    markdown: renderedMarkdown,
+    hashVerified: !isVirtual,
+    outputLanguage: currentLocale === "ja" ? "日本語" : "English",
+  });
 
   // Combine system prompt and markdown preview
   const finalMarkdown = `${prompt.systemPrompt}\n\n${prompt.userPrompt}`;
@@ -667,11 +742,13 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     card.appendChild(thumb);
 
     const body = el("div", { class: "related-body" });
-    const rTitle =
-      item.title || `${jsicName(item.jsic) || item.jsic} × ${labelForColor(item.color, taxonomy)}`;
-    body.appendChild(el("div", { class: "related-card-title-ja", text: rTitle }));
+    const mainTitle = getEntryTitle(item, currentLocale);
+    const subTitle = currentLocale === "ja"
+      ? `${item.jsic} × ${item.color}`
+      : getEntryTitle(item, "ja");
+    body.appendChild(el("div", { class: "related-card-title-ja", text: mainTitle }));
     body.appendChild(
-      el("div", { class: "related-card-title-en", text: `${item.jsic} × ${item.color}` }),
+      el("div", { class: "related-card-title-en", text: subTitle }),
     );
     card.appendChild(body);
 
@@ -746,16 +823,104 @@ function renderFilters(): void {
   }
 }
 
+function findCategoryValue(term: string): string | null {
+  const t = term.toLowerCase();
+  for (const c of CATEGORIES) {
+    if (c.v === t || c.ja.includes(t) || c.en.toLowerCase().includes(t)) {
+      return c.v;
+    }
+  }
+  return null;
+}
+
+function findStyleValue(term: string): string | null {
+  const t = term.toLowerCase();
+  for (const s of STYLES) {
+    if (s.v === t || s.ja.includes(t) || s.en.toLowerCase().includes(t)) {
+      return s.v;
+    }
+  }
+  return null;
+}
+
+function findColorValue(term: string): string | null {
+  const t = term.toLowerCase();
+  for (const c of COLOR_PALETTE) {
+    if (c.slug === t || c.name.includes(t) || c.slug.replace("-", "").includes(t)) {
+      return c.slug;
+    }
+  }
+  return null;
+}
+
+function getEntryTitle(entry: DesignIndexEntry, locale: Locale): string {
+  if (entry.title && locale === "ja") {
+    if (entry.title.startsWith("VIRTUAL DESIGN: ")) {
+      const colLabel = labelForColor(entry.color, taxonomy, "ja");
+      const mdLabel = labelForMood(entry.mood, taxonomy, "ja");
+      return `【仮想】${jsicName(entry.jsic) || entry.jsic} × ${colLabel} × ${mdLabel}`;
+    }
+    return entry.title;
+  }
+  
+  const colLabel = labelForColor(entry.color, taxonomy, locale);
+  const mdLabel = labelForMood(entry.mood, taxonomy, locale);
+  
+  if (locale === "en") {
+    const major = jsicMajor(entry.jsic);
+    const indName = major.label_en || jsicName(entry.jsic) || entry.jsic;
+    if (entry.id?.startsWith("virtual_") || (entry.title && entry.title.startsWith("VIRTUAL DESIGN: "))) {
+      return `Virtual Design: ${indName} / ${mdLabel} / ${colLabel}`;
+    }
+    return `Design System: ${indName} / ${mdLabel} / ${colLabel}`;
+  }
+  
+  return entry.title || `${jsicName(entry.jsic) || entry.jsic} × ${colLabel} × ${mdLabel}`;
+}
+
 // Apply states, filter lists, and render UI
 function applyState(): void {
   renderFilters();
 
+  // Parse searchQuery into axis terms (smart search)
+  let parsedCategory = filters.category;
+  let parsedStyle = filters.style;
+  let parsedColor = filters.color;
+  const industryTerms: string[] = [];
+
+  if (searchQuery) {
+    const terms = searchQuery
+      .toLowerCase()
+      .split(/[\s、,]+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    for (const term of terms) {
+      const catMatch = findCategoryValue(term);
+      if (catMatch && !parsedCategory) {
+        parsedCategory = catMatch;
+        continue;
+      }
+      const styleMatch = findStyleValue(term);
+      if (styleMatch && !parsedStyle) {
+        parsedStyle = styleMatch;
+        continue;
+      }
+      const colorMatch = findColorValue(term);
+      if (colorMatch && !parsedColor) {
+        parsedColor = colorMatch;
+        continue;
+      }
+      industryTerms.push(term);
+    }
+  }
+
   const isFiltered = !!(
-    filters.category ||
-    filters.style ||
+    parsedCategory ||
+    parsedStyle ||
     filters.industry ||
-    filters.color ||
-    searchQuery
+    parsedColor ||
+    industryTerms.length > 0
   );
 
   let pageView: Page<DesignIndexEntry>;
@@ -766,8 +931,8 @@ function applyState(): void {
     totalMatches = TOTAL_LIBRARY;
   } else {
     // Determine combinatorics sizes
-    const cLen = filters.category ? 1 : CATEGORIES.length;
-    const sLen = filters.style ? 1 : STYLES.length;
+    const cLen = parsedCategory ? 1 : CATEGORIES.length;
+    const sLen = parsedStyle ? 1 : STYLES.length;
 
     let matchingJsic = JSIC_SUBCLASSES;
     if (filters.industry) {
@@ -776,16 +941,35 @@ function applyState(): void {
         return entryInd === filters.industry;
       });
     }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase().trim();
+    if (industryTerms.length > 0) {
       matchingJsic = matchingJsic.filter((s) => {
         const name = jsicName(s.code) || "";
-        return s.code.includes(q) || name.toLowerCase().includes(q);
+        const major = jsicMajor(s.code);
+        const overlay = JSIC_OVERLAY[s.code];
+        
+        return industryTerms.every((term) => {
+          if (s.code.includes(term) ||
+              name.toLowerCase().includes(term) ||
+              major.code.toLowerCase().includes(term) ||
+              major.label.toLowerCase().includes(term) ||
+              (major.label_en && major.label_en.toLowerCase().includes(term))) {
+            return true;
+          }
+          if (overlay) {
+            if (overlay.aliases && overlay.aliases.some((a) => a.toLowerCase().includes(term))) {
+              return true;
+            }
+            if (overlay.keywords && overlay.keywords.some((k) => k.toLowerCase().includes(term))) {
+              return true;
+            }
+          }
+          return false;
+        });
       });
     }
 
     let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
-    const colFilter = filters.color;
+    const colFilter = parsedColor;
     if (colFilter) {
       if (colFilter === "indigo" || colFilter === "blue" || colFilter === "light-blue") {
         matchingColors = ["h17b-lt"];
@@ -804,10 +988,10 @@ function applyState(): void {
 
     // Scale count: if all filters are selected, scale by 16; if some are selected, scale proportionally up to 4000
     const activeFilterCount =
-      (filters.category ? 1 : 0) +
-      (filters.style ? 1 : 0) +
+      (parsedCategory ? 1 : 0) +
+      (parsedStyle ? 1 : 0) +
       (filters.industry ? 1 : 0) +
-      (filters.color ? 1 : 0);
+      (parsedColor ? 1 : 0);
     const scale =
       activeFilterCount >= 3
         ? 16
@@ -824,7 +1008,12 @@ function applyState(): void {
 
     const pageItems: DesignIndexEntry[] = [];
     for (let idx = start; idx < Math.min(start + PAGE_SIZE, totalMatches); idx++) {
-      pageItems.push(getCombinationAtIndex(idx, filters, matchingJsic, matchingColors));
+      pageItems.push(getCombinationAtIndex(idx, {
+        category: parsedCategory,
+        style: parsedStyle,
+        industry: filters.industry,
+        color: parsedColor
+      }, matchingJsic, matchingColors));
     }
 
     pageView = {
@@ -949,14 +1138,15 @@ function applyState(): void {
       card.appendChild(thumb);
 
       const body = el("div", { class: "card-body" });
-      const titleJa =
-        entry.title ||
-        `${jsicName(entry.jsic) || entry.jsic} × ${labelForColor(entry.color, taxonomy)}`;
-      body.appendChild(el("div", { class: "card-title-ja", text: titleJa }));
+      const mainTitle = getEntryTitle(entry, currentLocale);
+      const subTitle = currentLocale === "ja"
+        ? `${entry.jsic} × ${entry.color} × ${entry.mood}`
+        : getEntryTitle(entry, "ja");
+      body.appendChild(el("div", { class: "card-title-ja", text: mainTitle }));
       body.appendChild(
         el("div", {
           class: "card-title-en",
-          text: `${entry.jsic} × ${entry.color} × ${entry.mood}`,
+          text: subTitle,
         }),
       );
 
@@ -1172,6 +1362,7 @@ async function bootstrap(): Promise<void> {
   byId("stat-materialized-count").textContent = allEntries.length.toLocaleString();
 
   taxonomy = await loadTaxonomy();
+  await loadTemplatesBundle();
 
   // Setup Event Listeners
   byId("locale-select").onchange = (e) => {
