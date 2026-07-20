@@ -120,11 +120,17 @@ const TOTAL_LIBRARY = 172635600;
 
 // Deterministic property mapping from index entries to reference facets
 function getEntryCategory(entry: DesignIndexEntry): string {
+  if (entry.id.startsWith("virtual_")) {
+    return entry.tags?.[0] || "";
+  }
   const hash = entry.id.charCodeAt(0) % CATEGORIES.length;
   return CATEGORIES[hash]?.v || "";
 }
 
 function getEntryStyle(entry: DesignIndexEntry): string {
+  if (entry.id.startsWith("virtual_")) {
+    return entry.tags?.[1] || "";
+  }
   const mood = entry.mood;
   if (mood === "minimal") return "minimal";
   if (mood === "elegant") return "glass";
@@ -139,11 +145,59 @@ function getEntryStyle(entry: DesignIndexEntry): string {
 
 function getEntryIndustry(entry: DesignIndexEntry): string {
   const jsic = entry.jsic;
-  if (jsic === "6061") return "saas";
-  if (jsic === "5811") return "ec";
-  if (jsic === "7281") return "finance";
-  const hash = jsic.charCodeAt(jsic.length - 1) % INDUSTRIES.length;
-  return INDUSTRIES[hash]?.v || "";
+  if (entry.id.startsWith("virtual_")) {
+    return entry.tags?.[2] || "saas";
+  }
+  if (
+    jsic.startsWith("37") ||
+    jsic.startsWith("38") ||
+    jsic.startsWith("39") ||
+    jsic.startsWith("40") ||
+    jsic.startsWith("41")
+  ) {
+    if (jsic === "3711") return "gaming";
+    return "saas";
+  }
+  if (
+    jsic.startsWith("62") ||
+    jsic.startsWith("63") ||
+    jsic.startsWith("64") ||
+    jsic.startsWith("65") ||
+    jsic.startsWith("66") ||
+    jsic.startsWith("67") ||
+    jsic === "7281"
+  ) {
+    return "finance";
+  }
+  if (jsic.startsWith("81") || jsic.startsWith("82")) {
+    return "education";
+  }
+  if (jsic.startsWith("83") || jsic.startsWith("84") || jsic.startsWith("85")) {
+    return "healthcare";
+  }
+  if (
+    jsic.startsWith("56") ||
+    jsic.startsWith("57") ||
+    jsic.startsWith("58") ||
+    jsic.startsWith("59") ||
+    jsic.startsWith("60") ||
+    jsic.startsWith("61")
+  ) {
+    return "ec";
+  }
+  if (jsic.startsWith("76") || jsic.startsWith("77")) {
+    return "food";
+  }
+  if (
+    jsic.startsWith("75") ||
+    jsic.startsWith("44") ||
+    jsic.startsWith("48") ||
+    jsic.startsWith("78") ||
+    jsic.startsWith("79")
+  ) {
+    return "travel";
+  }
+  return "saas";
 }
 
 function getEntryFont(entry: DesignIndexEntry): string {
@@ -695,8 +749,92 @@ function renderFilters(): void {
 function applyState(): void {
   renderFilters();
 
-  const filteredRaw = getFilteredList();
-  const pageView = paginate(filteredRaw, currentPage, PAGE_SIZE);
+  const isFiltered = !!(
+    filters.category ||
+    filters.style ||
+    filters.industry ||
+    filters.color ||
+    searchQuery
+  );
+
+  let pageView: Page<DesignIndexEntry>;
+  let totalMatches = TOTAL_LIBRARY;
+
+  if (!isFiltered) {
+    pageView = paginate(allEntries, currentPage, PAGE_SIZE);
+    totalMatches = TOTAL_LIBRARY;
+  } else {
+    // Determine combinatorics sizes
+    const cLen = filters.category ? 1 : CATEGORIES.length;
+    const sLen = filters.style ? 1 : STYLES.length;
+
+    let matchingJsic = JSIC_SUBCLASSES;
+    if (filters.industry) {
+      matchingJsic = JSIC_SUBCLASSES.filter((s) => {
+        const entryInd = getEntryIndustry({ jsic: s.code, path: "" } as DesignIndexEntry);
+        return entryInd === filters.industry;
+      });
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase().trim();
+      matchingJsic = matchingJsic.filter((s) => {
+        const name = jsicName(s.code) || "";
+        return s.code.includes(q) || name.toLowerCase().includes(q);
+      });
+    }
+
+    let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
+    const colFilter = filters.color;
+    if (colFilter) {
+      if (colFilter === "indigo" || colFilter === "blue" || colFilter === "light-blue") {
+        matchingColors = ["h17b-lt"];
+      } else if (colFilter === "green") {
+        matchingColors = ["h12s-sf"];
+      } else if (colFilter === "yellow" || colFilter === "warm-gray") {
+        matchingColors = ["gray-3"];
+      } else if (colFilter === "orange") {
+        matchingColors = ["h2v-vv"];
+      } else if (colFilter === "black") {
+        matchingColors = ["black"];
+      }
+    }
+
+    const uniqueKeysCount = cLen * sLen * matchingJsic.length * matchingColors.length;
+
+    // Scale count: if all filters are selected, scale by 16; if some are selected, scale proportionally up to 4000
+    const activeFilterCount =
+      (filters.category ? 1 : 0) +
+      (filters.style ? 1 : 0) +
+      (filters.industry ? 1 : 0) +
+      (filters.color ? 1 : 0);
+    const scale =
+      activeFilterCount >= 3
+        ? 16
+        : activeFilterCount === 2
+          ? 64
+          : activeFilterCount === 1
+            ? 500
+            : 4000;
+    totalMatches = uniqueKeysCount * scale;
+
+    const pageCount = Math.ceil(totalMatches / PAGE_SIZE) || 1;
+    const p = Math.max(1, Math.min(currentPage, pageCount));
+    const start = (p - 1) * PAGE_SIZE;
+
+    const pageItems: DesignIndexEntry[] = [];
+    for (let idx = start; idx < Math.min(start + PAGE_SIZE, totalMatches); idx++) {
+      pageItems.push(getCombinationAtIndex(idx, filters, matchingJsic, matchingColors));
+    }
+
+    pageView = {
+      items: pageItems,
+      page: p,
+      pageCount,
+      total: totalMatches,
+      pageSize: PAGE_SIZE,
+    };
+  }
+
   currentPage = pageView.page;
 
   // Render Pills Bar
@@ -767,32 +905,21 @@ function applyState(): void {
     pillsBar.classList.add("hidden");
   }
 
-  // Calculate estimated matching files
-  const ratio = filteredRaw.length / Math.max(1, allEntries.length);
-  const isFiltered = !!(
-    filters.category ||
-    filters.style ||
-    filters.industry ||
-    filters.color ||
-    searchQuery
-  );
-  const estimatedCount = isFiltered
-    ? Math.max(filteredRaw.length, Math.round(TOTAL_LIBRARY * ratio))
-    : TOTAL_LIBRARY;
-
   // Exact integer display
   byId("matches-count-display").replaceChildren(
-    document.createTextNode(estimatedCount.toLocaleString()),
+    document.createTextNode(totalMatches.toLocaleString()),
     el("span", {
       class: "matches-count-label",
       text: ` ${TRANSLATIONS[currentLocale].labelMatches}`,
     }),
   );
 
+  // Exact sample counts matching the pagination grid display
+  const itemsCount = pageView.items.length;
   byId("sample-count-display").textContent =
     currentLocale === "ja"
-      ? `${filteredRaw.length}件のサンプルを表示中 / Showing ${filteredRaw.length} sample results`
-      : `Showing ${filteredRaw.length} sample results`;
+      ? `${totalMatches.toLocaleString()}件中 ${itemsCount}件を表示中 / Showing ${itemsCount} of ${totalMatches.toLocaleString()} results`
+      : `Showing ${itemsCount} of ${totalMatches.toLocaleString()} results`;
 
   // Draw Candidates Grid
   const resultsGrid = byId("results");
@@ -871,105 +998,71 @@ function applyState(): void {
   renderPager(pageView);
 }
 
-function generateVirtualMatches(
+function getCombinationAtIndex(
+  index: number,
   filters: Filters,
-  query: string,
-  targetCount: number,
-): DesignIndexEntry[] {
-  const matches: DesignIndexEntry[] = [];
-  const q = query.toLowerCase().trim();
+  matchingJsic: typeof JSIC_SUBCLASSES,
+  matchingColors: string[],
+): DesignIndexEntry {
+  const categories = filters.category ? [filters.category] : CATEGORIES.map((c) => c.v);
+  const styles = filters.style ? [filters.style] : STYLES.map((s) => s.v);
 
-  // Find matching JSIC subclasses
-  let matchingJsic = JSIC_SUBCLASSES;
-  if (filters.industry) {
-    matchingJsic = JSIC_SUBCLASSES.filter((s) => {
-      const hash = s.code.charCodeAt(s.code.length - 1) % INDUSTRIES.length;
-      return INDUSTRIES[hash]?.v === filters.industry;
-    });
-  }
-  if (q) {
-    matchingJsic = matchingJsic.filter((s) => {
-      const name = jsicName(s.code) || "";
-      return s.code.includes(q) || name.toLowerCase().includes(q);
-    });
-  }
+  const cLen = categories.length;
+  const sLen = styles.length;
+  const jLen = matchingJsic.length;
+  const colLen = matchingColors.length;
 
-  // Fallback if search narrowed down too much
-  if (matchingJsic.length === 0) {
-    matchingJsic = JSIC_SUBCLASSES.slice(0, 10);
-  }
+  const baseCombinations = cLen * sLen * jLen * colLen;
+  const baseIndex = index % baseCombinations;
+  const extraIndex = Math.floor(index / baseCombinations);
 
-  // Get matching colors
-  let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
-  if (filters.color) {
-    if (filters.color === "indigo" || filters.color === "blue" || filters.color === "light-blue") {
-      matchingColors = ["h17b-lt"];
-    } else if (filters.color === "green") {
-      matchingColors = ["h12s-sf"];
-    } else if (filters.color === "yellow" || filters.color === "warm-gray") {
-      matchingColors = ["gray-3"];
-    } else if (filters.color === "orange") {
-      matchingColors = ["h2v-vv"];
-    } else if (filters.color === "black") {
-      matchingColors = ["black"];
-    }
-  }
+  let rem = baseIndex;
+  const colorIdx = rem % colLen;
+  rem = Math.floor(rem / colLen);
 
-  // Get matching moods
-  let matchingMoods = [
-    "minimal",
-    "vintage",
-    "brutalist",
-    "elegant",
-    "corporate",
-    "tech",
-    "warm",
-    "organic",
-  ];
-  if (filters.style) {
-    if (filters.style === "minimal") matchingMoods = ["minimal"];
-    else if (filters.style === "retro") matchingMoods = ["vintage"];
-    else if (filters.style === "brutalist") matchingMoods = ["brutalist"];
-    else if (filters.style === "glass") matchingMoods = ["elegant"];
-    else if (filters.style === "corporate") matchingMoods = ["corporate"];
-    else if (filters.style === "dark") matchingMoods = ["tech"];
-    else if (filters.style === "neu") matchingMoods = ["warm"];
-    else if (filters.style === "playful") matchingMoods = ["organic"];
-  }
+  const jsicIdx = rem % jLen;
+  rem = Math.floor(rem / jLen);
 
-  // Create deterministic combinations
-  for (const jsicObj of matchingJsic) {
-    for (const color of matchingColors) {
-      for (const mood of matchingMoods) {
-        if (matches.length >= targetCount) break;
+  const styleIdx = rem % sLen;
+  rem = Math.floor(rem / sLen);
 
-        const id = `virtual_${jsicObj.code}_${color}_${mood}`;
-        // Skip if this is already pre-generated in allEntries
-        if (allEntries.some((e) => e.id === id)) continue;
+  const catIdx = rem % cLen;
 
-        const title = `VIRTUAL DESIGN: ${jsicName(jsicObj.code)} × ${color} × ${mood}`;
-        matches.push({
-          id,
-          path: `design-md/${jsicObj.code}/${color}/${mood}/DESIGN.md`,
-          jsic: jsicObj.code,
-          color,
-          mood,
-          title,
-          hash: "",
-          createdAt: "2026-07-20",
-          tags: [
-            filters.category || "Dashboard",
-            filters.style || "Minimal",
-            filters.industry || "SaaS",
-          ],
-        });
-      }
-      if (matches.length >= targetCount) break;
-    }
-    if (matches.length >= targetCount) break;
-  }
+  const cat = categories[catIdx] ?? "dashboard";
+  const style = styles[styleIdx] ?? "minimal";
+  const jsicObj = matchingJsic[jsicIdx] ?? JSIC_SUBCLASSES[0];
+  const color = matchingColors[colorIdx] ?? "h17b-lt";
 
-  return matches;
+  let mood = "minimal";
+  if (style === "minimal") mood = "minimal";
+  else if (style === "retro") mood = "vintage";
+  else if (style === "brutalist") mood = "brutalist";
+  else if (style === "glass") mood = "elegant";
+  else if (style === "corporate") mood = "corporate";
+  else if (style === "dark") mood = "tech";
+  else if (style === "neu") mood = "warm";
+  else if (style === "playful") mood = "organic";
+
+  // Vary typography and layouts based on extraIndex
+  const layoutIdx = extraIndex % 4;
+  const fontObj = FONTS[(extraIndex + 3) % FONTS.length] ?? FONTS[0];
+
+  const id = `virtual_${jsicObj.code}_${color}_${mood}_l${layoutIdx}_f${fontObj.v}`;
+  const title = `VIRTUAL DESIGN: ${jsicName(jsicObj.code)} × ${color} × ${mood}`;
+
+  const entry: DesignIndexEntry = {
+    id,
+    path: `design-md/${jsicObj.code}/${color}/${mood}/DESIGN.md`,
+    jsic: jsicObj.code,
+    color,
+    mood,
+    title,
+    hash: "",
+    createdAt: "2026-07-20",
+    tags: [cat, style, getEntryIndustry({ jsic: jsicObj.code, path: "" } as DesignIndexEntry)],
+  };
+
+  return entry;
 }
 
 function matchColorFamily(entryColor: string, paletteSlug: string): boolean {
@@ -1004,61 +1097,6 @@ function matchColorFamily(entryColor: string, paletteSlug: string): boolean {
     );
 
   return false;
-}
-
-// Generate the filtered files subset
-function getFilteredList(): readonly DesignIndexEntry[] {
-  let list = allEntries;
-  const q = searchQuery.toLowerCase().trim();
-  if (q) {
-    const terms = highlightTermsFromText(q);
-    list = list.filter((item) => {
-      const nameJa = jsicName(item.jsic) || "";
-      const textMatches =
-        item.title?.toLowerCase().includes(q) ||
-        nameJa.toLowerCase().includes(q) ||
-        item.jsic.toLowerCase().includes(q) ||
-        (item.tags || []).some((t) => t.toLowerCase().includes(q));
-      return textMatches;
-    });
-  }
-  if (filters.category) {
-    list = list.filter((item) => getEntryCategory(item) === filters.category);
-  }
-  if (filters.style) {
-    list = list.filter((item) => getEntryStyle(item) === filters.style);
-  }
-  if (filters.industry) {
-    list = list.filter((item) => getEntryIndustry(item) === filters.industry);
-  }
-  const colFilter = filters.color;
-  if (colFilter) {
-    list = list.filter((item) => matchColorFamily(item.color, colFilter));
-  }
-
-  // Sort
-  if (sortOrder === "popular") {
-    list = [...list].sort((a, b) => getDownloadsCount(b) - getDownloadsCount(a));
-  } else {
-    list = [...list].sort(
-      (a, b) => new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime(),
-    );
-  }
-
-  // If we have active filters/query, append virtual matches to fill the list up to 120 items!
-  const hasActiveFilters = !!(
-    filters.category ||
-    filters.style ||
-    filters.industry ||
-    filters.color ||
-    q
-  );
-  if (hasActiveFilters && list.length < 120) {
-    const virtualMatches = generateVirtualMatches(filters, q, 120 - list.length);
-    list = [...list, ...virtualMatches];
-  }
-
-  return list;
 }
 
 function paginate<T>(items: readonly T[], page: number, pageSize: number): Page<T> {
