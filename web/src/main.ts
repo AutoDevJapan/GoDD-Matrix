@@ -31,6 +31,7 @@ import {
   resolveMoodSlug,
 } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
+import { localizePromptPreview, localizedColorName } from "./ui-localization.js";
 import { buildVirtualDesign } from "./virtual-design.js";
 
 // DOM helper to build elements cleanly
@@ -96,7 +97,7 @@ let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let searchQuery = "";
 let sortOrder: "popular" | "newest" = "popular";
 let currentPage = 1;
-let selectedCellId: string | null = null;
+let selectedEntry: DesignIndexEntry | null = null;
 const PAGE_SIZE = 24;
 
 interface Filters {
@@ -607,7 +608,7 @@ function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
 
 // Render the detailed view of a resolved specification
 async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = {}): Promise<void> {
-  selectedCellId = entry.id;
+  selectedEntry = entry;
 
   // Transition views
   byId("search-view").classList.add("hidden");
@@ -712,7 +713,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   });
 
   // Combine system prompt and markdown preview
-  const finalMarkdown = `${prompt.systemPrompt}\n\n${prompt.userPrompt}`;
+  const finalMarkdown = localizePromptPreview(prompt, currentLocale);
   const codeBlock = byId("detail-code-block");
   codeBlock.textContent = finalMarkdown;
 
@@ -805,7 +806,7 @@ function renderFilters(): void {
     const active = filters.color === c.slug;
     const chip = el("button", {
       class: `color-dot-btn ${active ? "selected" : ""}`,
-      title: c.name,
+      title: localizedColorName(c.name, c.slug, currentLocale),
     });
     chip.style.backgroundColor = c.hex;
     chip.onclick = () => {
@@ -1049,7 +1050,7 @@ function applyState(): void {
   if (filters.color) {
     const c = COLOR_PALETTE.find((x) => x.slug === filters.color);
     pills.push({
-      label: c ? (currentLocale === "ja" ? c.name : c.slug) : filters.color,
+      label: c ? localizedColorName(c.name, c.slug, currentLocale) : filters.color,
       clear: () => {
         filters.color = null;
         applyState();
@@ -1331,10 +1332,7 @@ async function bootstrap(): Promise<void> {
     localStorage.setItem("godd_locale", val);
     translateUI();
     applyState();
-    if (selectedCellId) {
-      const entry = findEntryById(allEntries, selectedCellId);
-      if (entry) void openDetail(entry, { scroll: false });
-    }
+    if (selectedEntry) void openDetail(selectedEntry, { scroll: false });
   };
 
   byId("main-search-input").oninput = (e) => {
@@ -1371,7 +1369,7 @@ async function bootstrap(): Promise<void> {
   };
 
   byId("back-btn").onclick = () => {
-    selectedCellId = null;
+    selectedEntry = null;
     window.history.replaceState(null, "", window.location.pathname);
     byId("detail-view").classList.add("hidden");
     byId("search-view").classList.remove("hidden");
