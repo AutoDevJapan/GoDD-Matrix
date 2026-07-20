@@ -359,6 +359,15 @@ export function materializedResolution(
   return { status: "materialized", document: { entry, markdown, source, hashVerified } };
 }
 
+/** ブラウザ内で決定論的に合成した未材化セル本文を renderer 結果として組む。 */
+export function renderedResolution(entry: DesignIndexEntry, markdown: string): DesignResolution {
+  return {
+    status: "rendered",
+    request: contextFromEntry(entry),
+    result: { designMarkdown: markdown },
+  };
+}
+
 /** 未取得セルの {@link DesignResolution} をブラウザで組む。 */
 export function unavailableResolution(entry: DesignIndexEntry, reason: string): DesignResolution {
   return {
@@ -743,6 +752,8 @@ export interface ComposeInput {
   markdown?: string;
   /** index の hash と本文 sha256 が一致したか。 */
   hashVerified: boolean;
+  /** 本文の出所。仮想本文は rendered として扱い、index hash 検証の対象外にする。 */
+  resolutionStatus?: "materialized" | "rendered";
   /** 元の検索要望 (notices に反映)。省略時はエントリの軸から補う。 */
   request?: SearchInput;
   /**
@@ -1100,7 +1111,7 @@ export function extractColorTokens(markdown: string, locale: Locale = "ja"): rea
  * 既存 `synthesizePrompt` (純関数) をそのまま呼ぶ。
  */
 export function composePromptForCell(input: ComposeInput): ComposedPrompt {
-  const { entry, markdown, hashVerified, request, outputLanguage } = input;
+  const { entry, markdown, hashVerified, request, outputLanguage, resolutionStatus } = input;
   const ctx = contextFromEntry(entry);
   const brief: DesignBrief = {
     industry: request?.industry?.trim() || jsicName(entry.jsic),
@@ -1110,7 +1121,9 @@ export function composePromptForCell(input: ComposeInput): ComposedPrompt {
   };
   const resolution =
     markdown !== undefined
-      ? materializedResolution(entry, markdown, designRawUrl(entry), hashVerified)
+      ? resolutionStatus === "rendered"
+        ? renderedResolution(entry, markdown)
+        : materializedResolution(entry, markdown, designRawUrl(entry), hashVerified)
       : unavailableResolution(entry, "DESIGN.md not pre-materialized in Git");
   return synthesizePrompt(brief, resolution, ctx, {
     ...(outputLanguage?.trim() ? { outputLanguage: outputLanguage.trim() } : {}),
