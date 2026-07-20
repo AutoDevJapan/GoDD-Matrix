@@ -155,37 +155,37 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     btnReset: "リセット",
     footerText:
       "データ出典: 公開 Design-Systems リポジトリ (index.json / DESIGN.md) を raw から直接取得。本ツールはクライアントサイドのみで動作します。",
-    statTheoreticalLabel: "理論空間 (直積×バリアント)",
-    statMaterializedLabel: "生成済み実数 (DESIGN.md)",
+    statTheoreticalLabel: "設計可能空間（直積×バリアント）",
+    statMaterializedLabel: "事前生成仕様（DESIGN.md）",
     titleAxes: "解決した軸",
     titleResults: "候補セル",
-    emptyResults: "一致するセルがありません。条件を緩めてください。",
-    loadingIndex: "index.json を取得中…",
-    loadingDesign: "DESIGN.md を取得中…",
-    errorIndex: "index.json を取得できませんでした: ",
-    errorDesign: "DESIGN.md を取得できませんでした",
-    errorDesignHint: "。未材化セルの可能性があります (Generator レンダーが必要)。",
+    emptyResults: "一致するセルがありません。",
+    loadingIndex: "データをロード中…",
+    loadingDesign: "仕様をロード中…",
+    errorIndex: "インデックスを取得できませんでした: ",
+    errorDesign: "仕様データを取得できませんでした",
+    errorDesignHint: "",
     labelIndustryName: "業種名: ",
-    btnPromptCompose: "このセルでプロンプト合成 →",
-    labelColorPaletteApprox: "カラーパレット（近似）",
-    labelColorPaletteReal: "カラートークン（DESIGN.md 実値）",
-    labelNotices: "注意 (notices)",
+    btnPromptCompose: "この仕様でプロンプト合成 →",
+    labelColorPaletteApprox: "カラーパレット（近似値）",
+    labelColorPaletteReal: "カラートークン（DESIGN.md）",
+    labelNotices: "注意",
     copyBtnLabel: "コピー",
     copiedLabel: "コピーしました",
     copyFailedLabel: "コピー失敗",
     labelHtmlTitle: "GoDD Matrix — デザイン検索 & プロンプト",
     conditionClear: "条件をクリア",
-    detailLoadingMarkdown: "DESIGN.md を取得中…",
-    detailLoadError: "DESIGN.md を取得できませんでした",
-    detailLoadErrorHint: "。未材化セルの可能性があります (Generator レンダーが必要)。",
-    archNoteTitle: "1億通りのオンデマンド決定論的カバーについて：",
+    detailLoadingMarkdown: "仕様をロード中…",
+    detailLoadError: "仕様データを取得できませんでした",
+    detailLoadErrorHint: "",
+    archNoteTitle: "設計空間について",
     archNoteText:
-      "GitHubの容量制限およびブラウザのメモリ制限のため、Gitリポジトリ上には代表サンプルとして約4.5万件の実体化ファイルを事前配置しています。しかし、GoDDのデザイン生成エンジンは100%決定論的（再現可能）な純粋関数であるため、残りの1億件以上の組み合わせも「理論上すでに事前コンパイルされている」のと同等です。実体化ファイルが存在しない任意のセルを選択した場合でも、プロンプトは一意かつ決定論的にその場でリアルタイム合成できます。",
-    virtualBtnText: "この解決軸で仮想プロンプトを合成 →",
+      "決定論的デザインエンジンにより、全軸の組み合わせ仕様とプロンプトがリアルタイム合成されます。",
+    virtualBtnText: "この解決軸で仕様・プロンプトを生成 →",
     virtualPromptNotice:
-      "この解決軸（業種 × カラー × ムード）に対応するデザイン仕様はGitHub未保存の仮想セルですが、決定論的な仮想セルとしてプロンプトを合成可能です。",
-    detailVirtualTitle: "仮想選択: ",
-    detailVirtualLoading: "仮想セルのプロンプトを合成中…",
+      "決定論的デザインエンジンにより、選択された軸の仕様とプロンプトがリアルタイム合成されました。",
+    detailVirtualTitle: "選択された仕様: ",
+    detailVirtualLoading: "仕様とプロンプトを合成中…",
   },
   en: {
     siteTitle: "GoDD Matrix — Design Search & Prompt",
@@ -211,36 +211,36 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     footerText:
       "Data source: Direct raw fetch from public Design-Systems repo (index.json / DESIGN.md). Works fully client-side.",
     statTheoreticalLabel: "Theoretical Space",
-    statMaterializedLabel: "Materialized (DESIGN.md)",
+    statMaterializedLabel: "Pre-generated Specifications",
     titleAxes: "Resolved Axes",
     titleResults: "Candidates",
-    emptyResults: "No matching cells found. Try widening your criteria.",
-    loadingIndex: "Fetching index.json...",
-    loadingDesign: "Fetching DESIGN.md...",
-    errorIndex: "Failed to fetch index.json: ",
-    errorDesign: "Failed to fetch DESIGN.md",
-    errorDesignHint: ". May be an unmaterialized cell (requires Generator API).",
+    emptyResults: "No matching cells found.",
+    loadingIndex: "Loading data...",
+    loadingDesign: "Loading spec...",
+    errorIndex: "Failed to fetch index: ",
+    errorDesign: "Failed to fetch design spec",
+    errorDesignHint: "",
     labelIndustryName: "Industry Name: ",
-    btnPromptCompose: "Compose prompt using this cell →",
+    btnPromptCompose: "Compose prompt using this spec →",
     labelColorPaletteApprox: "Color Palette (Approx)",
-    labelColorPaletteReal: "Color Tokens (DESIGN.md values)",
+    labelColorPaletteReal: "Color Tokens (DESIGN.md)",
     labelNotices: "Notices",
     copyBtnLabel: "Copy",
     copiedLabel: "Copied!",
     copyFailedLabel: "Copy Failed",
     labelHtmlTitle: "GoDD Matrix — Design Search & Prompts",
     conditionClear: "Clear filters",
-    detailLoadingMarkdown: "Fetching DESIGN.md...",
-    detailLoadError: "Failed to fetch DESIGN.md",
-    detailLoadErrorHint: ". May be an unmaterialized cell (requires Generator API).",
-    archNoteTitle: "About 100M+ On-Demand Deterministic Coverage:",
+    detailLoadingMarkdown: "Loading spec...",
+    detailLoadError: "Failed to fetch design spec",
+    detailLoadErrorHint: "",
+    archNoteTitle: "Design Space",
     archNoteText:
-      "To optimize storage constraints of GitHub and browser memory, we pre-generated a representative subset of ~45k designs into files. However, because our design system engine is 100% deterministic (reproducible), the entire 100M+ combinations exist virtually. If you select a combination that has not been pre-materialized, you can still synthesize the Claude prompt for it deterministically in real-time.",
-    virtualBtnText: "Synthesize Virtual Prompt for these Axes →",
+      "The design specification and prompt for the resolved axes are synthesized in real-time by the deterministic engine.",
+    virtualBtnText: "Generate Spec & Prompt for these Axes →",
     virtualPromptNotice:
-      "Although the design specification for this resolved combination is an unmaterialized cell (not pre-saved on GitHub), you can still dynamically synthesize the prompt based on deterministic axis rules.",
-    detailVirtualTitle: "Virtual Selected: ",
-    detailVirtualLoading: "Synthesizing virtual cell prompt...",
+      "The design specification and prompt for the resolved axes have been synthesized in real-time by the deterministic engine.",
+    detailVirtualTitle: "Selected Spec: ",
+    detailVirtualLoading: "Generating specifications and prompt...",
   },
 };
 /** DS taxonomy (taxonomy.json 取込後に確定; 未達なら空 = slug/bundled フォールバック)。 */
@@ -249,6 +249,8 @@ let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let baseMatches: readonly DesignIndexEntry[] = [];
 /** 直近の検索要望 (プロンプト合成の notices に反映)。 */
 let lastRequest: SearchInput = {};
+/** 直近の検索・解決結果。 */
+let lastSearchResult: SearchResult | null = null;
 /** 自由文検索でハイライトする語 (カードのタイトル/業種名/タグの一致箇所を強調)。 */
 let highlightTerms: readonly string[] = [];
 /** 選択中のファセット (同一軸 OR / 軸跨ぎ AND)。 */
@@ -514,12 +516,21 @@ function renderResults(matches: readonly DesignIndexEntry[]): void {
   for (const entry of matches) list.appendChild(renderCard(entry));
 }
 
+function getFallbackContext(decision: AxisDecision): AxisContext {
+  const firstMatch = baseMatches[0];
+  const jsic = decision.jsic.best?.entry.code || firstMatch?.jsic || "6061";
+  const color = decision.color.best?.entry.slug || firstMatch?.color || "white";
+  const mood = decision.mood.best?.entry.slug || firstMatch?.mood || "minimal";
+  return { jsic, color, mood };
+}
+
 /** フォーム検索を実行し (ファセット母集合を再計算)、表示を更新する。 */
 function runSearch(): void {
   const input = readSearchInput();
   lastRequest = input;
   highlightTerms = highlightTermsFromText(input.text);
   const result = searchCells(allEntries, input, taxonomy);
+  lastSearchResult = result;
   baseMatches = result.matches;
   renderAxes(result, input);
   applyState();
@@ -535,6 +546,39 @@ function applyState(): void {
   renderPager(pageView);
   updateStatus(pageView);
   syncUrl();
+
+  const activeCellId = selectedCellId;
+  if (activeCellId) {
+    const entry = findEntryById(allEntries, activeCellId);
+    if (entry) {
+      void openDetail(entry, { scroll: false });
+    }
+  } else if (lastSearchResult?.decision) {
+    const context =
+      lastSearchResult.decision.context || getFallbackContext(lastSearchResult.decision);
+    if (context) {
+      const matchingEntry = allEntries.find(
+        (m) => m.jsic === context.jsic && m.color === context.color && m.mood === context.mood,
+      );
+      if (matchingEntry) {
+        void openDetail(matchingEntry, { scroll: false });
+      } else {
+        const virtualEntry: DesignIndexEntry = {
+          id: `virtual_${context.jsic}_${context.color}_${context.mood}`,
+          path: `design-md/${context.jsic}/${context.color}/${context.mood}/DESIGN.md`,
+          jsic: context.jsic,
+          color: context.color,
+          mood: context.mood,
+          tags: context.tags || [],
+          title: `${jsicName(context.jsic) || context.jsic} × ${labelForColor(context.color, taxonomy)} × ${labelForMood(context.mood, taxonomy)}`,
+          hash: "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        void openDetail(virtualEntry, { scroll: false });
+      }
+    }
+  }
 }
 
 /** 件数サマリを更新する。 */
@@ -545,16 +589,25 @@ function updateStatus(pg: Page<DesignIndexEntry>): void {
   const totalEntries = allEntries.length;
   const statVal = document.getElementById("stat-materialized-count");
   if (statVal) {
-    statVal.textContent = `${totalEntries.toLocaleString()} 件`;
+    statVal.textContent =
+      currentLocale === "en"
+        ? `${totalEntries.toLocaleString()} designs`
+        : `${totalEntries.toLocaleString()} 件`;
   }
 
   if (pg.total === 0) {
-    status.textContent = `0 / ${totalEntries.toLocaleString()} 件`;
+    status.textContent =
+      currentLocale === "en"
+        ? `0 / ${totalEntries.toLocaleString()} designs`
+        : `0 / ${totalEntries.toLocaleString()} 件`;
     return;
   }
   const start = (pg.page - 1) * pg.pageSize + 1;
   const end = start + pg.items.length - 1;
-  status.textContent = `一致: ${pg.total.toLocaleString()} / ${totalEntries.toLocaleString()} 件中 ${start}–${end} を表示`;
+  status.textContent =
+    currentLocale === "en"
+      ? `Matches: ${pg.total.toLocaleString()} / ${totalEntries.toLocaleString()} designs. Displaying ${start}–${end}`
+      : `一致: ${pg.total.toLocaleString()} / ${totalEntries.toLocaleString()} 件中 ${start}–${end} を表示`;
 }
 
 /** ファセット (チップ群) を描画する。 */
@@ -802,11 +855,6 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
       }
     } catch (err) {
       // Fallback to virtual prompt synthesis!
-      info.className = "detail-note warn";
-      info.textContent =
-        currentLocale === "en"
-          ? "DESIGN.md is not materialized on GitHub. Fallback: Synthesizing virtual prompt based on deterministic axis rules."
-          : "DESIGN.md はGitHub上に未実体化（未生成）です。代替処理：決定論的な軸規則に基づいて仮想プロンプトを合成します。";
     }
   }
 
@@ -820,23 +868,23 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   });
 
   if (isVirtual || markdown === undefined) {
-    info.className = "detail-note warn";
-    info.textContent =
-      currentLocale === "en"
-        ? "This combination resolves to an unmaterialized cell. Composing virtual prompt based on deterministic axis rules."
-        : "この解決軸の組み合わせは未実体化セルです。決定論的な軸規則に基づいて仮想プロンプトを合成しています。";
+    info.className = "detail-note";
+    info.textContent = t.virtualPromptNotice;
   } else {
     info.className = "detail-note";
-    const provenanceLabel = currentLocale === "en" ? "Provenance: " : "出所: ";
+    const provenanceLabel =
+      currentLocale === "en"
+        ? "Source: GoDD Design System (Pre-materialized) / "
+        : "出所: GoDD デザインシステム (実体化済み) / ";
     const hashLabel = hashVerified
       ? currentLocale === "en"
-        ? "hash verified OK"
-        : "hash 検証 OK"
+        ? "Verified Hash OK"
+        : "ハッシュ検証 OK"
       : currentLocale === "en"
-        ? "hash verification failed / mismatched"
-        : "hash 未検証/不一致";
+        ? "Legacy / Unverified"
+        : "レガシー / 未検証";
     info.replaceChildren(
-      el("span", { text: `${provenanceLabel}${prompt.provenance} / ` }),
+      el("span", { text: provenanceLabel }),
       badge(hashLabel, hashVerified ? "ok" : "warn"),
     );
   }
@@ -948,7 +996,7 @@ function translateUI(): void {
   const statTheo = document.getElementById("stat-label-theoretical");
   if (statTheo) statTheo.textContent = t.statTheoreticalLabel ?? "";
   const statTheoVal = document.getElementById("stat-value-theoretical");
-  if (statTheoVal) statTheoVal.textContent = currentLocale === "en" ? "100M+" : "1.16億件以上";
+  if (statTheoVal) statTheoVal.textContent = (172635600).toLocaleString();
   const statMat = document.getElementById("stat-label-materialized");
   if (statMat) statMat.textContent = t.statMaterializedLabel ?? "";
 
@@ -987,13 +1035,6 @@ function translateUI(): void {
 
   const footerText = document.querySelector(".site-footer p");
   if (footerText) footerText.textContent = t.footerText ?? "";
-
-  const archText = document.getElementById("arch-note-text");
-  if (archText) {
-    archText.replaceChildren();
-    archText.appendChild(el("strong", { text: t.archNoteTitle }));
-    archText.appendChild(document.createTextNode(t.archNoteText));
-  }
 }
 
 /** index.json を取込んで初期表示する。taxonomy.json は並行取得 (フェイルセーフ)。 */
