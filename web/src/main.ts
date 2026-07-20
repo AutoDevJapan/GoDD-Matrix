@@ -552,6 +552,18 @@ function translateUI(): void {
   byId("btn-copy").textContent = t.btnCopy;
   byId("btn-share").textContent = t.btnShare;
   byId("label-related-title").textContent = t.labelRelated;
+
+  const catalogBadge = byId("label-hero-catalog");
+  if (catalogBadge) {
+    catalogBadge.replaceChildren();
+    const countSpan = el("span", { text: allEntries.length > 0 ? allEntries.length.toLocaleString() : "Loading..." });
+    countSpan.id = "stat-materialized-count";
+    if (currentLocale === "ja") {
+      catalogBadge.append(document.createTextNode("OSS 材化済みカタログ: "), countSpan, document.createTextNode(" 件"));
+    } else {
+      catalogBadge.append(document.createTextNode("Pre-generated OSS Catalog: "), countSpan, document.createTextNode(" files"));
+    }
+  }
 }
 
 // Build and trigger file download
@@ -628,9 +640,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
   // Title & Filename
   const mainTitle = getEntryTitle(entry, currentLocale);
-  const subTitle = currentLocale === "ja"
-    ? `${entry.jsic} × ${entry.color} × ${entry.mood}`
-    : getEntryTitle(entry, "ja");
+  const subTitle = `${entry.jsic} × ${entry.color} × ${entry.mood}`;
   byId("detail-filename").textContent = `${entry.id}.design.md`;
   byId("detail-title-ja").textContent = mainTitle;
   byId("detail-title-en").textContent = subTitle;
@@ -639,13 +649,14 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   if (currentLocale === "ja") {
     byId("detail-desc-ja").textContent =
       `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」の決定論的デザイン仕様書。`;
-    byId("detail-desc-en").textContent =
-      `Deterministic design specification matching industry code ${entry.jsic}, color tone ${entry.color}, and design mood ${entry.mood}.`;
+    byId("detail-desc-ja").classList.remove("hidden");
+    byId("detail-desc-en").classList.add("hidden");
   } else {
-    byId("detail-desc-ja").textContent =
-      `Deterministic design specification matching industry code ${entry.jsic} (${jsicMajor(entry.jsic).label_en || jsicName(entry.jsic)}), color tone "${labelForColor(entry.color, taxonomy, "en")}", and design mood "${labelForMood(entry.mood, taxonomy, "en")}".`;
+    const major = jsicMajor(entry.jsic);
     byId("detail-desc-en").textContent =
-      `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」の決定論的デザイン仕様書。`;
+      `Deterministic design specification matching industry code ${entry.jsic} (${major.label_en || jsicName(entry.jsic) || "Unknown"}), color tone "${labelForColor(entry.color, taxonomy, "en")}", and design mood "${labelForMood(entry.mood, taxonomy, "en")}".`;
+    byId("detail-desc-en").classList.remove("hidden");
+    byId("detail-desc-ja").classList.add("hidden");
   }
 
   // Draw swatches
@@ -743,9 +754,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
     const body = el("div", { class: "related-body" });
     const mainTitle = getEntryTitle(item, currentLocale);
-    const subTitle = currentLocale === "ja"
-      ? `${item.jsic} × ${item.color}`
-      : getEntryTitle(item, "ja");
+    const subTitle = `${item.jsic} × ${item.color} × ${item.mood}`;
     body.appendChild(el("div", { class: "related-card-title-ja", text: mainTitle }));
     body.appendChild(
       el("div", { class: "related-card-title-en", text: subTitle }),
@@ -834,20 +843,57 @@ function findCategoryValue(term: string): string | null {
 }
 
 function findStyleValue(term: string): string | null {
-  const t = term.toLowerCase();
+  const t = term.toLowerCase().trim();
+  if (!t) return null;
   for (const s of STYLES) {
-    if (s.v === t || s.ja.includes(t) || s.en.toLowerCase().includes(t)) {
+    if (s.v === t || s.ja.toLowerCase().includes(t) || s.en.toLowerCase().includes(t)) {
       return s.v;
+    }
+  }
+  if (taxonomy && taxonomy.moods) {
+    for (const [slug, item] of Object.entries(taxonomy.moods)) {
+      if (
+        slug === t ||
+        item.name_ja?.toLowerCase().includes(t) ||
+        item.name_en?.toLowerCase().includes(t)
+      ) {
+        if (slug === "vintage") return "retro";
+        if (slug === "elegant") return "glass";
+        if (slug === "tech") return "dark";
+        if (slug === "warm") return "neu";
+        if (slug === "organic") return "playful";
+        return slug;
+      }
     }
   }
   return null;
 }
 
 function findColorValue(term: string): string | null {
-  const t = term.toLowerCase();
+  const t = term.toLowerCase().trim();
+  if (!t) return null;
   for (const c of COLOR_PALETTE) {
-    if (c.slug === t || c.name.includes(t) || c.slug.replace("-", "").includes(t)) {
+    if (c.slug === t || c.name.toLowerCase().includes(t) || c.slug.replace("-", "").toLowerCase().includes(t)) {
       return c.slug;
+    }
+  }
+  if (taxonomy && taxonomy.colors) {
+    for (const [slug, item] of Object.entries(taxonomy.colors)) {
+      if (
+        slug === t ||
+        item.name_ja?.toLowerCase().includes(t) ||
+        item.name_en?.toLowerCase().includes(t) ||
+        item.family?.toLowerCase().includes(t) ||
+        item.family_ja?.toLowerCase().includes(t) ||
+        item.family_en?.toLowerCase().includes(t)
+      ) {
+        if (slug === "h17b-lt") return "indigo";
+        if (slug === "h12s-sf") return "green";
+        if (slug === "gray-3") return "yellow";
+        if (slug === "h2v-vv") return "rose";
+        if (slug === "black") return "black";
+        return slug;
+      }
     }
   }
   return null;
@@ -971,16 +1017,23 @@ function applyState(): void {
     let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
     const colFilter = parsedColor;
     if (colFilter) {
-      if (colFilter === "indigo" || colFilter === "blue" || colFilter === "light-blue") {
+      const family = colorFamily(colFilter).key;
+      if (family === "blue" || family === "bluepurple" || family === "purple") {
         matchingColors = ["h17b-lt"];
-      } else if (colFilter === "green") {
+      } else if (family === "green" || family === "yellowgreen" || family === "bluegreen") {
         matchingColors = ["h12s-sf"];
-      } else if (colFilter === "yellow" || colFilter === "warm-gray") {
+      } else if (family === "yellow") {
         matchingColors = ["gray-3"];
-      } else if (colFilter === "orange") {
+      } else if (family === "red" || family === "orange" || family === "redpurple") {
         matchingColors = ["h2v-vv"];
-      } else if (colFilter === "black") {
-        matchingColors = ["black"];
+      } else if (family === "neutral") {
+        if (colFilter.includes("white") || colFilter.includes("lt")) {
+          matchingColors = ["white"];
+        } else if (colFilter.includes("black") || colFilter.includes("dk")) {
+          matchingColors = ["black"];
+        } else {
+          matchingColors = ["gray-3"];
+        }
       }
     }
 
@@ -1139,9 +1192,7 @@ function applyState(): void {
 
       const body = el("div", { class: "card-body" });
       const mainTitle = getEntryTitle(entry, currentLocale);
-      const subTitle = currentLocale === "ja"
-        ? `${entry.jsic} × ${entry.color} × ${entry.mood}`
-        : getEntryTitle(entry, "ja");
+      const subTitle = `${entry.jsic} × ${entry.color} × ${entry.mood}`;
       body.appendChild(el("div", { class: "card-title-ja", text: mainTitle }));
       body.appendChild(
         el("div", {
@@ -1357,9 +1408,7 @@ async function bootstrap(): Promise<void> {
     indexData = parseDesignIndex(await remoteRes.text());
   }
   allEntries = indexData.entries;
-
-  // Set Pre-generated Count
-  byId("stat-materialized-count").textContent = allEntries.length.toLocaleString();
+  translateUI();
 
   taxonomy = await loadTaxonomy();
   await loadTemplatesBundle();
