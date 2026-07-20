@@ -1,13 +1,14 @@
+import Handlebars from "handlebars";
+import { selectPartials } from "../../../src/compat/selector.js";
+import type { CompatTable, SelectionManifest } from "../../../src/compat/types.js";
+import { buildDesignDocument } from "../../../src/engine/document.js";
+import type { PartialSectionId } from "../../../src/partials/types.js";
 import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
 import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
-import { selectPartials } from "../../../src/compat/selector.js";
-import { buildDesignDocument } from "../../../src/engine/document.js";
-import Handlebars from "handlebars";
 import {
   DS_INDEX_URL,
-  DS_TAXONOMY_URL,
   EMPTY_SELECTION,
   EMPTY_TAXONOMY,
   type FacetSelection,
@@ -25,8 +26,16 @@ import {
   jsicName,
   labelForColor,
   labelForMood,
-  parseTaxonomy,
 } from "./lib.js";
+import {
+  SEARCH_COLORS,
+  SEARCH_STYLES,
+  findColorValue,
+  findStyleValue,
+  resolveColorSlugs,
+  resolveMoodSlug,
+} from "./search-parser.js";
+import { loadTaxonomy } from "./taxonomy-cache.js";
 
 // DOM helper to build elements cleanly
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -60,16 +69,7 @@ const CATEGORIES = [
   { v: "form", ja: "フォーム", en: "Form" },
 ];
 
-const STYLES = [
-  { v: "minimal", ja: "ミニマル", en: "Minimal" },
-  { v: "retro", ja: "レトロ", en: "Retro" },
-  { v: "brutalist", ja: "ブルータリズム", en: "Brutalist" },
-  { v: "glass", ja: "グラスモーフィズム", en: "Glassmorphism" },
-  { v: "corporate", ja: "コーポレート", en: "Corporate" },
-  { v: "dark", ja: "ダーク", en: "Dark" },
-  { v: "neu", ja: "ニューモーフィズム", en: "Neumorphism" },
-  { v: "playful", ja: "プレイフル", en: "Playful" },
-];
+const STYLES = SEARCH_STYLES;
 
 const INDUSTRIES = [
   { v: "saas", ja: "SaaS", en: "SaaS" },
@@ -91,16 +91,7 @@ const FONTS = [
   { v: "space", ja: "Space Grotesk", en: "Space Grotesk" },
 ];
 
-const COLOR_PALETTE = [
-  { hex: "#6366f1", name: "Indigo / インディゴ", slug: "indigo" },
-  { hex: "#0ea5e9", name: "Sky / スカイ", slug: "light-blue" },
-  { hex: "#10b981", name: "Emerald / エメラルド", slug: "green" },
-  { hex: "#f59e0b", name: "Amber / アンバー", slug: "yellow" },
-  { hex: "#f43f5e", name: "Rose / ローズ", slug: "orange" },
-  { hex: "#8b5cf6", name: "Violet / バイオレット", slug: "blue" },
-  { hex: "#64748b", name: "Slate / スレート", slug: "warm-gray" },
-  { hex: "#0f172a", name: "Ink / インク", slug: "black" },
-];
+const COLOR_PALETTE = SEARCH_COLORS;
 
 // App States
 let allEntries: readonly DesignIndexEntry[] = [];
@@ -112,18 +103,20 @@ let currentPage = 1;
 let selectedCellId: string | null = null;
 const PAGE_SIZE = 24;
 
-let templatesBundle: {
+interface TemplatesBundle {
   template: string;
   partials: Record<string, string>;
-  manifest: any;
-  compat: any;
-} | null = null;
+  manifest: SelectionManifest;
+  compat: CompatTable;
+}
+
+let templatesBundle: TemplatesBundle | null = null;
 
 async function loadTemplatesBundle(): Promise<void> {
   try {
     const res = await fetch("templates-bundle.json", { cache: "no-cache" });
     if (res.ok) {
-      templatesBundle = (await res.json()) as any;
+      templatesBundle = (await res.json()) as TemplatesBundle;
     }
   } catch (err) {
     console.error("Failed to load templates bundle:", err);
@@ -368,6 +361,11 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
 // Translations Structure
 interface TranslationKeys {
   siteTitle: string;
+  siteDescription: string;
+  localeLabel: string;
+  pagerLabel: string;
+  previewLabel: string;
+  footerText: string;
   brandSubtitle: string;
   heroTag: string;
   heroSub: string;
@@ -393,47 +391,71 @@ interface TranslationKeys {
   toastCopied: string;
   toastShareCopied: string;
   toastDownloadStarted: string;
+  toastCopyFailed: string;
   virtualNotice: string;
   labelVirtualBadge: string;
+  catalogPrefix: string;
+  catalogSuffix: string;
+  loading: string;
+  sampleCount: (shown: number, total: number) => string;
+  materializationType: string;
+  preGeneratedType: string;
 }
 
 const TRANSLATIONS: Record<Locale, TranslationKeys> = {
   ja: {
     siteTitle: "DESIGN.md Library",
-    brandSubtitle: "1億件以上のDESIGNファイルを検索・共有 / Search & share 100M+ DESIGN files",
-    heroTag: "世界最大のDESIGNファイルライブラリ / World's largest DESIGN.md library",
-    heroSub: "件のDESIGN.mdファイルが検索可能 / DESIGN.md files ready to search",
-    placeholderSearch: "検索 / Search e.g. 'ミニマル ダッシュボード'",
-    labelFacetCategory: "カテゴリ / Category",
-    labelFacetStyle: "スタイル / Style",
-    labelFacetIndustry: "業界 / Industry",
-    labelFacetColor: "カラー / Color",
-    labelActivePills: "適用中 / Active:",
-    clearAll: "すべてクリア / Clear all",
-    labelMatches: "件が一致 / files match",
-    btnPopular: "人気順 / Popular",
-    btnNewest: "新着順 / Newest",
-    detailBack: "← 検索に戻る / Back to search",
-    labelCodePreview: "DESIGN.md プレビュー / Preview",
-    labelDownloads: "提供形式 / Type",
-    labelUpdated: "更新日 / Updated",
-    labelLicense: "ライセンス / License",
-    btnDownload: "ダウンロード / Download",
-    btnCopy: "コピー / Copy",
-    btnShare: "共有リンク / Share",
-    labelRelated: "関連するDESIGNファイル / Related files",
+    siteDescription: "1億件以上のDESIGNファイルを検索・共有",
+    localeLabel: "言語",
+    pagerLabel: "ページ送り",
+    previewLabel: "プレビュー",
+    footerText: "データ提供元: GoDD Design System 公開コーパス（ブラウザから取得）",
+    brandSubtitle: "1億件以上のDESIGNファイルを検索・共有",
+    heroTag: "世界最大のDESIGNファイルライブラリ",
+    heroSub: "件のDESIGN.mdファイルが検索可能",
+    placeholderSearch: "検索例: ミニマル ダッシュボード",
+    labelFacetCategory: "カテゴリ",
+    labelFacetStyle: "スタイル",
+    labelFacetIndustry: "業界",
+    labelFacetColor: "カラー",
+    labelActivePills: "適用中:",
+    clearAll: "すべてクリア",
+    labelMatches: "件が一致",
+    btnPopular: "人気順",
+    btnNewest: "新着順",
+    detailBack: "← 検索に戻る",
+    labelCodePreview: "DESIGN.md プレビュー",
+    labelDownloads: "提供形式",
+    labelUpdated: "更新日",
+    labelLicense: "ライセンス",
+    btnDownload: "ダウンロード",
+    btnCopy: "コピー",
+    btnShare: "共有リンク",
+    labelRelated: "関連するDESIGNファイル",
     toastCopied: "Markdownをクリップボードにコピーしました",
     toastShareCopied: "共有リンクをコピーしました",
     toastDownloadStarted: "ダウンロードを開始しました",
+    toastCopyFailed: "コピーに失敗しました",
     virtualNotice: "決定論的デザインエンジンによりリアルタイム合成されました。",
     labelVirtualBadge: "VIRTUAL",
+    catalogPrefix: "OSS 材化済みカタログ: ",
+    catalogSuffix: " 件",
+    loading: "読み込み中...",
+    sampleCount: (shown, total) => `${total.toLocaleString("ja-JP")}件中 ${shown}件を表示中`,
+    materializationType: "リアルタイム合成",
+    preGeneratedType: "OSS 材化済み",
   },
   en: {
     siteTitle: "DESIGN.md Library",
+    siteDescription: "Search and share more than 100 million DESIGN files",
+    localeLabel: "Language",
+    pagerLabel: "Pagination",
+    previewLabel: "Preview",
+    footerText: "Data source: GoDD Design System public corpus (fetched client-side)",
     brandSubtitle: "Search & share 100M+ DESIGN files",
     heroTag: "World's largest DESIGN.md library",
     heroSub: "DESIGN.md files ready to search",
-    placeholderSearch: "Search / 検索 e.g. 'Minimal Dashboard'",
+    placeholderSearch: "Search e.g. 'Minimal Dashboard'",
     labelFacetCategory: "Category",
     labelFacetStyle: "Style",
     labelFacetIndustry: "Industry",
@@ -455,8 +477,15 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     toastCopied: "Markdown copied to clipboard",
     toastShareCopied: "Share link copied to clipboard",
     toastDownloadStarted: "Download started",
+    toastCopyFailed: "Copy failed",
     virtualNotice: "Synthesized in real-time by the deterministic design engine.",
     labelVirtualBadge: "VIRTUAL",
+    catalogPrefix: "Pre-generated OSS Catalog: ",
+    catalogSuffix: " files",
+    loading: "Loading...",
+    sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString("en-US")} results`,
+    materializationType: "Virtual",
+    preGeneratedType: "Pre-generated",
   },
 };
 
@@ -488,7 +517,7 @@ function copyText(text: string, toastMsg: string): void {
         document.execCommand("copy");
         showToast(toastMsg);
       } catch {
-        showToast("Copy failed");
+        showToast(TRANSLATIONS[currentLocale].toastCopyFailed);
       }
       document.body.removeChild(ta);
     });
@@ -504,29 +533,29 @@ function animateCounter(): void {
     step++;
     const progress = 1 - (1 - step / steps) ** 3;
     animatedTotal = Math.min(target, Math.round(target * progress));
-    if (counterEl) counterEl.textContent = animatedTotal.toLocaleString();
+    if (counterEl) {
+      counterEl.textContent = animatedTotal.toLocaleString(
+        currentLocale === "ja" ? "ja-JP" : "en-US",
+      );
+    }
     if (step >= steps) {
       clearInterval(timer);
     }
   }, 40);
 }
 
-// Fetch Taxonomy
-async function loadTaxonomy(): Promise<Taxonomy> {
-  try {
-    const res = await fetch(DS_TAXONOMY_URL, { cache: "no-cache" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return parseTaxonomy(await res.json());
-  } catch {
-    return EMPTY_TAXONOMY;
-  }
-}
-
 // Dynamic UI Text Localization updates
 function translateUI(): void {
   const t = TRANSLATIONS[currentLocale];
-  document.title = "GoDD Matrix — DESIGN.md Library";
+  document.title = `GoDD Matrix — ${t.siteTitle}`;
   document.documentElement.lang = currentLocale;
+  document
+    .querySelector<HTMLMetaElement>('meta[name="description"]')
+    ?.setAttribute("content", t.siteDescription);
+  byId("locale-select").setAttribute("aria-label", t.localeLabel);
+  byId("pager").setAttribute("aria-label", t.pagerLabel);
+  byId("label-preview-overlay").textContent = t.previewLabel;
+  byId("label-footer").textContent = t.footerText;
 
   byId("label-brand-subtitle").textContent = t.brandSubtitle;
   byId("label-hero-tag").textContent = t.heroTag;
@@ -556,13 +585,18 @@ function translateUI(): void {
   const catalogBadge = byId("label-hero-catalog");
   if (catalogBadge) {
     catalogBadge.replaceChildren();
-    const countSpan = el("span", { text: allEntries.length > 0 ? allEntries.length.toLocaleString() : "Loading..." });
+    const countSpan = el("span", {
+      text:
+        allEntries.length > 0
+          ? allEntries.length.toLocaleString(currentLocale === "ja" ? "ja-JP" : "en-US")
+          : t.loading,
+    });
     countSpan.id = "stat-materialized-count";
-    if (currentLocale === "ja") {
-      catalogBadge.append(document.createTextNode("OSS 材化済みカタログ: "), countSpan, document.createTextNode(" 件"));
-    } else {
-      catalogBadge.append(document.createTextNode("Pre-generated OSS Catalog: "), countSpan, document.createTextNode(" files"));
-    }
+    catalogBadge.append(
+      document.createTextNode(t.catalogPrefix),
+      countSpan,
+      document.createTextNode(t.catalogSuffix),
+    );
   }
 }
 
@@ -595,14 +629,14 @@ function renderVirtualDesign(entry: DesignIndexEntry): string | undefined {
       variant: entry.variant || 0,
     });
     const env = Handlebars.create();
-    const selection: Record<string, string> = {};
+    const selection = {} as Record<PartialSectionId, string>;
     for (const [section, meta] of selectionMeta) {
       const source = templatesBundle.partials[meta.id] || "";
       env.registerPartial(section, env.compile(source, { noEscape: true }));
       selection[section] = meta.id;
     }
     const documentData = buildDesignDocument(ctx, {
-      selection: selection as any,
+      selection,
       title: getEntryTitle(entry, "ja"),
     });
     const compiled = env.compile(templatesBundle.template, { noEscape: true });
@@ -687,13 +721,8 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
 
   // Set file type and metadata
-  byId("detail-downloads-val").textContent = isVirtual
-    ? currentLocale === "ja"
-      ? "リアルタイム合成 / Virtual"
-      : "Virtual (Synthesized)"
-    : currentLocale === "ja"
-      ? "OSS 材化済み / Pre-generated"
-      : "Pre-generated (OSS)";
+  const t = TRANSLATIONS[currentLocale];
+  byId("detail-downloads-val").textContent = isVirtual ? t.materializationType : t.preGeneratedType;
   byId("detail-updated-val").textContent = entry.createdAt
     ? entry.createdAt.slice(0, 10)
     : "2026-07-20";
@@ -729,7 +758,6 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   codeBlock.textContent = finalMarkdown;
 
   // Bind sidebar action buttons
-  const t = TRANSLATIONS[currentLocale];
   byId("btn-download").onclick = () => downloadMarkdown(`${entry.id}.design.md`, finalMarkdown);
   byId("btn-copy").onclick = () => copyText(finalMarkdown, t.toastCopied);
   byId("btn-share").onclick = () => copyText(window.location.href, t.toastShareCopied);
@@ -749,16 +777,14 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
     const thumb = el("div", { class: "related-thumb" });
     renderThumbnail(item, thumb);
-    thumb.appendChild(el("div", { class: "preview-overlay", text: "PREVIEW" }));
+    thumb.appendChild(el("div", { class: "preview-overlay", text: t.previewLabel }));
     card.appendChild(thumb);
 
     const body = el("div", { class: "related-body" });
     const mainTitle = getEntryTitle(item, currentLocale);
     const subTitle = `${item.jsic} × ${item.color} × ${item.mood}`;
     body.appendChild(el("div", { class: "related-card-title-ja", text: mainTitle }));
-    body.appendChild(
-      el("div", { class: "related-card-title-en", text: subTitle }),
-    );
+    body.appendChild(el("div", { class: "related-card-title-en", text: subTitle }));
     card.appendChild(body);
 
     relatedGrid.appendChild(card);
@@ -842,63 +868,6 @@ function findCategoryValue(term: string): string | null {
   return null;
 }
 
-function findStyleValue(term: string): string | null {
-  const t = term.toLowerCase().trim();
-  if (!t) return null;
-  for (const s of STYLES) {
-    if (s.v === t || s.ja.toLowerCase().includes(t) || s.en.toLowerCase().includes(t)) {
-      return s.v;
-    }
-  }
-  if (taxonomy && taxonomy.moods) {
-    for (const [slug, item] of Object.entries(taxonomy.moods)) {
-      if (
-        slug === t ||
-        item.name_ja?.toLowerCase().includes(t) ||
-        item.name_en?.toLowerCase().includes(t)
-      ) {
-        if (slug === "vintage") return "retro";
-        if (slug === "elegant") return "glass";
-        if (slug === "tech") return "dark";
-        if (slug === "warm") return "neu";
-        if (slug === "organic") return "playful";
-        return slug;
-      }
-    }
-  }
-  return null;
-}
-
-function findColorValue(term: string): string | null {
-  const t = term.toLowerCase().trim();
-  if (!t) return null;
-  for (const c of COLOR_PALETTE) {
-    if (c.slug === t || c.name.toLowerCase().includes(t) || c.slug.replace("-", "").toLowerCase().includes(t)) {
-      return c.slug;
-    }
-  }
-  if (taxonomy && taxonomy.colors) {
-    for (const [slug, item] of Object.entries(taxonomy.colors)) {
-      if (
-        slug === t ||
-        item.name_ja?.toLowerCase().includes(t) ||
-        item.name_en?.toLowerCase().includes(t) ||
-        item.family?.toLowerCase().includes(t) ||
-        item.family_ja?.toLowerCase().includes(t) ||
-        item.family_en?.toLowerCase().includes(t)
-      ) {
-        if (slug === "h17b-lt") return "indigo";
-        if (slug === "h12s-sf") return "green";
-        if (slug === "gray-3") return "yellow";
-        if (slug === "h2v-vv") return "rose";
-        if (slug === "black") return "black";
-        return slug;
-      }
-    }
-  }
-  return null;
-}
-
 function getEntryTitle(entry: DesignIndexEntry, locale: Locale): string {
   if (entry.title && locale === "ja") {
     if (entry.title.startsWith("VIRTUAL DESIGN: ")) {
@@ -908,19 +877,19 @@ function getEntryTitle(entry: DesignIndexEntry, locale: Locale): string {
     }
     return entry.title;
   }
-  
+
   const colLabel = labelForColor(entry.color, taxonomy, locale);
   const mdLabel = labelForMood(entry.mood, taxonomy, locale);
-  
+
   if (locale === "en") {
     const major = jsicMajor(entry.jsic);
     const indName = major.label_en || jsicName(entry.jsic) || entry.jsic;
-    if (entry.id?.startsWith("virtual_") || (entry.title && entry.title.startsWith("VIRTUAL DESIGN: "))) {
+    if (entry.id?.startsWith("virtual_") || entry.title?.startsWith("VIRTUAL DESIGN: ")) {
       return `Virtual Design: ${indName} / ${mdLabel} / ${colLabel}`;
     }
     return `Design System: ${indName} / ${mdLabel} / ${colLabel}`;
   }
-  
+
   return entry.title || `${jsicName(entry.jsic) || entry.jsic} × ${colLabel} × ${mdLabel}`;
 }
 
@@ -947,12 +916,12 @@ function applyState(): void {
         parsedCategory = catMatch;
         continue;
       }
-      const styleMatch = findStyleValue(term);
+      const styleMatch = findStyleValue(term, taxonomy);
       if (styleMatch && !parsedStyle) {
         parsedStyle = styleMatch;
         continue;
       }
-      const colorMatch = findColorValue(term);
+      const colorMatch = findColorValue(term, taxonomy);
       if (colorMatch && !parsedColor) {
         parsedColor = colorMatch;
         continue;
@@ -992,20 +961,22 @@ function applyState(): void {
         const name = jsicName(s.code) || "";
         const major = jsicMajor(s.code);
         const overlay = JSIC_OVERLAY[s.code];
-        
+
         return industryTerms.every((term) => {
-          if (s.code.includes(term) ||
-              name.toLowerCase().includes(term) ||
-              major.code.toLowerCase().includes(term) ||
-              major.label.toLowerCase().includes(term) ||
-              (major.label_en && major.label_en.toLowerCase().includes(term))) {
+          if (
+            s.code.includes(term) ||
+            name.toLowerCase().includes(term) ||
+            major.code.toLowerCase().includes(term) ||
+            major.label.toLowerCase().includes(term) ||
+            major.label_en?.toLowerCase().includes(term)
+          ) {
             return true;
           }
           if (overlay) {
-            if (overlay.aliases && overlay.aliases.some((a) => a.toLowerCase().includes(term))) {
+            if (overlay.aliases?.some((a) => a.toLowerCase().includes(term))) {
               return true;
             }
-            if (overlay.keywords && overlay.keywords.some((k) => k.toLowerCase().includes(term))) {
+            if (overlay.keywords?.some((k) => k.toLowerCase().includes(term))) {
               return true;
             }
           }
@@ -1017,24 +988,7 @@ function applyState(): void {
     let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
     const colFilter = parsedColor;
     if (colFilter) {
-      const family = colorFamily(colFilter).key;
-      if (family === "blue" || family === "bluepurple" || family === "purple") {
-        matchingColors = ["h17b-lt"];
-      } else if (family === "green" || family === "yellowgreen" || family === "bluegreen") {
-        matchingColors = ["h12s-sf"];
-      } else if (family === "yellow") {
-        matchingColors = ["gray-3"];
-      } else if (family === "red" || family === "orange" || family === "redpurple") {
-        matchingColors = ["h2v-vv"];
-      } else if (family === "neutral") {
-        if (colFilter.includes("white") || colFilter.includes("lt")) {
-          matchingColors = ["white"];
-        } else if (colFilter.includes("black") || colFilter.includes("dk")) {
-          matchingColors = ["black"];
-        } else {
-          matchingColors = ["gray-3"];
-        }
-      }
+      matchingColors = resolveColorSlugs(colFilter, taxonomy);
     }
 
     const uniqueKeysCount = cLen * sLen * matchingJsic.length * matchingColors.length;
@@ -1061,12 +1015,19 @@ function applyState(): void {
 
     const pageItems: DesignIndexEntry[] = [];
     for (let idx = start; idx < Math.min(start + PAGE_SIZE, totalMatches); idx++) {
-      pageItems.push(getCombinationAtIndex(idx, {
-        category: parsedCategory,
-        style: parsedStyle,
-        industry: filters.industry,
-        color: parsedColor
-      }, matchingJsic, matchingColors));
+      pageItems.push(
+        getCombinationAtIndex(
+          idx,
+          {
+            category: parsedCategory,
+            style: parsedStyle,
+            industry: filters.industry,
+            color: parsedColor,
+          },
+          matchingJsic,
+          matchingColors,
+        ),
+      );
     }
 
     pageView = {
@@ -1150,7 +1111,9 @@ function applyState(): void {
 
   // Exact integer display
   byId("matches-count-display").replaceChildren(
-    document.createTextNode(totalMatches.toLocaleString()),
+    document.createTextNode(
+      totalMatches.toLocaleString(currentLocale === "ja" ? "ja-JP" : "en-US"),
+    ),
     el("span", {
       class: "matches-count-label",
       text: ` ${TRANSLATIONS[currentLocale].labelMatches}`,
@@ -1159,10 +1122,10 @@ function applyState(): void {
 
   // Exact sample counts matching the pagination grid display
   const itemsCount = pageView.items.length;
-  byId("sample-count-display").textContent =
-    currentLocale === "ja"
-      ? `${totalMatches.toLocaleString()}件中 ${itemsCount}件を表示中 / Showing ${itemsCount} of ${totalMatches.toLocaleString()} results`
-      : `Showing ${itemsCount} of ${totalMatches.toLocaleString()} results`;
+  byId("sample-count-display").textContent = TRANSLATIONS[currentLocale].sampleCount(
+    itemsCount,
+    totalMatches,
+  );
 
   // Draw Candidates Grid
   const resultsGrid = byId("results");
@@ -1187,7 +1150,9 @@ function applyState(): void {
 
       const thumb = el("div", { class: "card-thumbnail" });
       renderThumbnail(entry, thumb);
-      thumb.appendChild(el("div", { class: "preview-overlay", text: "PREVIEW" }));
+      thumb.appendChild(
+        el("div", { class: "preview-overlay", text: TRANSLATIONS[currentLocale].previewLabel }),
+      );
       card.appendChild(thumb);
 
       const body = el("div", { class: "card-body" });
@@ -1219,12 +1184,8 @@ function applyState(): void {
       const footer = el("div", { class: "card-footer" });
       const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
       const typeText = isVirtual
-        ? currentLocale === "ja"
-          ? "リアルタイム合成"
-          : "Virtual"
-        : currentLocale === "ja"
-          ? "OSS 材化済み"
-          : "Pre-generated";
+        ? TRANSLATIONS[currentLocale].materializationType
+        : TRANSLATIONS[currentLocale].preGeneratedType;
       footer.appendChild(el("span", { class: "card-type-label", text: typeText }));
       footer.appendChild(
         el("span", { text: entry.createdAt ? entry.createdAt.slice(0, 10) : "2026-07-20" }),
@@ -1275,15 +1236,7 @@ function getCombinationAtIndex(
   const jsicObj = matchingJsic[jsicIdx] || { code: "6061", name: "ソフトウェア業" };
   const color = matchingColors[colorIdx] || "h17b-lt";
 
-  let mood = "minimal";
-  if (style === "minimal") mood = "minimal";
-  else if (style === "retro") mood = "vintage";
-  else if (style === "brutalist") mood = "brutalist";
-  else if (style === "glass") mood = "elegant";
-  else if (style === "corporate") mood = "corporate";
-  else if (style === "dark") mood = "tech";
-  else if (style === "neu") mood = "warm";
-  else if (style === "playful") mood = "organic";
+  const mood = resolveMoodSlug(style);
 
   // Vary typography and layouts based on extraIndex
   const layoutIdx = extraIndex % 4;

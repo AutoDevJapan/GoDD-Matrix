@@ -9,6 +9,14 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src", "../src/axes", "../src/ds", "../src/prompt", "../src/compat", "../src/engine", "../src/partials"],
+  "include": [
+    "src",
+    "../src/axes",
+    "../src/ds",
+    "../src/prompt",
+    "../src/compat",
+    "../src/engine",
+    "../src/partials"
+  ],
   "exclude": ["dist", "dist-tsc", "node_modules", "**/*.test.ts", "../src/**/*.test.ts"]
 }

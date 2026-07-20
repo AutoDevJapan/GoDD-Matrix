@@ -6,7 +6,7 @@
  * 静的資産 (index.html / styles.css) を `web/dist/` へ配置する。GitHub Pages で
  * そのまま配信できる純静的成果物を生成する (サーバ不要・秘密なし)。
  */
-import { cp, mkdir, readFile, rm, writeFile, readdir } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -20,12 +20,12 @@ await mkdir(path.join(outDir, "assets"), { recursive: true });
 
 // esbuild plugin to mock node:fs/path/url for the browser build
 const nodeMockPlugin = {
-  name: 'node-mock',
+  name: "node-mock",
   setup(build) {
-    build.onResolve({ filter: /^node:(fs|path|url)/ }, args => {
-      return { path: args.path, namespace: 'node-mock-ns' }
+    build.onResolve({ filter: /^node:(fs|path|url)/ }, (args) => {
+      return { path: args.path, namespace: "node-mock-ns" };
     });
-    build.onLoad({ filter: /.*/, namespace: 'node-mock-ns' }, () => {
+    build.onLoad({ filter: /.*/, namespace: "node-mock-ns" }, () => {
       return {
         contents: `
           export function existsSync() { return false; }
@@ -34,7 +34,7 @@ const nodeMockPlugin = {
           export function dirname(p) { return p; }
           export function fileURLToPath(u) { return u; }
         `,
-        loader: 'js',
+        loader: "js",
       };
     });
   },
@@ -81,7 +81,11 @@ for (const section of sections) {
     }
   }
 }
-await writeFile(path.join(outDir, "templates-bundle.json"), JSON.stringify(templatesBundle), "utf8");
+await writeFile(
+  path.join(outDir, "templates-bundle.json"),
+  JSON.stringify(templatesBundle),
+  "utf8",
+);
 
 await cp(path.join(webSrc, "styles.css"), path.join(outDir, "styles.css"));
 try {
