@@ -14,9 +14,9 @@ export class DesignIndexError extends Error {
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const JSIC = /^[0-9]{4}$/;
-const ID = /^[0-9]{4}_[a-z0-9]+(-[a-z0-9]+)*_[a-z0-9]+(-[a-z0-9]+)*$/;
+const ID = /^[0-9]{4}_[a-z0-9]+(-[a-z0-9]+)*_[a-z0-9]+(-[a-z0-9]+)*(_v[1-9][0-9]*)?$/;
 const ENTRY_PATH =
-  /^design-md\/[0-9]{4}\/[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*\/DESIGN\.md$/;
+  /^design-md\/[0-9]{4}\/[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*(\/v[1-9][0-9]*)?\/DESIGN\.md$/;
 const HASH = /^sha256:[0-9a-f]{64}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,6 +54,19 @@ function optionalString(
   return value;
 }
 
+function optionalInteger(
+  obj: Record<string, unknown>,
+  key: string,
+  where: string,
+): number | undefined {
+  const value = obj[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new DesignIndexError(`${where}: "${key}" は整数である必要があります`);
+  }
+  return value;
+}
+
 function validateEntry(raw: unknown, where: string): DesignIndexEntry {
   if (!isRecord(raw)) {
     throw new DesignIndexError(`${where}: エントリはオブジェクトである必要があります`);
@@ -65,6 +78,7 @@ function validateEntry(raw: unknown, where: string): DesignIndexEntry {
     jsic: requireString(raw, "jsic", where, JSIC),
     color: requireString(raw, "color", where, SLUG),
     mood: requireString(raw, "mood", where, SLUG),
+    variant: optionalInteger(raw, "variant", where) ?? 0,
     title: requireString(raw, "title", where),
     hash: requireString(raw, "hash", where, HASH),
     createdAt: requireString(raw, "createdAt", where),
