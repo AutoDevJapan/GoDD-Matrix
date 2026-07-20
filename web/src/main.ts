@@ -1,3 +1,4 @@
+import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
 import {
@@ -12,6 +13,7 @@ import {
   type Taxonomy,
   approxSwatchesForColor,
   buildCellPermalink,
+  colorFamily,
   composePromptForCell,
   findEntryById,
   highlightTermsFromText,
@@ -869,6 +871,99 @@ function applyState(): void {
   renderPager(pageView);
 }
 
+function generateVirtualMatch(filters: Filters): DesignIndexEntry {
+  // Resolve JSIC code
+  let jsic = "6061";
+  if (filters.industry) {
+    if (filters.industry === "saas") jsic = "6061";
+    else if (filters.industry === "ec") jsic = "5811";
+    else if (filters.industry === "finance") jsic = "7281";
+    else {
+      // Find a JSIC subclass code that hashes to this industry
+      const subclass = JSIC_SUBCLASSES.find((s) => {
+        const hash = s.code.charCodeAt(s.code.length - 1) % INDUSTRIES.length;
+        return INDUSTRIES[hash]?.v === filters.industry;
+      });
+      if (subclass) jsic = subclass.code;
+    }
+  }
+
+  // Resolve Color Key (map UI palette slugs to actual supported PCCS keys in MINIMAL_COLORS)
+  let color = "h17b-lt";
+  if (filters.color) {
+    if (filters.color === "indigo") color = "h17b-lt";
+    else if (filters.color === "light-blue") color = "h17b-lt";
+    else if (filters.color === "green") color = "h12s-sf";
+    else if (filters.color === "yellow") color = "gray-3";
+    else if (filters.color === "orange") color = "h2v-vv";
+    else if (filters.color === "blue") color = "h17b-lt";
+    else if (filters.color === "warm-gray") color = "gray-3";
+    else if (filters.color === "black") color = "black";
+  }
+
+  // Resolve Mood Key
+  let mood = "minimal";
+  if (filters.style) {
+    if (filters.style === "minimal") mood = "minimal";
+    else if (filters.style === "retro") mood = "vintage";
+    else if (filters.style === "brutalist") mood = "brutalist";
+    else if (filters.style === "glass") mood = "elegant";
+    else if (filters.style === "corporate") mood = "corporate";
+    else if (filters.style === "dark") mood = "tech";
+    else if (filters.style === "neu") mood = "warm";
+    else if (filters.style === "playful") mood = "organic";
+  }
+
+  const id = `virtual_${jsic}_${color}_${mood}`;
+  const title = `VIRTUAL DESIGN: ${jsicName(jsic)} × ${color} × ${mood}`;
+
+  return {
+    id,
+    path: `design-md/${jsic}/${color}/${mood}/DESIGN.md`,
+    jsic,
+    color,
+    mood,
+    title,
+    hash: "",
+    createdAt: "2026-07-20",
+    tags: [filters.category || "Dashboard", filters.style || "Minimal", filters.industry || "SaaS"],
+  };
+}
+
+function matchColorFamily(entryColor: string, paletteSlug: string): boolean {
+  const family = colorFamily(entryColor).key;
+  const isNeutral = family === "neutral";
+
+  if (paletteSlug === "indigo") return family === "blue" || family === "bluepurple";
+  if (paletteSlug === "light-blue")
+    return (
+      family === "bluegreen" || family === "blue" || (isNeutral && entryColor.includes("white"))
+    );
+  if (paletteSlug === "green")
+    return family === "green" || family === "yellowgreen" || family === "bluegreen";
+  if (paletteSlug === "yellow") return family === "yellow";
+  if (paletteSlug === "orange")
+    return family === "orange" || family === "red" || family === "redpurple";
+  if (paletteSlug === "blue")
+    return family === "blue" || family === "bluepurple" || family === "purple";
+  if (paletteSlug === "warm-gray")
+    return (
+      isNeutral &&
+      (entryColor.includes("gray") ||
+        entryColor.includes("gr") ||
+        entryColor.includes("white") ||
+        entryColor.includes("off-white") ||
+        entryColor.includes("ivory"))
+    );
+  if (paletteSlug === "black")
+    return (
+      isNeutral &&
+      (entryColor.includes("black") || entryColor.includes("bk") || entryColor.includes("ink"))
+    );
+
+  return false;
+}
+
 // Generate the filtered files subset
 function getFilteredList(): readonly DesignIndexEntry[] {
   let list = allEntries;
@@ -895,7 +990,7 @@ function getFilteredList(): readonly DesignIndexEntry[] {
     list = list.filter((item) => getEntryIndustry(item) === filters.industry);
   }
   if (filters.color) {
-    list = list.filter((item) => item.color === filters.color);
+    list = list.filter((item) => matchColorFamily(item.color, filters.color));
   }
 
   // Sort
@@ -905,6 +1000,14 @@ function getFilteredList(): readonly DesignIndexEntry[] {
     list = [...list].sort(
       (a, b) => new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime(),
     );
+  }
+
+  // If list is empty but we have active filters, generate a virtual matching cell!
+  if (
+    list.length === 0 &&
+    (filters.category || filters.style || filters.industry || filters.color)
+  ) {
+    return [generateVirtualMatch(filters)];
   }
 
   return list;
