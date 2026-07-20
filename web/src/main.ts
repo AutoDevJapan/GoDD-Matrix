@@ -1,8 +1,3 @@
-import Handlebars from "handlebars";
-import { selectPartials } from "../../../src/compat/selector.js";
-import type { CompatTable, SelectionManifest } from "../../../src/compat/types.js";
-import { buildDesignDocument } from "../../../src/engine/document.js";
-import type { PartialSectionId } from "../../../src/partials/types.js";
 import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
 import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
@@ -36,6 +31,7 @@ import {
   resolveMoodSlug,
 } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
+import { buildVirtualDesign } from "./virtual-design.js";
 
 // DOM helper to build elements cleanly
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -102,26 +98,6 @@ let sortOrder: "popular" | "newest" = "popular";
 let currentPage = 1;
 let selectedCellId: string | null = null;
 const PAGE_SIZE = 24;
-
-interface TemplatesBundle {
-  template: string;
-  partials: Record<string, string>;
-  manifest: SelectionManifest;
-  compat: CompatTable;
-}
-
-let templatesBundle: TemplatesBundle | null = null;
-
-async function loadTemplatesBundle(): Promise<void> {
-  try {
-    const res = await fetch("templates-bundle.json", { cache: "no-cache" });
-    if (res.ok) {
-      templatesBundle = (await res.json()) as TemplatesBundle;
-    }
-  } catch (err) {
-    console.error("Failed to load templates bundle:", err);
-  }
-}
 
 interface Filters {
   category: string | null;
@@ -614,37 +590,19 @@ function downloadMarkdown(filename: string, content: string): void {
   showToast(TRANSLATIONS[currentLocale].toastDownloadStarted);
 }
 
-function renderVirtualDesign(entry: DesignIndexEntry): string | undefined {
-  if (!templatesBundle) return undefined;
-  try {
-    const ctx = {
-      jsic: { code: entry.jsic },
-      colorId: entry.color,
-      moodId: entry.mood,
-      tags: entry.tags || [],
-    };
-    const selectionMeta = selectPartials(ctx, {
-      manifest: templatesBundle.manifest,
-      compat: templatesBundle.compat,
-      variant: entry.variant || 0,
-    });
-    const env = Handlebars.create();
-    const selection = {} as Record<PartialSectionId, string>;
-    for (const [section, meta] of selectionMeta) {
-      const source = templatesBundle.partials[meta.id] || "";
-      env.registerPartial(section, env.compile(source, { noEscape: true }));
-      selection[section] = meta.id;
-    }
-    const documentData = buildDesignDocument(ctx, {
-      selection,
-      title: getEntryTitle(entry, "ja"),
-    });
-    const compiled = env.compile(templatesBundle.template, { noEscape: true });
-    return compiled(documentData);
-  } catch (err) {
-    console.error("Failed to render virtual design client-side:", err);
-    return undefined;
-  }
+function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
+  const major = jsicMajor(entry.jsic);
+  const industry =
+    locale === "ja"
+      ? jsicName(entry.jsic) || entry.jsic
+      : major.label_en || major.label || entry.jsic;
+  return buildVirtualDesign(entry, locale, {
+    title: getEntryTitle(entry, locale),
+    industry,
+    color: labelForColor(entry.color, taxonomy, locale),
+    mood: labelForMood(entry.mood, taxonomy, locale),
+    swatches: getSwatchHexes(entry),
+  });
 }
 
 // Render the detailed view of a resolved specification
@@ -741,7 +699,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   // Render DESIGN.md if virtual or missing in index
   let renderedMarkdown: string | undefined = undefined;
   if (isVirtual) {
-    renderedMarkdown = renderVirtualDesign(entry);
+    renderedMarkdown = renderVirtualDesign(entry, currentLocale);
   }
 
   // Synthesize Markdown Content
@@ -1257,6 +1215,7 @@ function getCombinationAtIndex(
     mood,
     title,
     hash: "",
+    variant: extraIndex,
     createdAt: "2026-07-20",
     tags: [cat, style, getEntryIndustry({ jsic: jsicObj.code, path: "" } as DesignIndexEntry)],
   };
@@ -1364,8 +1323,6 @@ async function bootstrap(): Promise<void> {
   translateUI();
 
   taxonomy = await loadTaxonomy();
-  await loadTemplatesBundle();
-
   // Setup Event Listeners
   byId("locale-select").onchange = (e) => {
     const val = (e.target as HTMLSelectElement).value as Locale;
