@@ -405,11 +405,22 @@ body {
   transition: transform 0.15s, box-shadow 0.15s;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .card:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 20px rgba(20, 20, 30, 0.08);
+}
+
+.card:focus-visible,
+.related-card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .card.selected {
@@ -777,6 +788,11 @@ body {
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .related-card:hover {

@@ -47,7 +47,7 @@
           <!-- Centered Search Bar -->
           <div class="search-bar-wrapper">
             <span class="search-bar-icon">⌕</span>
-            <input type="text" id="main-search-input" placeholder="検索例: ミニマル ダッシュボード" />
+            <input type="text" id="main-search-input" aria-label="DESIGN.mdを検索" placeholder="検索例: ミニマル ダッシュボード" />
           </div>
 
           <!-- Facets Accordion / Filters -->
@@ -173,7 +173,7 @@
       </footer>
 
       <!-- Toast Notification -->
-      <div id="toast" class="toast"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
 
     <script type="module" src="./assets/app.js"></script>

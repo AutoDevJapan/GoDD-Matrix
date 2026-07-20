@@ -552,7 +552,9 @@ function translateUI(): void {
   byId("label-brand-subtitle").textContent = t.brandSubtitle;
   byId("label-hero-tag").textContent = t.heroTag;
   byId("label-hero-sub").textContent = t.heroSub;
-  byId<HTMLInputElement>("main-search-input").placeholder = t.placeholderSearch;
+  const searchInput = byId<HTMLInputElement>("main-search-input");
+  searchInput.placeholder = t.placeholderSearch;
+  searchInput.setAttribute("aria-label", t.placeholderSearch);
 
   byId("label-facet-category").textContent = t.labelFacetCategory;
   byId("label-facet-style").textContent = t.labelFacetStyle;
@@ -777,7 +779,8 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     .slice(0, 4);
 
   for (const item of relatedList) {
-    const card = el("div", { class: "related-card" });
+    const card = el("button", { class: "related-card" });
+    card.type = "button";
     card.onclick = () => {
       void openDetail(item);
     };
@@ -1149,7 +1152,8 @@ function applyState(): void {
     );
   } else {
     for (const entry of pageView.items) {
-      const card = el("div", { class: "card" });
+      const card = el("button", { class: "card" });
+      card.type = "button";
       card.onclick = () => {
         void openDetail(entry);
       };
