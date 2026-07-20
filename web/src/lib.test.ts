@@ -652,6 +652,22 @@ describe("contextFromEntry / composePromptForCell", () => {
     expect(prompt.userPrompt).toContain("コンサル");
   });
 
+  it("仮想 DESIGN.md は rendered として扱い、hash 不一致を報告しない", () => {
+    const markdown = "# 仮想 DESIGN\nブラウザ内で決定論的に合成。";
+    const prompt = composePromptForCell({
+      entry: { ...consulting, id: "virtual_7281_h17b-lt_trustworthy", hash: "" },
+      markdown,
+      hashVerified: false,
+      resolutionStatus: "rendered",
+    });
+
+    expect(prompt.provenance).toBe("rendered");
+    expect(prompt.hasDesignBody).toBe(true);
+    expect(prompt.systemPrompt).toContain(markdown);
+    expect(prompt.systemPrompt).not.toContain("hash検証: 不一致");
+    expect(prompt.notices.some((notice) => notice.includes("hash 検証に失敗"))).toBe(false);
+  });
+
   it("要望でカラー/ムード未指定なら notices に推定適用を明示する", () => {
     const prompt = composePromptForCell({
       entry: consulting,

@@ -707,6 +707,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     entry,
     markdown: renderedMarkdown,
     hashVerified: !isVirtual,
+    ...(isVirtual ? { resolutionStatus: "rendered" as const } : {}),
     outputLanguage: currentLocale === "ja" ? "日本語" : "English",
   });
 
