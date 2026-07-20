@@ -81,7 +81,52 @@ let allEntries: readonly DesignIndexEntry[] = [];
 /** 現在の UI 表示言語。 */
 let currentLocale: Locale = "ja";
 
-const TRANSLATIONS: Record<Locale, Record<string, string>> = {
+interface TranslationKeys {
+  siteTitle: string;
+  siteDesc: string;
+  searchTitle: string;
+  labelIndustry: string;
+  placeholderIndustry: string;
+  labelColor: string;
+  placeholderColor: string;
+  labelMood: string;
+  placeholderMood: string;
+  labelTags: string;
+  placeholderTags: string;
+  labelText: string;
+  placeholderText: string;
+  labelOutputLang: string;
+  placeholderOutputLang: string;
+  hintOutputLang: string;
+  btnSearch: string;
+  btnReset: string;
+  footerText: string;
+  statTheoreticalLabel: string;
+  statMaterializedLabel: string;
+  titleAxes: string;
+  titleResults: string;
+  emptyResults: string;
+  loadingIndex: string;
+  loadingDesign: string;
+  errorIndex: string;
+  errorDesign: string;
+  errorDesignHint: string;
+  labelIndustryName: string;
+  btnPromptCompose: string;
+  labelColorPaletteApprox: string;
+  labelColorPaletteReal: string;
+  labelNotices: string;
+  copyBtnLabel: string;
+  copiedLabel: string;
+  copyFailedLabel: string;
+  labelHtmlTitle: string;
+  conditionClear: string;
+  detailLoadingMarkdown: string;
+  detailLoadError: string;
+  detailLoadErrorHint: string;
+}
+
+const TRANSLATIONS: Record<Locale, TranslationKeys> = {
   ja: {
     siteTitle: "GoDD Matrix — デザイン検索 & プロンプト",
     siteDesc:
@@ -123,6 +168,10 @@ const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     copiedLabel: "コピーしました",
     copyFailedLabel: "コピー失敗",
     labelHtmlTitle: "GoDD Matrix — デザイン検索 & プロンプト",
+    conditionClear: "条件をクリア",
+    detailLoadingMarkdown: "DESIGN.md を取得中…",
+    detailLoadError: "DESIGN.md を取得できませんでした",
+    detailLoadErrorHint: "。未材化セルの可能性があります (Generator レンダーが必要)。",
   },
   en: {
     siteTitle: "GoDD Matrix — Design Search & Prompt",
@@ -166,6 +215,10 @@ const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     copiedLabel: "Copied!",
     copyFailedLabel: "Copy Failed",
     labelHtmlTitle: "GoDD Matrix — Design Search & Prompts",
+    conditionClear: "Clear filters",
+    detailLoadingMarkdown: "Fetching DESIGN.md...",
+    detailLoadError: "Failed to fetch DESIGN.md",
+    detailLoadErrorHint: ". May be an unmaterialized cell (requires Generator API).",
   },
 };
 /** DS taxonomy (taxonomy.json 取込後に確定; 未達なら空 = slug/bundled フォールバック)。 */
