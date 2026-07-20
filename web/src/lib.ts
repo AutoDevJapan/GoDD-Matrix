@@ -214,9 +214,13 @@ function toBrief(input: SearchInput): DesignBrief {
 function matchesText(entry: DesignIndexEntry, term: string, taxonomy?: Taxonomy): boolean {
   const q = term.trim().toLowerCase();
   if (!q) return true;
+  const major = jsicMajor(entry.jsic);
   const hay = [
     entry.jsic,
     jsicName(entry.jsic),
+    major.code,
+    major.label,
+    major.label_en ?? "",
     entry.color,
     labelForColor(entry.color, taxonomy),
     entry.mood,
@@ -496,15 +500,16 @@ const jsicDivisionByCode = new Map(JSIC_DIVISIONS.map((d) => [d.code, d]));
 export interface JsicMajor {
   readonly code: string;
   readonly label: string;
+  readonly label_en?: string;
 }
-const UNKNOWN_MAJOR: JsicMajor = { code: "?", label: "分類不明" };
+const UNKNOWN_MAJOR: JsicMajor = { code: "?", label: "分類不明", label_en: "Unknown" };
 
 /** JSIC 細分類コード → 大分類 (letter + 名称)。範囲外/不正は「分類不明」。 */
 export function jsicMajor(code: string): JsicMajor {
   const major = Number.parseInt(code.slice(0, 2), 10);
   if (!Number.isFinite(major)) return UNKNOWN_MAJOR;
   const div = JSIC_DIVISIONS.find((d) => major >= d.from && major <= d.to);
-  return div ? { code: div.code, label: div.label } : UNKNOWN_MAJOR;
+  return div ? { code: div.code, label: div.label, label_en: div.label_en } : UNKNOWN_MAJOR;
 }
 
 /** カラー系統 (PCCS 色相番号を系統にまとめたもの)。 */
