@@ -355,6 +355,20 @@ export function materializedResolution(
   return { status: "materialized", document: { entry, markdown, source, hashVerified } };
 }
 
+/** 未取得セルの {@link DesignResolution} をブラウザで組む。 */
+export function unavailableResolution(entry: DesignIndexEntry, reason: string): DesignResolution {
+  return {
+    status: "unavailable",
+    request: {
+      jsic: entry.jsic,
+      color: entry.color,
+      mood: entry.mood,
+      ...(entry.tags && entry.tags.length > 0 ? { tags: entry.tags } : {}),
+    },
+    reason,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // ファセット絞り込み + ページング (issue #31): 大コーパス向けの純ロジック。
 // DOM/ネットワーク非依存 (決定論・テスト可能)。UI 配線は main.ts が担う。
@@ -721,7 +735,7 @@ export function paginate<T>(items: readonly T[], page: number, pageSize: number)
 export interface ComposeInput {
   entry: DesignIndexEntry;
   /** raw から取得した DESIGN.md 全文。 */
-  markdown: string;
+  markdown?: string;
   /** index の hash と本文 sha256 が一致したか。 */
   hashVerified: boolean;
   /** 元の検索要望 (notices に反映)。省略時はエントリの軸から補う。 */
@@ -1089,7 +1103,10 @@ export function composePromptForCell(input: ComposeInput): ComposedPrompt {
     ...(request?.mood?.trim() ? { mood: request.mood } : {}),
     ...(entry.tags && entry.tags.length > 0 ? { tags: entry.tags } : {}),
   };
-  const resolution = materializedResolution(entry, markdown, designRawUrl(entry), hashVerified);
+  const resolution =
+    markdown !== undefined
+      ? materializedResolution(entry, markdown, designRawUrl(entry), hashVerified)
+      : unavailableResolution(entry, "DESIGN.md not pre-materialized in Git");
   return synthesizePrompt(brief, resolution, ctx, {
     ...(outputLanguage?.trim() ? { outputLanguage: outputLanguage.trim() } : {}),
   });

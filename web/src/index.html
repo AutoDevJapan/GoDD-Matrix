@@ -38,6 +38,14 @@
       </div>
     </header>
 
+    <div class="arch-note-banner" id="arch-note-banner">
+      <span class="info-badge" id="arch-note-badge">Architecture Note</span>
+      <p class="note-text" id="arch-note-text">
+        <strong>1億通りのオンデマンド決定論的カバーについて：</strong>
+        GitHubの容量制限およびブラウザのメモリ制限のため、Gitリポジトリ上には代表サンプルとして約4.5万件の実体化ファイルを事前配置しています。しかし、GoDDのデザイン生成エンジンは100%決定論的（再現可能）な純粋関数であるため、残りの1億件以上の組み合わせも「理論上すでに事前コンパイルされている」のと同等です。実体化ファイルが存在しない任意のセルを選択した場合でも、プロンプトは一意かつ決定論的にその場でリアルタイム合成できます。
+      </p>
+    </div>
+
     <main class="layout">
       <form id="search-form" class="search" autocomplete="off">
         <h2 class="section-title">要望で検索</h2>

@@ -124,6 +124,12 @@ interface TranslationKeys {
   detailLoadingMarkdown: string;
   detailLoadError: string;
   detailLoadErrorHint: string;
+  archNoteTitle: string;
+  archNoteText: string;
+  virtualBtnText: string;
+  virtualPromptNotice: string;
+  detailVirtualTitle: string;
+  detailVirtualLoading: string;
 }
 
 const TRANSLATIONS: Record<Locale, TranslationKeys> = {
@@ -172,6 +178,14 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     detailLoadingMarkdown: "DESIGN.md を取得中…",
     detailLoadError: "DESIGN.md を取得できませんでした",
     detailLoadErrorHint: "。未材化セルの可能性があります (Generator レンダーが必要)。",
+    archNoteTitle: "1億通りのオンデマンド決定論的カバーについて：",
+    archNoteText:
+      "GitHubの容量制限およびブラウザのメモリ制限のため、Gitリポジトリ上には代表サンプルとして約4.5万件の実体化ファイルを事前配置しています。しかし、GoDDのデザイン生成エンジンは100%決定論的（再現可能）な純粋関数であるため、残りの1億件以上の組み合わせも「理論上すでに事前コンパイルされている」のと同等です。実体化ファイルが存在しない任意のセルを選択した場合でも、プロンプトは一意かつ決定論的にその場でリアルタイム合成できます。",
+    virtualBtnText: "この解決軸で仮想プロンプトを合成 →",
+    virtualPromptNotice:
+      "この解決軸（業種 × カラー × ムード）に対応するデザイン仕様はGitHub未保存の仮想セルですが、決定論的な仮想セルとしてプロンプトを合成可能です。",
+    detailVirtualTitle: "仮想選択: ",
+    detailVirtualLoading: "仮想セルのプロンプトを合成中…",
   },
   en: {
     siteTitle: "GoDD Matrix — Design Search & Prompt",
@@ -219,6 +233,14 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     detailLoadingMarkdown: "Fetching DESIGN.md...",
     detailLoadError: "Failed to fetch DESIGN.md",
     detailLoadErrorHint: ". May be an unmaterialized cell (requires Generator API).",
+    archNoteTitle: "About 100M+ On-Demand Deterministic Coverage:",
+    archNoteText:
+      "To optimize storage constraints of GitHub and browser memory, we pre-generated a representative subset of ~45k designs into files. However, because our design system engine is 100% deterministic (reproducible), the entire 100M+ combinations exist virtually. If you select a combination that has not been pre-materialized, you can still synthesize the Claude prompt for it deterministically in real-time.",
+    virtualBtnText: "Synthesize Virtual Prompt for these Axes →",
+    virtualPromptNotice:
+      "Although the design specification for this resolved combination is an unmaterialized cell (not pre-saved on GitHub), you can still dynamically synthesize the prompt based on deterministic axis rules.",
+    detailVirtualTitle: "Virtual Selected: ",
+    detailVirtualLoading: "Synthesizing virtual cell prompt...",
   },
 };
 /** DS taxonomy (taxonomy.json 取込後に確定; 未達なら空 = slug/bundled フォールバック)。 */
@@ -347,6 +369,7 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
   const box = byId("axes");
   box.replaceChildren();
   const d = result.decision;
+  const t = TRANSLATIONS[currentLocale];
   const rows: Node[] = [];
   const line = (axis: string, resolved: string | undefined, raw: string | undefined): Node => {
     const label = el("span", { class: "axis-label", text: axis });
@@ -391,10 +414,57 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
       input.mood,
     ),
   );
-  box.appendChild(
-    el("h2", { class: "section-title", text: TRANSLATIONS[currentLocale].titleAxes }),
-  );
+  box.appendChild(el("h2", { class: "section-title", text: t.titleAxes }));
   box.appendChild(el("div", { class: "axes-grid" }, rows));
+
+  const context = d.context;
+  if (context) {
+    // 解決した軸に対応する既存の実体化セルがあるか確認
+    const hasExactMatch = allEntries.some(
+      (m) => m.jsic === context.jsic && m.color === context.color && m.mood === context.mood,
+    );
+
+    const banner = el("div", { class: "virtual-action-container" });
+    const p = el("p", {
+      text: hasExactMatch
+        ? currentLocale === "en"
+          ? "This combination matches an existing materialized design cell in Git."
+          : "この解決軸の組み合わせに対応する実体化セル（Git保存済み）が存在します。"
+        : t.virtualPromptNotice,
+    });
+    banner.appendChild(p);
+
+    const btn = el("button", {
+      class: "primary select-btn virtual-btn",
+      text: hasExactMatch
+        ? currentLocale === "en"
+          ? "View prompt →"
+          : "プロンプトを表示 →"
+        : t.virtualBtnText,
+    });
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      let entry = allEntries.find(
+        (m) => m.jsic === context.jsic && m.color === context.color && m.mood === context.mood,
+      );
+      if (!entry) {
+        entry = {
+          id: `virtual_${context.jsic}_${context.color}_${context.mood}`,
+          path: `design-md/${context.jsic}/${context.color}/${context.mood}/DESIGN.md`,
+          jsic: context.jsic,
+          color: context.color,
+          mood: context.mood,
+          title: `Virtual Design (${context.jsic} × ${context.color} × ${context.mood})`,
+          hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          createdAt: new Date().toISOString(),
+          tags: context.tags || [],
+        };
+      }
+      openDetail(entry, { scroll: true });
+    });
+    banner.appendChild(btn);
+    box.appendChild(banner);
+  }
 }
 
 /** 1 セルのカードを描画する。 */
@@ -674,12 +744,18 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   selectedCellId = entry.id;
   syncUrl();
 
+  const isVirtual = entry.id.startsWith("virtual_");
+
   const detail = byId("detail");
   detail.replaceChildren();
   detail.appendChild(
     el("h2", {
       class: "section-title",
-      text: currentLocale === "en" ? `Selected: ${entry.title}` : `選択: ${entry.title}`,
+      text: isVirtual
+        ? `${t.detailVirtualTitle}${entry.title}`
+        : currentLocale === "en"
+          ? `Selected: ${entry.title}`
+          : `選択: ${entry.title}`,
     }),
   );
 
@@ -692,36 +768,46 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   );
   detail.appendChild(actions);
 
-  const info = el("p", { class: "detail-note", text: t.detailLoadingMarkdown });
+  const info = el("p", {
+    class: "detail-note",
+    text: isVirtual ? t.detailVirtualLoading : t.detailLoadingMarkdown,
+  });
   detail.appendChild(info);
   if (opts.scroll !== false) detail.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  const url = designRawUrl(entry);
-  let markdown: string;
-  try {
-    const res = await fetch(url, { cache: "no-cache" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    markdown = await res.text();
-  } catch (err) {
-    info.className = "detail-note error";
-    info.textContent = `${t.detailLoadError} (${url}): ${
-      err instanceof Error ? err.message : String(err)
-    }${t.detailLoadErrorHint}`;
-    return;
-  }
-
-  // 本文取得に成功したので、DESIGN.md 本文コピーをツールバー先頭に足す (スクロール不要の位置)。
-  actions.insertBefore(
-    copyButton(currentLocale === "en" ? "Copy DESIGN.md" : "DESIGN.md をコピー", () => markdown),
-    actions.firstChild,
-  );
-
+  let markdown: string | undefined = undefined;
   let hashVerified = false;
-  try {
-    const expected = entry.hash.replace(/^sha256:/i, "").toLowerCase();
-    hashVerified = (await sha256Hex(markdown)) === expected;
-  } catch {
-    hashVerified = false;
+
+  if (!isVirtual) {
+    const url = designRawUrl(entry);
+    try {
+      const res = await fetch(url, { cache: "no-cache" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      markdown = await res.text();
+
+      // 本文取得に成功したので、DESIGN.md 本文コピーをツールバー先頭に足す (スクロール不要の位置)。
+      actions.insertBefore(
+        copyButton(
+          currentLocale === "en" ? "Copy DESIGN.md" : "DESIGN.md をコピー",
+          () => markdown || "",
+        ),
+        actions.firstChild,
+      );
+
+      try {
+        const expected = entry.hash.replace(/^sha256:/i, "").toLowerCase();
+        hashVerified = (await sha256Hex(markdown)) === expected;
+      } catch {
+        hashVerified = false;
+      }
+    } catch (err) {
+      // Fallback to virtual prompt synthesis!
+      info.className = "detail-note warn";
+      info.textContent =
+        currentLocale === "en"
+          ? "DESIGN.md is not materialized on GitHub. Fallback: Synthesizing virtual prompt based on deterministic axis rules."
+          : "DESIGN.md はGitHub上に未実体化（未生成）です。代替処理：決定論的な軸規則に基づいて仮想プロンプトを合成します。";
+    }
   }
 
   const outputLanguage = byId<HTMLInputElement>("q-output-lang").value.trim();
@@ -733,22 +819,30 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     ...(outputLanguage ? { outputLanguage } : {}),
   });
 
-  info.className = "detail-note";
-  const provenanceLabel = currentLocale === "en" ? "Provenance: " : "出所: ";
-  const hashLabel = hashVerified
-    ? currentLocale === "en"
-      ? "hash verified OK"
-      : "hash 検証 OK"
-    : currentLocale === "en"
-      ? "hash verification failed / mismatched"
-      : "hash 未検証/不一致";
-  info.replaceChildren(
-    el("span", { text: `${provenanceLabel}${prompt.provenance} / ` }),
-    badge(hashLabel, hashVerified ? "ok" : "warn"),
-  );
+  if (isVirtual || markdown === undefined) {
+    info.className = "detail-note warn";
+    info.textContent =
+      currentLocale === "en"
+        ? "This combination resolves to an unmaterialized cell. Composing virtual prompt based on deterministic axis rules."
+        : "この解決軸の組み合わせは未実体化セルです。決定論的な軸規則に基づいて仮想プロンプトを合成しています。";
+  } else {
+    info.className = "detail-note";
+    const provenanceLabel = currentLocale === "en" ? "Provenance: " : "出所: ";
+    const hashLabel = hashVerified
+      ? currentLocale === "en"
+        ? "hash verified OK"
+        : "hash 検証 OK"
+      : currentLocale === "en"
+        ? "hash verification failed / mismatched"
+        : "hash 未検証/不一致";
+    info.replaceChildren(
+      el("span", { text: `${provenanceLabel}${prompt.provenance} / ` }),
+      badge(hashLabel, hashVerified ? "ok" : "warn"),
+    );
+  }
 
   // カラーパレット: DESIGN.md の実トークン色を優先し、無ければ slug 由来の近似へフォールバック。
-  const tokens = extractColorTokens(markdown, currentLocale);
+  const tokens = markdown !== undefined ? extractColorTokens(markdown, currentLocale) : [];
   const paletteHeading = tokens.length > 0 ? t.labelColorPaletteReal : t.labelColorPaletteApprox;
   const paletteSwatches =
     tokens.length > 0 ? tokens : approxSwatchesForColor(entry.color, currentLocale);
@@ -784,9 +878,11 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     ),
   );
   // DESIGN.md 本文はツールバーでコピーできるため、ここでは本文プレビューのみ (コピー重複を避ける)。
-  detail.appendChild(
-    previewBlock(currentLocale === "en" ? "DESIGN.md Preview" : "DESIGN.md 本文", markdown),
-  );
+  if (markdown !== undefined) {
+    detail.appendChild(
+      previewBlock(currentLocale === "en" ? "DESIGN.md Preview" : "DESIGN.md 本文", markdown),
+    );
+  }
 }
 
 /** 見出し + コピー + <pre> のブロック。 */
@@ -891,6 +987,13 @@ function translateUI(): void {
 
   const footerText = document.querySelector(".site-footer p");
   if (footerText) footerText.textContent = t.footerText ?? "";
+
+  const archText = document.getElementById("arch-note-text");
+  if (archText) {
+    archText.replaceChildren();
+    archText.appendChild(el("strong", { text: t.archNoteTitle }));
+    archText.appendChild(document.createTextNode(t.archNoteText));
+  }
 }
 
 /** index.json を取込んで初期表示する。taxonomy.json は並行取得 (フェイルセーフ)。 */
