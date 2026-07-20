@@ -31,15 +31,15 @@ export function buildVirtualDesign(
   const layouts = ["single-column", "sidebar", "split-view", "modular-grid"] as const;
   const densities = ["comfortable", "compact", "spacious"] as const;
   const fontPairs = [
-    "system-ui / ui-sans-serif",
-    "ui-serif / system-ui",
-    "system-ui / ui-monospace",
+    "system-ui, ui-sans-serif",
+    "ui-serif, system-ui",
+    "system-ui, ui-monospace",
   ] as const;
   const componentPatterns = ["task-first", "data-dense", "editorial", "guided-flow"] as const;
   const radii = ["0px", "4px", "8px", "12px"] as const;
   const layout = layouts[seed % layouts.length] ?? "single-column";
   const density = densities[(seed >>> 3) % densities.length] ?? "comfortable";
-  const fontPair = fontPairs[(seed >>> 7) % fontPairs.length] ?? "system-ui / ui-sans-serif";
+  const fontPair = fontPairs[(seed >>> 7) % fontPairs.length] ?? "system-ui, ui-sans-serif";
   const componentPattern =
     componentPatterns[(seed >>> 11) % componentPatterns.length] ?? "task-first";
   const radius = radii[(seed >>> 15) % radii.length] ?? "4px";
@@ -54,8 +54,11 @@ export function buildVirtualDesign(
     (
       {
         dashboard: "ダッシュボード",
-        landing: "ランディングページ",
+        lp: "ランディングページ",
+        mobile: "モバイルアプリ",
+        portfolio: "ポートフォリオ",
         ecommerce: "EC",
+        admin: "管理画面",
         blog: "ブログ",
         form: "フォーム",
       } as Record<string, string>

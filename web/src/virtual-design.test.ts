@@ -74,4 +74,20 @@ describe("buildVirtualDesign", () => {
       withoutVariantLine(buildVirtualDesign({ ...entry, variant: 13 }, "en", labels)),
     );
   });
+
+  it.each([
+    ["lp", "ランディングページ"],
+    ["mobile", "モバイルアプリ"],
+    ["portfolio", "ポートフォリオ"],
+    ["admin", "管理画面"],
+  ])("localizes the %s category in Japanese guidance", (category, expected) => {
+    const result = buildVirtualDesign({ ...entry, tags: [category] }, "ja", {
+      title: "仮想デザイン",
+      industry: "情報サービス業",
+      color: "青",
+      mood: "ミニマル",
+      swatches: ["#112233"],
+    });
+    expect(result).toContain(`${expected}の主要タスク`);
+  });
 });
