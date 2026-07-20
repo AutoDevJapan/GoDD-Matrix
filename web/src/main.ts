@@ -23,6 +23,7 @@ import {
   labelForMood,
 } from "./lib.js";
 import { renderMatchesCount } from "./matches-count.js";
+import { loadMaterializedDesign } from "./materialized-design.js";
 import {
   SEARCH_COLORS,
   SEARCH_STYLES,
@@ -99,6 +100,7 @@ let searchQuery = "";
 let sortOrder: "popular" | "newest" = "popular";
 let currentPage = 1;
 let selectedEntry: DesignIndexEntry | null = null;
+let detailRequestId = 0;
 const PAGE_SIZE = 24;
 
 interface Filters {
@@ -378,6 +380,8 @@ interface TranslationKeys {
   sampleCount: (shown: number, total: number) => string;
   materializationType: string;
   preGeneratedType: string;
+  detailLoading: string;
+  detailLoadError: string;
 }
 
 const TRANSLATIONS: Record<Locale, TranslationKeys> = {
@@ -422,6 +426,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     sampleCount: (shown, total) => `${total.toLocaleString("ja-JP")}件中 ${shown}件を表示中`,
     materializationType: "リアルタイム合成",
     preGeneratedType: "OSS 材化済み",
+    detailLoading: "DESIGN.md を読み込んでいます...",
+    detailLoadError: "DESIGN.md の読み込みに失敗しました。時間をおいて再度お試しください。",
   },
   en: {
     siteTitle: "DESIGN.md Library",
@@ -464,6 +470,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString("en-US")} results`,
     materializationType: "Virtual",
     preGeneratedType: "Pre-generated",
+    detailLoading: "Loading DESIGN.md...",
+    detailLoadError: "Failed to load DESIGN.md. Please try again later.",
   },
 };
 
@@ -609,6 +617,7 @@ function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
 
 // Render the detailed view of a resolved specification
 async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = {}): Promise<void> {
+  const requestId = ++detailRequestId;
   selectedEntry = entry;
 
   // Transition views
@@ -698,17 +707,45 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     virtualNotice.classList.add("hidden");
   }
 
-  // Render DESIGN.md if virtual or missing in index
-  let renderedMarkdown: string | undefined = undefined;
+  const codeBlock = byId("detail-code-block");
+  const downloadButton = byId<HTMLButtonElement>("btn-download");
+  const copyButton = byId<HTMLButtonElement>("btn-copy");
+  const relatedGrid = byId("related-grid");
+  downloadButton.disabled = true;
+  copyButton.disabled = true;
+  codeBlock.setAttribute("aria-busy", "true");
+  codeBlock.textContent = t.detailLoading;
+  relatedGrid.replaceChildren();
+
+  // Resolve virtual content locally, or fetch and verify a materialized body.
+  let renderedMarkdown: string;
+  let hashVerified: boolean;
   if (isVirtual) {
     renderedMarkdown = renderVirtualDesign(entry, currentLocale);
+    hashVerified = false;
+  } else {
+    try {
+      const materialized = await loadMaterializedDesign(entry);
+      if (requestId !== detailRequestId) return;
+      renderedMarkdown = materialized.markdown;
+      hashVerified = materialized.hashVerified;
+    } catch (error) {
+      if (requestId !== detailRequestId) return;
+      console.error("Failed to load materialized DESIGN.md:", error);
+      codeBlock.setAttribute("aria-busy", "false");
+      codeBlock.textContent = t.detailLoadError;
+      downloadButton.onclick = null;
+      copyButton.onclick = null;
+      byId("btn-share").onclick = () => copyText(window.location.href, t.toastShareCopied);
+      return;
+    }
   }
 
   // Synthesize Markdown Content
   const prompt = composePromptForCell({
     entry,
     markdown: renderedMarkdown,
-    hashVerified: !isVirtual,
+    hashVerified,
     ...(isVirtual ? { resolutionStatus: "rendered" as const } : {}),
     ...(currentLocale === "en"
       ? { request: { industry: jsicMajor(entry.jsic).label_en || entry.jsic } }
@@ -718,17 +755,17 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
   // Combine system prompt and markdown preview
   const finalMarkdown = localizePromptPreview(prompt, currentLocale);
-  const codeBlock = byId("detail-code-block");
+  codeBlock.setAttribute("aria-busy", "false");
   codeBlock.textContent = finalMarkdown;
 
   // Bind sidebar action buttons
-  byId("btn-download").onclick = () => downloadMarkdown(`${entry.id}.design.md`, finalMarkdown);
-  byId("btn-copy").onclick = () => copyText(finalMarkdown, t.toastCopied);
+  downloadButton.disabled = false;
+  copyButton.disabled = false;
+  downloadButton.onclick = () => downloadMarkdown(`${entry.id}.design.md`, finalMarkdown);
+  copyButton.onclick = () => copyText(finalMarkdown, t.toastCopied);
   byId("btn-share").onclick = () => copyText(window.location.href, t.toastShareCopied);
 
   // Load related design entries
-  const relatedGrid = byId("related-grid");
-  relatedGrid.replaceChildren();
   const relatedList = allEntries
     .filter((e) => e.id !== entry.id && (e.mood === entry.mood || e.jsic === entry.jsic))
     .slice(0, 4);
@@ -1371,6 +1408,7 @@ async function bootstrap(): Promise<void> {
   };
 
   byId("back-btn").onclick = () => {
+    detailRequestId++;
     selectedEntry = null;
     window.history.replaceState(null, "", window.location.pathname);
     byId("detail-view").classList.add("hidden");
