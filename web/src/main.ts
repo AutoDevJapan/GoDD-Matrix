@@ -428,10 +428,6 @@ function animateCounter(): void {
     if (counterEl) counterEl.textContent = animatedTotal.toLocaleString();
     if (step >= steps) {
       clearInterval(timer);
-      setInterval(() => {
-        animatedTotal += Math.floor(40 + Math.random() * 260);
-        if (counterEl) counterEl.textContent = animatedTotal.toLocaleString();
-      }, 4000);
     }
   }, 40);
 }
