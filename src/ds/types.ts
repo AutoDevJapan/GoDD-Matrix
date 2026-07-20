@@ -17,8 +17,8 @@ export interface DesignIndexEntry {
   color: ColorKey;
   /** ムード軸 slug。 */
   mood: MoodKey;
-  /** バリアント番号。基底セルは 0、変種は 1 以上の整数。 */
-  variant: number;
+  /** バリアント番号。基底セルは 0、変種は 1 以上の整数。任意。 */
+  variant?: number;
   /** タイポ体系・レイアウト原型など、軸に掛けない差別化/検索用タグ。任意。 */
   tags?: readonly string[];
   /** 人間可読の見出し (ブラウズ/SEO 用)。 */
