@@ -23,6 +23,8 @@ import {
   labelForMood,
 } from "./lib.js";
 import { renderMatchesCount } from "./matches-count.js";
+import { loadMaterializedDesign } from "./materialized-design.js";
+import { type ResultSortOrder, sortDesignEntries, virtualIndexAtRank } from "./result-sorting.js";
 import {
   SEARCH_COLORS,
   SEARCH_STYLES,
@@ -34,6 +36,11 @@ import {
 import { loadTaxonomy } from "./taxonomy-cache.js";
 import { localizePromptPreview, localizedColorName } from "./ui-localization.js";
 import { buildVirtualDesign } from "./virtual-design.js";
+import {
+  buildVirtualPermalinkId,
+  parseVirtualPermalinkId,
+  validateVirtualPermalinkAxes,
+} from "./virtual-permalink.js";
 
 // DOM helper to build elements cleanly
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -96,9 +103,11 @@ let allEntries: readonly DesignIndexEntry[] = [];
 let currentLocale: Locale = "ja";
 let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let searchQuery = "";
-let sortOrder: "popular" | "newest" = "popular";
+let sortOrder: ResultSortOrder = "popular";
 let currentPage = 1;
 let selectedEntry: DesignIndexEntry | null = null;
+let detailReturnFocus: HTMLElement | null = null;
+let detailRequestId = 0;
 const PAGE_SIZE = 24;
 
 interface Filters {
@@ -251,25 +260,25 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
   container.style.position = "relative";
 
   // Header Bar
-  const header = el("div");
+  const header = el("span");
   header.style.display = "flex";
   header.style.justifyContent = "space-between";
   header.style.alignItems = "center";
   header.style.borderBottom = `1px solid ${border}`;
   header.style.paddingBottom = "6px";
 
-  const dot = el("div");
+  const dot = el("span");
   dot.style.width = "8px";
   dot.style.height = "8px";
   dot.style.borderRadius = "50%";
   dot.style.background = primaryColor;
   header.appendChild(dot);
 
-  const right = el("div");
+  const right = el("span");
   right.style.display = "flex";
   right.style.gap = "4px";
   for (let i = 0; i < 3; i++) {
-    const line = el("div");
+    const line = el("span");
     line.style.width = "12px";
     line.style.height = "2px";
     line.style.background = muted;
@@ -279,12 +288,12 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
   container.appendChild(header);
 
   // Content Area
-  const body = el("div");
+  const body = el("span");
   body.style.display = "flex";
   body.style.gap = "8px";
   body.style.flex = "1";
 
-  const sidebar = el("div");
+  const sidebar = el("span");
   sidebar.style.width = "16px";
   sidebar.style.background = isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)";
   sidebar.style.borderRadius = "4px";
@@ -293,7 +302,7 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
   sidebar.style.flexDirection = "column";
   sidebar.style.gap = "4px";
   for (let i = 0; i < 3; i++) {
-    const item = el("div");
+    const item = el("span");
     item.style.height = "3px";
     item.style.background = i === 0 ? accentColor : muted;
     item.style.borderRadius = "1px";
@@ -301,13 +310,13 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
   }
   body.appendChild(sidebar);
 
-  const main = el("div");
+  const main = el("span");
   main.style.flex = "1";
   main.style.display = "flex";
   main.style.flexDirection = "column";
   main.style.gap = "6px";
 
-  const mockCard = el("div");
+  const mockCard = el("span");
   mockCard.style.flex = "1";
   mockCard.style.background = cardBg;
   mockCard.style.border = `1px solid ${border}`;
@@ -317,14 +326,14 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
   mockCard.style.flexDirection = "column";
   mockCard.style.justifyContent = "space-between";
 
-  const topBar = el("div");
+  const topBar = el("span");
   topBar.style.width = "50%";
   topBar.style.height = "3px";
   topBar.style.background = primaryColor;
   topBar.style.borderRadius = "1px";
   mockCard.appendChild(topBar);
 
-  const btn = el("div");
+  const btn = el("span");
   btn.style.width = "30px";
   btn.style.height = "10px";
   btn.style.background = accentColor;
@@ -378,6 +387,8 @@ interface TranslationKeys {
   sampleCount: (shown: number, total: number) => string;
   materializationType: string;
   preGeneratedType: string;
+  detailLoading: string;
+  detailLoadError: string;
 }
 
 const TRANSLATIONS: Record<Locale, TranslationKeys> = {
@@ -422,6 +433,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     sampleCount: (shown, total) => `${total.toLocaleString("ja-JP")}件中 ${shown}件を表示中`,
     materializationType: "リアルタイム合成",
     preGeneratedType: "OSS 材化済み",
+    detailLoading: "DESIGN.md を読み込んでいます...",
+    detailLoadError: "DESIGN.md の読み込みに失敗しました。時間をおいて再度お試しください。",
   },
   en: {
     siteTitle: "DESIGN.md Library",
@@ -464,6 +477,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString("en-US")} results`,
     materializationType: "Virtual",
     preGeneratedType: "Pre-generated",
+    detailLoading: "Loading DESIGN.md...",
+    detailLoadError: "Failed to load DESIGN.md. Please try again later.",
   },
 };
 
@@ -538,7 +553,9 @@ function translateUI(): void {
   byId("label-brand-subtitle").textContent = t.brandSubtitle;
   byId("label-hero-tag").textContent = t.heroTag;
   byId("label-hero-sub").textContent = t.heroSub;
-  byId<HTMLInputElement>("main-search-input").placeholder = t.placeholderSearch;
+  const searchInput = byId<HTMLInputElement>("main-search-input");
+  searchInput.placeholder = t.placeholderSearch;
+  searchInput.setAttribute("aria-label", t.placeholderSearch);
 
   byId("label-facet-category").textContent = t.labelFacetCategory;
   byId("label-facet-style").textContent = t.labelFacetStyle;
@@ -608,7 +625,11 @@ function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
 }
 
 // Render the detailed view of a resolved specification
-async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = {}): Promise<void> {
+async function openDetail(
+  entry: DesignIndexEntry,
+  opts: { scroll?: boolean; focus?: boolean } = {},
+): Promise<void> {
+  const requestId = ++detailRequestId;
   selectedEntry = entry;
 
   // Transition views
@@ -616,6 +637,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   const detailView = byId("detail-view");
   detailView.classList.remove("hidden");
   if (opts.scroll !== false) window.scrollTo(0, 0);
+  if (opts.focus !== false) byId<HTMLButtonElement>("back-btn").focus();
 
   // Sync URL permalink
   const permalink = buildCellPermalink(window.location.href, entry.id);
@@ -698,17 +720,48 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     virtualNotice.classList.add("hidden");
   }
 
-  // Render DESIGN.md if virtual or missing in index
-  let renderedMarkdown: string | undefined = undefined;
+  const codeBlock = byId("detail-code-block");
+  const loadStatus = byId("detail-load-status");
+  const downloadButton = byId<HTMLButtonElement>("btn-download");
+  const copyButton = byId<HTMLButtonElement>("btn-copy");
+  const relatedGrid = byId("related-grid");
+  downloadButton.disabled = true;
+  copyButton.disabled = true;
+  codeBlock.setAttribute("aria-busy", "true");
+  codeBlock.textContent = t.detailLoading;
+  loadStatus.textContent = t.detailLoading;
+  relatedGrid.replaceChildren();
+
+  // Resolve virtual content locally, or fetch and verify a materialized body.
+  let renderedMarkdown: string;
+  let hashVerified: boolean;
   if (isVirtual) {
     renderedMarkdown = renderVirtualDesign(entry, currentLocale);
+    hashVerified = false;
+  } else {
+    try {
+      const materialized = await loadMaterializedDesign(entry);
+      if (requestId !== detailRequestId) return;
+      renderedMarkdown = materialized.markdown;
+      hashVerified = materialized.hashVerified;
+    } catch (error) {
+      if (requestId !== detailRequestId) return;
+      console.error("Failed to load materialized DESIGN.md:", error);
+      codeBlock.setAttribute("aria-busy", "false");
+      codeBlock.textContent = t.detailLoadError;
+      loadStatus.textContent = t.detailLoadError;
+      downloadButton.onclick = null;
+      copyButton.onclick = null;
+      byId("btn-share").onclick = () => copyText(window.location.href, t.toastShareCopied);
+      return;
+    }
   }
 
   // Synthesize Markdown Content
   const prompt = composePromptForCell({
     entry,
     markdown: renderedMarkdown,
-    hashVerified: !isVirtual,
+    hashVerified,
     ...(isVirtual ? { resolutionStatus: "rendered" as const } : {}),
     ...(currentLocale === "en"
       ? { request: { industry: jsicMajor(entry.jsic).label_en || entry.jsic } }
@@ -718,37 +771,39 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
 
   // Combine system prompt and markdown preview
   const finalMarkdown = localizePromptPreview(prompt, currentLocale);
-  const codeBlock = byId("detail-code-block");
+  codeBlock.setAttribute("aria-busy", "false");
   codeBlock.textContent = finalMarkdown;
+  loadStatus.textContent = "";
 
   // Bind sidebar action buttons
-  byId("btn-download").onclick = () => downloadMarkdown(`${entry.id}.design.md`, finalMarkdown);
-  byId("btn-copy").onclick = () => copyText(finalMarkdown, t.toastCopied);
+  downloadButton.disabled = false;
+  copyButton.disabled = false;
+  downloadButton.onclick = () => downloadMarkdown(`${entry.id}.design.md`, finalMarkdown);
+  copyButton.onclick = () => copyText(finalMarkdown, t.toastCopied);
   byId("btn-share").onclick = () => copyText(window.location.href, t.toastShareCopied);
 
   // Load related design entries
-  const relatedGrid = byId("related-grid");
-  relatedGrid.replaceChildren();
   const relatedList = allEntries
     .filter((e) => e.id !== entry.id && (e.mood === entry.mood || e.jsic === entry.jsic))
     .slice(0, 4);
 
   for (const item of relatedList) {
-    const card = el("div", { class: "related-card" });
+    const card = el("button", { class: "related-card" });
+    card.type = "button";
     card.onclick = () => {
       void openDetail(item);
     };
 
-    const thumb = el("div", { class: "related-thumb" });
+    const thumb = el("span", { class: "related-thumb" });
     renderThumbnail(item, thumb);
-    thumb.appendChild(el("div", { class: "preview-overlay", text: t.previewLabel }));
+    thumb.appendChild(el("span", { class: "preview-overlay", text: t.previewLabel }));
     card.appendChild(thumb);
 
-    const body = el("div", { class: "related-body" });
+    const body = el("span", { class: "related-body" });
     const mainTitle = getEntryTitle(item, currentLocale);
     const subTitle = `${item.jsic} × ${item.color} × ${item.mood}`;
-    body.appendChild(el("div", { class: "related-card-title-ja", text: mainTitle }));
-    body.appendChild(el("div", { class: "related-card-title-en", text: subTitle }));
+    body.appendChild(el("span", { class: "related-card-title-ja", text: mainTitle }));
+    body.appendChild(el("span", { class: "related-card-title-en", text: subTitle }));
     card.appendChild(body);
 
     relatedGrid.appendChild(card);
@@ -906,7 +961,7 @@ function applyState(): void {
   let totalMatches = TOTAL_LIBRARY;
 
   if (!isFiltered) {
-    pageView = paginate(allEntries, currentPage, PAGE_SIZE);
+    pageView = paginate(sortDesignEntries(allEntries, sortOrder), currentPage, PAGE_SIZE);
     totalMatches = TOTAL_LIBRARY;
   } else {
     // Determine combinatorics sizes
@@ -978,7 +1033,8 @@ function applyState(): void {
     const start = (p - 1) * PAGE_SIZE;
 
     const pageItems: DesignIndexEntry[] = [];
-    for (let idx = start; idx < Math.min(start + PAGE_SIZE, totalMatches); idx++) {
+    for (let rank = start; rank < Math.min(start + PAGE_SIZE, totalMatches); rank++) {
+      const idx = virtualIndexAtRank(rank, totalMatches, sortOrder);
       pageItems.push(
         getCombinationAtIndex(
           idx,
@@ -1105,31 +1161,33 @@ function applyState(): void {
     );
   } else {
     for (const entry of pageView.items) {
-      const card = el("div", { class: "card" });
+      const card = el("button", { class: "card" });
+      card.type = "button";
       card.onclick = () => {
+        detailReturnFocus = card;
         void openDetail(entry);
       };
 
-      const thumb = el("div", { class: "card-thumbnail" });
+      const thumb = el("span", { class: "card-thumbnail" });
       renderThumbnail(entry, thumb);
       thumb.appendChild(
-        el("div", { class: "preview-overlay", text: TRANSLATIONS[currentLocale].previewLabel }),
+        el("span", { class: "preview-overlay", text: TRANSLATIONS[currentLocale].previewLabel }),
       );
       card.appendChild(thumb);
 
-      const body = el("div", { class: "card-body" });
+      const body = el("span", { class: "card-body" });
       const mainTitle = getEntryTitle(entry, currentLocale);
       const subTitle = `${entry.jsic} × ${entry.color} × ${entry.mood}`;
-      body.appendChild(el("div", { class: "card-title-ja", text: mainTitle }));
+      body.appendChild(el("span", { class: "card-title-ja", text: mainTitle }));
       body.appendChild(
-        el("div", {
+        el("span", {
           class: "card-title-en",
           text: subTitle,
         }),
       );
 
       // Add category/style badges
-      const bContainer = el("div", { class: "card-badges" });
+      const bContainer = el("span", { class: "card-badges" });
       const cL = CATEGORIES.find((x) => x.v === getEntryCategory(entry));
       const sL = STYLES.find((x) => x.v === getEntryStyle(entry));
       if (cL)
@@ -1143,7 +1201,7 @@ function applyState(): void {
       body.appendChild(bContainer);
 
       // Card footer
-      const footer = el("div", { class: "card-footer" });
+      const footer = el("span", { class: "card-footer" });
       const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
       const typeText = isVirtual
         ? TRANSLATIONS[currentLocale].materializationType
@@ -1200,15 +1258,14 @@ function getCombinationAtIndex(
 
   const mood = resolveMoodSlug(style);
 
-  // Vary typography and layouts based on extraIndex
-  const layoutIdx = extraIndex % 4;
-  const fontObj = FONTS[(extraIndex + 3) % FONTS.length] || {
-    v: "inter",
-    ja: "Inter",
-    en: "Inter",
-  };
-
-  const id = `virtual_${jsicObj.code}_${color}_${mood}_l${layoutIdx}_f${fontObj.v}`;
+  const id = buildVirtualPermalinkId({
+    jsic: jsicObj.code,
+    color,
+    mood,
+    category: cat,
+    style,
+    variant: extraIndex,
+  });
   const title = `VIRTUAL DESIGN: ${jsicName(jsicObj.code)} × ${color} × ${mood}`;
 
   const entry: DesignIndexEntry = {
@@ -1225,6 +1282,49 @@ function getCombinationAtIndex(
   };
 
   return entry;
+}
+
+function restoreVirtualEntry(id: string): DesignIndexEntry | undefined {
+  const axes = parseVirtualPermalinkId(id);
+  if (!axes) return undefined;
+
+  const knownColors = new Set([
+    "h17b-lt",
+    "gray-3",
+    "h12s-sf",
+    "h2v-vv",
+    "white",
+    "black",
+    ...Object.keys(taxonomy.colors),
+  ]);
+  if (
+    !validateVirtualPermalinkAxes(axes, {
+      jsic: new Set(JSIC_SUBCLASSES.map((item) => item.code)),
+      colors: knownColors,
+      categories: new Set(CATEGORIES.map((item) => item.v)),
+      styles: new Set(STYLES.map((item) => item.v)),
+      moodForStyle: resolveMoodSlug,
+    })
+  ) {
+    return undefined;
+  }
+
+  return {
+    id,
+    path: `design-md/${axes.jsic}/${axes.color}/${axes.mood}/DESIGN.md`,
+    jsic: axes.jsic,
+    color: axes.color,
+    mood: axes.mood,
+    title: `VIRTUAL DESIGN: ${jsicName(axes.jsic)} × ${axes.color} × ${axes.mood}`,
+    hash: "",
+    variant: axes.variant,
+    createdAt: "2026-07-20",
+    tags: [
+      axes.category,
+      axes.style,
+      getEntryIndustry({ jsic: axes.jsic, path: "" } as DesignIndexEntry),
+    ],
+  };
 }
 
 function matchColorFamily(entryColor: string, paletteSlug: string): boolean {
@@ -1334,7 +1434,7 @@ async function bootstrap(): Promise<void> {
     localStorage.setItem("godd_locale", val);
     translateUI();
     applyState();
-    if (selectedEntry) void openDetail(selectedEntry, { scroll: false });
+    if (selectedEntry) void openDetail(selectedEntry, { scroll: false, focus: false });
   };
 
   byId("main-search-input").oninput = (e) => {
@@ -1347,6 +1447,8 @@ async function bootstrap(): Promise<void> {
     sortOrder = "popular";
     byId("sort-btn-popular").classList.add("active");
     byId("sort-btn-newest").classList.remove("active");
+    byId("sort-btn-popular").setAttribute("aria-pressed", "true");
+    byId("sort-btn-newest").setAttribute("aria-pressed", "false");
     currentPage = 1;
     applyState();
   };
@@ -1355,6 +1457,8 @@ async function bootstrap(): Promise<void> {
     sortOrder = "newest";
     byId("sort-btn-newest").classList.add("active");
     byId("sort-btn-popular").classList.remove("active");
+    byId("sort-btn-newest").setAttribute("aria-pressed", "true");
+    byId("sort-btn-popular").setAttribute("aria-pressed", "false");
     currentPage = 1;
     applyState();
   };
@@ -1371,17 +1475,23 @@ async function bootstrap(): Promise<void> {
   };
 
   byId("back-btn").onclick = () => {
+    detailRequestId++;
     selectedEntry = null;
     window.history.replaceState(null, "", window.location.pathname);
     byId("detail-view").classList.add("hidden");
     byId("search-view").classList.remove("hidden");
+    const returnTarget = detailReturnFocus?.isConnected
+      ? detailReturnFocus
+      : byId("main-search-input");
+    detailReturnFocus = null;
+    returnTarget.focus();
   };
 
   // Restore state from URL permalink if any
   const params = new URLSearchParams(window.location.search);
   const cellParam = params.get("cell");
   if (cellParam) {
-    const entry = findEntryById(allEntries, cellParam);
+    const entry = findEntryById(allEntries, cellParam) ?? restoreVirtualEntry(cellParam);
     if (entry) {
       void openDetail(entry);
     }
