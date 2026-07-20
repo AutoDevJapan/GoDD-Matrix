@@ -8,7 +8,13 @@ on:
     paths:
       - "web/**"
       - "src/**"
-      - "scripts/build-web.mjs"
+      # Static build program and any helpers it may gain.
+      - "scripts/**"
+      # Dependency resolution and compiler inputs used by install/typecheck/build.
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".npmrc"
+      - "tsconfig.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
