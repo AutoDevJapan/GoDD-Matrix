@@ -41,18 +41,30 @@ test("loads, filters, opens a detail, switches locale, and restores its permalin
 
   await page.locator("#main-search-input").fill("dashboard minimal");
   await expect(page.locator("#active-pills-bar")).toBeVisible();
+  await page.locator("#sort-btn-newest").click();
   await page.locator("#results .card").first().click();
   await expect(page.locator("#detail-view")).toBeVisible();
-  await expect(page).toHaveURL(/cell=virtual_/);
+  await expect(page).toHaveURL(/cell=virtual_.*_v[1-9][0-9]*$/);
 
   await page.locator("#locale-select").selectOption("en");
   await expect(page.locator("#back-btn")).toHaveText("← Back to search");
   await expect(page.locator("#detail-code-block")).toContainText("Output language: English");
 
   const permalink = page.url();
+  const cellId = new URL(permalink).searchParams.get("cell");
+  const filename = await page.locator("#detail-filename").textContent();
+  const renderedPrompt = await page.locator("#detail-code-block").textContent();
+  const variant = /_v([1-9][0-9]*)$/.exec(cellId ?? "")?.[1];
+  expect(cellId).toMatch(/^virtual_.*_v[1-9][0-9]*$/);
+  expect(variant).toBeDefined();
+  expect(filename).toBe(`${cellId}.design.md`);
+  expect(renderedPrompt).toContain(`Variant: ${variant}`);
+
   await page.goto(permalink);
   await expect(page.locator("#detail-view")).toBeVisible();
-  await expect(page.locator("#detail-code-block")).toContainText("Output language: English");
+  await expect(page).toHaveURL(permalink);
+  await expect(page.locator("#detail-filename")).toHaveText(filename ?? "");
+  await expect(page.locator("#detail-code-block")).toHaveText(renderedPrompt ?? "");
 });
 
 test("fetches a materialized body and supports copy and download", async ({ page }) => {

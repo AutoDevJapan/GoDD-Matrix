@@ -25,6 +25,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "typecheck:web": "tsc -p web/tsconfig.json",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "build:web": "node scripts/build-web.mjs",
     "test:e2e": "playwright test",
     "test": "vitest run",

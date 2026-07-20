@@ -44,6 +44,9 @@ jobs:
       - name: Typecheck web
         run: pnpm typecheck:web
 
+      - name: Typecheck browser tests
+        run: pnpm typecheck:e2e
+
       - name: Test (vitest)
         run: pnpm test
 
