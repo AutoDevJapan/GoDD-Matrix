@@ -1030,8 +1030,8 @@ function getCombinationAtIndex(
 
   const cat = categories[catIdx] ?? "dashboard";
   const style = styles[styleIdx] ?? "minimal";
-  const jsicObj = matchingJsic[jsicIdx] ?? JSIC_SUBCLASSES[0];
-  const color = matchingColors[colorIdx] ?? "h17b-lt";
+  const jsicObj = matchingJsic[jsicIdx] || { code: "6061", name: "ソフトウェア業" };
+  const color = matchingColors[colorIdx] || "h17b-lt";
 
   let mood = "minimal";
   if (style === "minimal") mood = "minimal";
@@ -1045,7 +1045,11 @@ function getCombinationAtIndex(
 
   // Vary typography and layouts based on extraIndex
   const layoutIdx = extraIndex % 4;
-  const fontObj = FONTS[(extraIndex + 3) % FONTS.length] ?? FONTS[0];
+  const fontObj = FONTS[(extraIndex + 3) % FONTS.length] || {
+    v: "inter",
+    ja: "Inter",
+    en: "Inter",
+  };
 
   const id = `virtual_${jsicObj.code}_${color}_${mood}_l${layoutIdx}_f${fontObj.v}`;
   const title = `VIRTUAL DESIGN: ${jsicName(jsicObj.code)} × ${color} × ${mood}`;
