@@ -14,6 +14,7 @@ import {
   contextFromEntry,
   designRawUrl,
   extractColorTokens,
+  facetLabel,
   familySwatchHex,
   filterByFacets,
   findEntryById,
@@ -153,6 +154,63 @@ describe("labelForColor / labelForMood (name_ja 優先・フォールバック)"
     expect(labelForColor("h17b-lt", partial, "en")).toBe("空色"); // name_ja へ
     expect(labelForColor("white", partial, "en")).toBe("ホワイト"); // bundled へ
     expect(labelForMood("unknown", partial, "en")).toBe("unknown"); // slug へ
+  });
+
+  describe("facetLabel and computeFacetGroups i18n", () => {
+    it("facetLabel supports en locale", () => {
+      const taxonomy: Taxonomy = {
+        colors: {},
+        moods: { minimal: { name_ja: "極小", name_en: "minimal" } },
+      };
+      // Industry division translation
+      expect(facetLabel("industry", "A", taxonomy, "en")).toBe("Agriculture and Forestry");
+      expect(facetLabel("industry", "A", taxonomy, "ja")).toBe("農業，林業");
+
+      // Color family translation
+      expect(facetLabel("color", "red", taxonomy, "en")).toBe("Reds");
+      expect(facetLabel("color", "red", taxonomy, "ja")).toBe("赤系");
+
+      // Mood translation
+      expect(facetLabel("mood", "minimal", taxonomy, "en")).toBe("minimal");
+      expect(facetLabel("mood", "minimal", taxonomy, "ja")).toBe("極小");
+    });
+
+    it("computeFacetGroups returns translated facet titles and labels", () => {
+      const taxonomy: Taxonomy = {
+        colors: { "d-h01": { name_ja: "暗い赤", name_en: "dark red" } },
+        moods: { minimal: { name_ja: "極小", name_en: "minimal" } },
+      };
+      const entries: DesignIndexEntry[] = [
+        {
+          id: "6061_red_minimal",
+          path: "design-md/6061/red/minimal/DESIGN.md",
+          jsic: "6061",
+          color: "d-h01",
+          mood: "minimal",
+          title: "Bookstore minimal design",
+          hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          createdAt: "2026-07-20T00:00:00Z",
+        },
+      ];
+      const groups = computeFacetGroups(
+        entries,
+        { industry: [], color: [], mood: [], tag: [] },
+        taxonomy,
+        "en",
+      );
+
+      const industryGroup = groups.find((g) => g.axis === "industry");
+      expect(industryGroup?.title).toBe("Industry (Division)");
+      expect(industryGroup?.items[0]?.label).toBe("Wholesale and Retail Trade");
+
+      const colorGroup = groups.find((g) => g.axis === "color");
+      expect(colorGroup?.title).toBe("Color Family");
+      expect(colorGroup?.items[0]?.label).toBe("Reds");
+
+      const moodGroup = groups.find((g) => g.axis === "mood");
+      expect(moodGroup?.title).toBe("Mood");
+      expect(moodGroup?.items[0]?.label).toBe("minimal");
+    });
   });
 });
 

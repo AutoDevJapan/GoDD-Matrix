@@ -16,6 +16,7 @@ import {
   type FacetGroupView,
   type FacetSelection,
   type FacetValueItem,
+  type Locale,
   type Page,
   type SearchInput,
   type Swatch,
@@ -76,6 +77,97 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 
 /** 現在の全エントリ (index.json 取込後に確定)。 */
 let allEntries: readonly DesignIndexEntry[] = [];
+
+/** 現在の UI 表示言語。 */
+let currentLocale: Locale = "ja";
+
+const TRANSLATIONS: Record<Locale, Record<string, string>> = {
+  ja: {
+    siteTitle: "GoDD Matrix — デザイン検索 & プロンプト",
+    siteDesc:
+      "業種 (JSIC) × カラー × ムードで確定デザイン仕様 (DESIGN.md) を検索し、Claude 用プロンプトをブラウザ内で合成してコピーします。データは公開リポジトリから直接取得し、サーバや秘密は一切使いません (完全クライアントサイド)。",
+    searchTitle: "要望で検索",
+    labelIndustry: "業種 (名称 / キーワード / JSIC コード)",
+    placeholderIndustry: "例: コンサル / 書店 / 7281",
+    labelColor: "カラー",
+    placeholderColor: "例: 青 / ライトブルー / white",
+    labelMood: "ムード",
+    placeholderMood: "例: 信頼 / ミニマル",
+    labelTags: "タグ (カンマ区切り / AND)",
+    placeholderTags: "例: editorial, serif-display",
+    labelText: "自由文",
+    placeholderText: "タイトル・タグ・名称を横断検索",
+    labelOutputLang: "作りたいサイトの言語（任意）",
+    placeholderOutputLang: "例: English / 日本語 / Français / 简体中文",
+    hintOutputLang: "生成プロンプトに「この言語で作れ」と注入します。空なら仕様の言語のまま。",
+    btnSearch: "検索",
+    btnReset: "リセット",
+    footerText:
+      "データ出典: 公開 Design-Systems リポジトリ (index.json / DESIGN.md) を raw から直接取得。本ツールはクライアントサイドのみで動作します。",
+    statTheoreticalLabel: "理論空間 (直積×バリアント)",
+    statMaterializedLabel: "生成済み実数 (DESIGN.md)",
+    titleAxes: "解決した軸",
+    titleResults: "候補セル",
+    emptyResults: "一致するセルがありません。条件を緩めてください。",
+    loadingIndex: "index.json を取得中…",
+    loadingDesign: "DESIGN.md を取得中…",
+    errorIndex: "index.json を取得できませんでした: ",
+    errorDesign: "DESIGN.md を取得できませんでした",
+    errorDesignHint: "。未材化セルの可能性があります (Generator レンダーが必要)。",
+    labelIndustryName: "業種名: ",
+    btnPromptCompose: "このセルでプロンプト合成 →",
+    labelColorPaletteApprox: "カラーパレット（近似）",
+    labelColorPaletteReal: "カラートークン（DESIGN.md 実値）",
+    labelNotices: "注意 (notices)",
+    copyBtnLabel: "コピー",
+    copiedLabel: "コピーしました",
+    copyFailedLabel: "コピー失敗",
+    labelHtmlTitle: "GoDD Matrix — デザイン検索 & プロンプト",
+  },
+  en: {
+    siteTitle: "GoDD Matrix — Design Search & Prompt",
+    siteDesc:
+      "Search design specifications (DESIGN.md) by industry (JSIC) × color × mood, and compose prompts for Claude. Data is retrieved directly from the public repository (pure client-side, zero servers/secrets).",
+    searchTitle: "Search Criteria",
+    labelIndustry: "Industry (Name / Keyword / JSIC Code)",
+    placeholderIndustry: "e.g., Consulting / Bookstore / 7281",
+    labelColor: "Color",
+    placeholderColor: "e.g., Blue / Light Blue / white",
+    labelMood: "Mood",
+    placeholderMood: "e.g., Trust / Minimal",
+    labelTags: "Tags (Comma-separated / AND)",
+    placeholderTags: "e.g., editorial, serif-display",
+    labelText: "Fulltext",
+    placeholderText: "Search title, tags, and names",
+    labelOutputLang: "Target Site Language (Optional)",
+    placeholderOutputLang: "e.g., English / 日本語 / Français / 简体中文",
+    hintOutputLang:
+      "Inject 'Output user-visible text in this language' into prompt. If empty, uses specification language.",
+    btnSearch: "Search",
+    btnReset: "Reset",
+    footerText:
+      "Data source: Direct raw fetch from public Design-Systems repo (index.json / DESIGN.md). Works fully client-side.",
+    statTheoreticalLabel: "Theoretical Space",
+    statMaterializedLabel: "Materialized (DESIGN.md)",
+    titleAxes: "Resolved Axes",
+    titleResults: "Candidates",
+    emptyResults: "No matching cells found. Try widening your criteria.",
+    loadingIndex: "Fetching index.json...",
+    loadingDesign: "Fetching DESIGN.md...",
+    errorIndex: "Failed to fetch index.json: ",
+    errorDesign: "Failed to fetch DESIGN.md",
+    errorDesignHint: ". May be an unmaterialized cell (requires Generator API).",
+    labelIndustryName: "Industry Name: ",
+    btnPromptCompose: "Compose prompt using this cell →",
+    labelColorPaletteApprox: "Color Palette (Approx)",
+    labelColorPaletteReal: "Color Tokens (DESIGN.md values)",
+    labelNotices: "Notices",
+    copyBtnLabel: "Copy",
+    copiedLabel: "Copied!",
+    copyFailedLabel: "Copy Failed",
+    labelHtmlTitle: "GoDD Matrix — Design Search & Prompts",
+  },
+};
 /** DS taxonomy (taxonomy.json 取込後に確定; 未達なら空 = slug/bundled フォールバック)。 */
 let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 /** フォーム検索の結果 (ファセット適用前の母集合)。 */
@@ -139,7 +231,8 @@ async function copyToClipboard(text: string, button: HTMLButtonElement): Promise
     // Clipboard API が拒否/未対応の環境では旧 API にフォールバックする。
     ok = legacyCopy(text);
   }
-  button.textContent = ok ? "コピーしました" : "コピー失敗";
+  const t = TRANSLATIONS[currentLocale];
+  button.textContent = ok ? t.copiedLabel : t.copyFailedLabel;
   window.setTimeout(() => {
     button.textContent = original;
   }, 1400);
@@ -204,16 +297,23 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
   const rows: Node[] = [];
   const line = (axis: string, resolved: string | undefined, raw: string | undefined): Node => {
     const label = el("span", { class: "axis-label", text: axis });
+    const unresolvedText = raw
+      ? currentLocale === "en"
+        ? `Unresolved (input: ${raw})`
+        : `未解決 (入力: ${raw})`
+      : currentLocale === "en"
+        ? "Not specified"
+        : "未指定";
     const value = el("span", {
       class: resolved ? "axis-val resolved" : "axis-val unresolved",
-      text: resolved ?? (raw ? `未解決 (入力: ${raw})` : "未指定"),
+      text: resolved ?? unresolvedText,
     });
     return el("div", { class: "axis-row" }, [label, value]);
   };
   const jsicBest = input.industry ? d.jsic.best : undefined;
   rows.push(
     line(
-      "業種 (JSIC)",
+      currentLocale === "en" ? "Industry (JSIC)" : "業種 (JSIC)",
       jsicBest ? `${jsicBest.entry.code} ${jsicBest.entry.name}` : undefined,
       input.industry,
     ),
@@ -221,9 +321,9 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
   const colorBest = input.color ? d.color.best : undefined;
   rows.push(
     line(
-      "カラー",
+      currentLocale === "en" ? "Color" : "カラー",
       colorBest
-        ? `${colorBest.entry.slug} (${labelForColor(colorBest.entry.slug, taxonomy)})`
+        ? `${colorBest.entry.slug} (${labelForColor(colorBest.entry.slug, taxonomy, currentLocale)})`
         : undefined,
       input.color,
     ),
@@ -231,23 +331,26 @@ function renderAxes(result: ReturnType<typeof searchCells>, input: SearchInput):
   const moodBest = input.mood ? d.mood.best : undefined;
   rows.push(
     line(
-      "ムード",
+      currentLocale === "en" ? "Mood" : "ムード",
       moodBest
-        ? `${moodBest.entry.slug} (${labelForMood(moodBest.entry.slug, taxonomy)})`
+        ? `${moodBest.entry.slug} (${labelForMood(moodBest.entry.slug, taxonomy, currentLocale)})`
         : undefined,
       input.mood,
     ),
   );
-  box.appendChild(el("h2", { class: "section-title", text: "解決した軸" }));
+  box.appendChild(
+    el("h2", { class: "section-title", text: TRANSLATIONS[currentLocale].titleAxes }),
+  );
   box.appendChild(el("div", { class: "axes-grid" }, rows));
 }
 
 /** 1 セルのカードを描画する。 */
 function renderCard(entry: DesignIndexEntry): HTMLElement {
+  const t = TRANSLATIONS[currentLocale];
   const meta = el("div", { class: "card-meta" }, [
-    badge(`業種 ${entry.jsic}`, "jsic"),
-    badge(labelForColor(entry.color, taxonomy), "color"),
-    badge(labelForMood(entry.mood, taxonomy), "mood"),
+    badge(currentLocale === "en" ? `JSIC ${entry.jsic}` : `業種 ${entry.jsic}`, "jsic"),
+    badge(labelForColor(entry.color, taxonomy, currentLocale), "color"),
+    badge(labelForMood(entry.mood, taxonomy, currentLocale), "mood"),
   ]);
   const tags = el(
     "div",
@@ -262,11 +365,14 @@ function renderCard(entry: DesignIndexEntry): HTMLElement {
   const title = el("h3", { class: "card-title" });
   appendHighlighted(title, entry.title, highlightTerms);
   const industry = el("p", { class: "card-industry" });
-  industry.appendChild(document.createTextNode("業種名: "));
+  industry.appendChild(document.createTextNode(t.labelIndustryName));
   appendHighlighted(industry, jsicName(entry.jsic), highlightTerms);
   // カラースウォッチ (近似): DESIGN.md を取得せず slug からクライアントで配色を視覚化する。
-  const swatches = swatchRow(approxSwatchesForColor(entry.color), "カラーパレット（近似）");
-  const select = el("button", { class: "select-btn", text: "このセルでプロンプト合成 →" });
+  const swatches = swatchRow(
+    approxSwatchesForColor(entry.color, currentLocale),
+    t.labelColorPaletteApprox,
+  );
+  const select = el("button", { class: "select-btn", text: t.btnPromptCompose });
   select.type = "button";
   select.addEventListener("click", () => {
     void openDetail(entry);
@@ -279,9 +385,7 @@ function renderResults(matches: readonly DesignIndexEntry[]): void {
   const list = byId("results");
   list.replaceChildren();
   if (matches.length === 0) {
-    list.appendChild(
-      el("p", { class: "empty", text: "一致するセルがありません。条件を緩めてください。" }),
-    );
+    list.appendChild(el("p", { class: "empty", text: TRANSLATIONS[currentLocale].emptyResults }));
     return;
   }
   for (const entry of matches) list.appendChild(renderCard(entry));
@@ -334,14 +438,15 @@ function updateStatus(pg: Page<DesignIndexEntry>): void {
 function renderFacets(): void {
   const box = byId("facets");
   box.replaceChildren();
-  const groups = computeFacetGroups(baseMatches, facetSelection, taxonomy);
+  const groups = computeFacetGroups(baseMatches, facetSelection, taxonomy, currentLocale);
   if (!groups.some((g) => g.items.length > 0)) return;
 
+  const t = TRANSLATIONS[currentLocale];
   const head = el("div", { class: "facets-head" }, [
-    el("h2", { class: "section-title", text: "絞り込み" }),
+    el("h2", { class: "section-title", text: currentLocale === "en" ? "Filter" : "絞り込み" }),
   ]);
   if (hasAnyFacet(facetSelection)) {
-    const clear = el("button", { class: "facet-clear", text: "条件をクリア" });
+    const clear = el("button", { class: "facet-clear", text: t.conditionClear });
     clear.type = "button";
     clear.addEventListener("click", () => {
       facetSelection = { ...EMPTY_SELECTION };
@@ -367,9 +472,16 @@ function renderFacetGroup(group: FacetGroupView): HTMLElement {
   const chips = el("div", { class: "chips" });
   for (const item of visible) chips.appendChild(renderChip(group.axis, item));
   if (overLimit) {
+    const moreText = expanded
+      ? currentLocale === "en"
+        ? "Close"
+        : "閉じる"
+      : currentLocale === "en"
+        ? `Show ${group.items.length - FACET_COLLAPSE_LIMIT} more`
+        : `他 ${group.items.length - FACET_COLLAPSE_LIMIT} 件を表示`;
     const more = el("button", {
       class: "facet-more",
-      text: expanded ? "閉じる" : `他 ${group.items.length - FACET_COLLAPSE_LIMIT} 件を表示`,
+      text: moreText,
     });
     more.type = "button";
     more.setAttribute("aria-expanded", String(expanded));
@@ -418,15 +530,27 @@ function renderPager(pg: Page<DesignIndexEntry>): void {
   const nav = byId("pager");
   nav.replaceChildren();
   if (pg.pageCount <= 1) return;
-  const prev = el("button", { class: "page-btn", text: "← 前へ" });
+  const prev = el("button", {
+    class: "page-btn",
+    text: currentLocale === "en" ? "← Prev" : "← 前へ",
+  });
   prev.type = "button";
   prev.disabled = pg.page <= 1;
   prev.addEventListener("click", () => goToPage(pg.page - 1));
-  const next = el("button", { class: "page-btn", text: "次へ →" });
+  const next = el("button", {
+    class: "page-btn",
+    text: currentLocale === "en" ? "Next →" : "次へ →",
+  });
   next.type = "button";
   next.disabled = pg.page >= pg.pageCount;
   next.addEventListener("click", () => goToPage(pg.page + 1));
-  const info = el("span", { class: "page-info", text: `${pg.page} / ${pg.pageCount} ページ` });
+  const info = el("span", {
+    class: "page-info",
+    text:
+      currentLocale === "en"
+        ? `Page ${pg.page} of ${pg.pageCount}`
+        : `${pg.page} / ${pg.pageCount} ページ`,
+  });
   nav.append(prev, info, next);
 }
 
@@ -492,24 +616,30 @@ function restoreFromUrl(): void {
 
 /** 選択セルの詳細 (DESIGN.md 取得 → プロンプト合成 → コピー) を描画する。 */
 async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = {}): Promise<void> {
+  const t = TRANSLATIONS[currentLocale];
   // 選択を状態と URL (?cell=<id>) に反映する (共有可能なパーマリンク)。
   selectedCellId = entry.id;
   syncUrl();
 
   const detail = byId("detail");
   detail.replaceChildren();
-  detail.appendChild(el("h2", { class: "section-title", text: `選択: ${entry.title}` }));
+  detail.appendChild(
+    el("h2", {
+      class: "section-title",
+      text: currentLocale === "en" ? `Selected: ${entry.title}` : `選択: ${entry.title}`,
+    }),
+  );
 
   // 詳細先頭のアクションツールバー: セルのリンクコピーは即時、DESIGN.md コピーは取得後に足す。
   const actions = el("div", { class: "detail-actions" });
   actions.appendChild(
-    copyButton("このセルのリンクをコピー", () =>
+    copyButton(currentLocale === "en" ? "Copy cell link" : "このセルのリンクをコピー", () =>
       buildCellPermalink(window.location.href, entry.id),
     ),
   );
   detail.appendChild(actions);
 
-  const info = el("p", { class: "detail-note", text: "DESIGN.md を取得中…" });
+  const info = el("p", { class: "detail-note", text: t.detailLoadingMarkdown });
   detail.appendChild(info);
   if (opts.scroll !== false) detail.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -521,15 +651,15 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
     markdown = await res.text();
   } catch (err) {
     info.className = "detail-note error";
-    info.textContent = `DESIGN.md を取得できませんでした (${url}): ${
+    info.textContent = `${t.detailLoadError} (${url}): ${
       err instanceof Error ? err.message : String(err)
-    }。未材化セルの可能性があります (Generator レンダーが必要)。`;
+    }${t.detailLoadErrorHint}`;
     return;
   }
 
   // 本文取得に成功したので、DESIGN.md 本文コピーをツールバー先頭に足す (スクロール不要の位置)。
   actions.insertBefore(
-    copyButton("DESIGN.md をコピー", () => markdown),
+    copyButton(currentLocale === "en" ? "Copy DESIGN.md" : "DESIGN.md をコピー", () => markdown),
     actions.firstChild,
   );
 
@@ -551,16 +681,24 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   });
 
   info.className = "detail-note";
+  const provenanceLabel = currentLocale === "en" ? "Provenance: " : "出所: ";
+  const hashLabel = hashVerified
+    ? currentLocale === "en"
+      ? "hash verified OK"
+      : "hash 検証 OK"
+    : currentLocale === "en"
+      ? "hash verification failed / mismatched"
+      : "hash 未検証/不一致";
   info.replaceChildren(
-    el("span", { text: `出所: ${prompt.provenance} / ` }),
-    badge(hashVerified ? "hash 検証 OK" : "hash 未検証/不一致", hashVerified ? "ok" : "warn"),
+    el("span", { text: `${provenanceLabel}${prompt.provenance} / ` }),
+    badge(hashLabel, hashVerified ? "ok" : "warn"),
   );
 
   // カラーパレット: DESIGN.md の実トークン色を優先し、無ければ slug 由来の近似へフォールバック。
-  const tokens = extractColorTokens(markdown);
-  const paletteHeading =
-    tokens.length > 0 ? "カラートークン（DESIGN.md 実値）" : "カラーパレット（近似）";
-  const paletteSwatches = tokens.length > 0 ? tokens : approxSwatchesForColor(entry.color);
+  const tokens = extractColorTokens(markdown, currentLocale);
+  const paletteHeading = tokens.length > 0 ? t.labelColorPaletteReal : t.labelColorPaletteApprox;
+  const paletteSwatches =
+    tokens.length > 0 ? tokens : approxSwatchesForColor(entry.color, currentLocale);
   detail.appendChild(
     el("section", { class: "block swatch-block" }, [
       el("div", { class: "block-head" }, [el("h3", { class: "sub-title", text: paletteHeading })]),
@@ -574,18 +712,28 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
       { class: "notices" },
       prompt.notices.map((n) => el("li", { text: n })),
     );
-    detail.appendChild(el("h3", { class: "sub-title", text: "注意 (notices)" }));
+    detail.appendChild(el("h3", { class: "sub-title", text: t.labelNotices }));
     detail.appendChild(ul);
   }
 
   detail.appendChild(
-    promptBlock("Claude system プロンプト", prompt.systemPrompt, "system プロンプトをコピー"),
+    promptBlock(
+      currentLocale === "en" ? "Claude system prompt" : "Claude system プロンプト",
+      prompt.systemPrompt,
+      currentLocale === "en" ? "Copy system prompt" : "system プロンプトをコピー",
+    ),
   );
   detail.appendChild(
-    promptBlock("Claude user プロンプト", prompt.userPrompt, "user プロンプトをコピー"),
+    promptBlock(
+      currentLocale === "en" ? "Claude user prompt" : "Claude user プロンプト",
+      prompt.userPrompt,
+      currentLocale === "en" ? "Copy user prompt" : "user プロンプトをコピー",
+    ),
   );
   // DESIGN.md 本文はツールバーでコピーできるため、ここでは本文プレビューのみ (コピー重複を避ける)。
-  detail.appendChild(previewBlock("DESIGN.md 本文", markdown));
+  detail.appendChild(
+    previewBlock(currentLocale === "en" ? "DESIGN.md Preview" : "DESIGN.md 本文", markdown),
+  );
 }
 
 /** 見出し + コピー + <pre> のブロック。 */
@@ -624,10 +772,81 @@ async function loadTaxonomy(): Promise<Taxonomy> {
   }
 }
 
+function initLocale(): void {
+  const saved = localStorage.getItem("godd_locale");
+  if (saved === "en" || saved === "ja") {
+    currentLocale = saved;
+  } else {
+    const lang = navigator.language.slice(0, 2).toLowerCase();
+    currentLocale = lang === "en" ? "en" : "ja";
+  }
+  const select = document.getElementById("locale-select") as HTMLSelectElement | null;
+  if (select) select.value = currentLocale;
+}
+
+function translateUI(): void {
+  const t = TRANSLATIONS[currentLocale];
+  if (!t) return;
+
+  document.title = t.labelHtmlTitle ?? "";
+  document.documentElement.lang = currentLocale;
+
+  const h1 = document.querySelector(".site-header h1");
+  if (h1) h1.textContent = t.siteTitle ?? "";
+  const lede = document.querySelector(".site-header .lede");
+  if (lede) lede.textContent = t.siteDesc ?? "";
+
+  const statTheo = document.getElementById("stat-label-theoretical");
+  if (statTheo) statTheo.textContent = t.statTheoreticalLabel ?? "";
+  const statTheoVal = document.getElementById("stat-value-theoretical");
+  if (statTheoVal) statTheoVal.textContent = currentLocale === "en" ? "100M+" : "1.16億件以上";
+  const statMat = document.getElementById("stat-label-materialized");
+  if (statMat) statMat.textContent = t.statMaterializedLabel ?? "";
+
+  const formTitle = document.querySelector("#search-form .section-title");
+  if (formTitle) formTitle.textContent = t.searchTitle ?? "";
+
+  const setLabelText = (id: string, text: string | undefined) => {
+    const label = document.querySelector(`label[for="${id}"]`);
+    if (label && text) label.textContent = text;
+  };
+  setLabelText("q-industry", t.labelIndustry);
+  setLabelText("q-color", t.labelColor);
+  setLabelText("q-mood", t.labelMood);
+  setLabelText("q-tags", t.labelTags);
+  setLabelText("q-text", t.labelText);
+  setLabelText("q-output-lang", t.labelOutputLang);
+
+  const setPlaceholder = (id: string, text: string | undefined) => {
+    const input = document.getElementById(id) as HTMLInputElement | null;
+    if (input && text) input.placeholder = text;
+  };
+  setPlaceholder("q-industry", t.placeholderIndustry);
+  setPlaceholder("q-color", t.placeholderColor);
+  setPlaceholder("q-mood", t.placeholderMood);
+  setPlaceholder("q-tags", t.placeholderTags);
+  setPlaceholder("q-text", t.placeholderText);
+  setPlaceholder("q-output-lang", t.placeholderOutputLang);
+
+  const hint = document.querySelector(".field-hint");
+  if (hint) hint.textContent = t.hintOutputLang ?? "";
+
+  const searchBtn = document.querySelector("#search-form button.primary");
+  if (searchBtn) searchBtn.textContent = t.btnSearch ?? "";
+  const resetBtn = document.getElementById("reset-btn");
+  if (resetBtn) resetBtn.textContent = t.btnReset ?? "";
+
+  const footerText = document.querySelector(".site-footer p");
+  if (footerText) footerText.textContent = t.footerText ?? "";
+}
+
 /** index.json を取込んで初期表示する。taxonomy.json は並行取得 (フェイルセーフ)。 */
 async function bootstrap(): Promise<void> {
+  initLocale();
+  translateUI();
+
   const status = byId("status");
-  status.textContent = "index.json を取得中…";
+  status.textContent = TRANSLATIONS[currentLocale].loadingIndex;
   // index (必須) と taxonomy (任意) を並行取得。taxonomy は失敗しても続行する。
   const taxonomyPromise = loadTaxonomy();
   try {
@@ -637,7 +856,7 @@ async function bootstrap(): Promise<void> {
     allEntries = index.entries;
   } catch (err) {
     status.className = "error";
-    status.textContent = `index.json を取得できませんでした: ${
+    status.textContent = `${TRANSLATIONS[currentLocale].errorIndex}${
       err instanceof Error ? err.message : String(err)
     }`;
     return;
@@ -676,5 +895,27 @@ function wireForm(): void {
   });
 }
 
+function wireLocaleToggle(): void {
+  const select = document.getElementById("locale-select") as HTMLSelectElement | null;
+  if (select) {
+    select.addEventListener("change", () => {
+      const val = select.value;
+      if (val === "en" || val === "ja") {
+        currentLocale = val;
+        localStorage.setItem("godd_locale", val);
+        translateUI();
+        runSearch();
+        if (selectedCellId) {
+          const entry = findEntryById(allEntries, selectedCellId);
+          if (entry) {
+            void openDetail(entry, { scroll: false });
+          }
+        }
+      }
+    });
+  }
+}
+
 wireForm();
+wireLocaleToggle();
 void bootstrap();
