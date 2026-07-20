@@ -69,7 +69,7 @@ export interface McpHandlerOptions {
    */
   runtimeFactory?: () => Promise<MatrixRuntime>;
   /**
-   * リクエストボディの最大バイト数。`Content-Length` 超過を早期に 413 で拒否する。
+   * リクエストボディの最大バイト数。宣言値と実際のストリームの双方を検査する。
    * 省略時は環境変数 {@link MAX_BODY_BYTES_ENV} / 既定 {@link DEFAULT_MAX_BODY_BYTES}。
    */
   maxBodyBytes?: number;
@@ -116,6 +116,45 @@ export const REQUEST_ID_HEADER = "x-request-id";
 interface RpcMeta {
   method?: string;
   tool?: string;
+}
+
+class RequestBodyTooLargeError extends Error {}
+
+/** Read at most maxBytes, then rebuild the request so downstream consumers can parse it normally. */
+async function enforceBodyLimit(req: Request, maxBytes: number): Promise<Request> {
+  const declared = Number.parseInt(req.headers.get("content-length") ?? "", 10);
+  if (Number.isFinite(declared) && declared > maxBytes) throw new RequestBodyTooLargeError();
+  if (!req.body) return req;
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new RequestBodyTooLargeError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new Request(req.url, {
+    method: req.method,
+    headers: req.headers,
+    body,
+  });
 }
 
 /**
@@ -207,40 +246,16 @@ export function createMcpRequestHandler(
     return provided !== null && constantTimeEqual(provided, apiKey);
   }
 
-  function bodyTooLarge(req: Request): boolean {
-    const declared = Number.parseInt(req.headers.get("content-length") ?? "", 10);
-    return Number.isFinite(declared) && declared > maxBodyBytes;
-  }
-
   return async function handleMcp(req: Request): Promise<Response> {
     const requestId = newRequestId();
     const log = logger.child({ requestId });
     const startedAt = Date.now();
     const idHeader = { [REQUEST_ID_HEADER]: requestId };
-    const meta = await peekRpcMeta(req);
-    log.info("mcp.request.start", { method: meta.method, tool: meta.tool });
-
-    if (!isAuthorized(req)) {
-      log.warn("mcp.auth.failed", {
-        status: 401,
-        durationMs: Date.now() - startedAt,
-        method: meta.method,
-        tool: meta.tool,
-      });
-      return jsonResponse(
-        {
-          jsonrpc: "2.0",
-          error: { code: -32001, message: "認証に失敗しました (x-api-key)" },
-          id: null,
-        },
-        401,
-        idHeader,
-      );
-    }
-
-    // Content-Length で早期に過大ボディを拒否する (Web 層の多層防御)。
-    // 生ストリームの実バイト制限は Node ブリッジ (node-adapter) 側でも行う。
-    if (bodyTooLarge(req)) {
+    let boundedReq: Request;
+    try {
+      boundedReq = await enforceBodyLimit(req, maxBodyBytes);
+    } catch (error) {
+      if (!(error instanceof RequestBodyTooLargeError)) throw error;
       log.warn("mcp.body.too_large", {
         status: 413,
         durationMs: Date.now() - startedAt,
@@ -260,6 +275,27 @@ export function createMcpRequestHandler(
       );
     }
 
+    const meta = await peekRpcMeta(boundedReq);
+    log.info("mcp.request.start", { method: meta.method, tool: meta.tool });
+
+    if (!isAuthorized(boundedReq)) {
+      log.warn("mcp.auth.failed", {
+        status: 401,
+        durationMs: Date.now() - startedAt,
+        method: meta.method,
+        tool: meta.tool,
+      });
+      return jsonResponse(
+        {
+          jsonrpc: "2.0",
+          error: { code: -32001, message: "認証に失敗しました (x-api-key)" },
+          id: null,
+        },
+        401,
+        idHeader,
+      );
+    }
+
     const runtime = await resolveRuntime(log);
     const server = createMatrixServer(runtime);
     // stateless: セッションを持たず、リクエスト毎に完結させる (サーバレス向け)。
@@ -269,7 +305,7 @@ export function createMcpRequestHandler(
     });
     try {
       await server.connect(transport);
-      const res = await transport.handleRequest(req);
+      const res = await transport.handleRequest(boundedReq);
       log.info("mcp.request.end", {
         method: meta.method,
         tool: meta.tool,

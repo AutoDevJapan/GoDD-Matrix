@@ -97,7 +97,36 @@ describe("DesignBodyClient.fetch", () => {
     });
     const entry = entryWith(realHash);
     const [a, b] = await Promise.all([c.fetch(entry), c.fetch(entry)]);
-    expect(a).toBe(b);
+    expect(a).toEqual(b);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("同一 path の本文を共有しても entry identity と hash 検証は呼び出しごとに分離する", async () => {
+    const fetchImpl = vi.fn(async () => new Response(markdown, { status: 200 }));
+    const c = new DesignBodyClient("https://example.test/repo/", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const mismatched = { ...entryWith(ZERO_HASH), id: "7281_h17b-lt_trustworthy_v2" };
+    const verified = { ...entryWith(realHash), id: "7281_h17b-lt_trustworthy_v1" };
+
+    const [first, second] = await Promise.all([c.fetch(mismatched), c.fetch(verified)]);
+
+    expect(first.entry).toBe(mismatched);
+    expect(first.hashVerified).toBe(false);
+    expect(second.entry).toBe(verified);
+    expect(second.hashVerified).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("同一 path の不正 hash が requireHash で失敗しても正しい entry はキャッシュ本文を検証できる", async () => {
+    const fetchImpl = vi.fn(async () => new Response(markdown, { status: 200 }));
+    const c = new DesignBodyClient("https://example.test/repo/", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      requireHash: true,
+    });
+
+    await expect(c.fetch(entryWith(ZERO_HASH))).rejects.toThrow(DesignIndexError);
+    await expect(c.fetch(entryWith(realHash))).resolves.toMatchObject({ hashVerified: true });
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 

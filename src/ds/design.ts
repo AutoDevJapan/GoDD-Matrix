@@ -2,7 +2,7 @@
  * DESIGN.md 本文 fetch クライアント (issue #3, SSOT §5)。
  * - index の {@link DesignIndexEntry.path} を base に対して解決し、本文を取得する。
  * - 取込元はローカルディレクトリ / file: / http(s) base URL。
- * - 解決済みロケーション単位でインメモリキャッシュ。
+ * - 解決済みロケーション単位で本文だけをインメモリキャッシュ。
  * - index の hash と本文 sha256 の一致を検証 (requireHash で不一致を致命化)。
  * - 未材化セル (index にエントリなし) は「未取得」として表現し、将来の
  *   Generator レンダーへフォールバックする受け口を interface で用意する
@@ -73,7 +73,12 @@ export class DesignBodyClient {
   /** path 解決の起点。 */
   readonly base: string;
   private readonly opts: DesignBodyOptions;
-  private readonly cache = new Map<string, Promise<DesignDocument>>();
+  /**
+   * A source identifies fetched bytes, not an index entry. Keep entry/hash-derived verification
+   * outside this cache so callers that reference the same source cannot inherit one another's
+   * identity or verification result.
+   */
+  private readonly bodyCache = new Map<string, Promise<string>>();
 
   constructor(base: string, opts: DesignBodyOptions = {}) {
     this.base = base;
@@ -93,30 +98,32 @@ export class DesignBodyClient {
     const source = this.resolve(entry);
     const useCache = this.opts.cache !== false;
 
-    const cached = useCache ? this.cache.get(source) : undefined;
-    if (cached) return cached;
-
-    const promise = fetchText(source, this.opts).then((markdown): DesignDocument => {
-      const hashVerified = verifyDesignHash(markdown, entry.hash);
-      if (this.opts.requireHash && !hashVerified) {
-        throw new DesignIndexError(`DESIGN.md の hash 検証に失敗しました: ${entry.id} (${source})`);
+    let bodyPromise = useCache ? this.bodyCache.get(source) : undefined;
+    if (!bodyPromise) {
+      bodyPromise = fetchText(source, this.opts);
+      if (useCache) {
+        this.bodyCache.set(source, bodyPromise);
+        bodyPromise.catch(() => {
+          // Do not let an older failed request evict a replacement installed after clearCache().
+          if (this.bodyCache.get(source) === bodyPromise) this.bodyCache.delete(source);
+        });
       }
-      return { entry, markdown, source, hashVerified };
-    });
-
-    if (useCache) {
-      this.cache.set(source, promise);
-      promise.catch(() => this.cache.delete(source));
     }
-    return promise;
+
+    const markdown = await bodyPromise;
+    const hashVerified = verifyDesignHash(markdown, entry.hash);
+    if (this.opts.requireHash && !hashVerified) {
+      throw new DesignIndexError(`DESIGN.md の hash 検証に失敗しました: ${entry.id} (${source})`);
+    }
+    return { entry, markdown, source, hashVerified };
   }
 
   /** キャッシュを破棄する (entry 指定でその1件のみ)。 */
   clearCache(entry?: DesignIndexEntry): void {
     if (entry === undefined) {
-      this.cache.clear();
+      this.bodyCache.clear();
     } else {
-      this.cache.delete(this.resolve(entry));
+      this.bodyCache.delete(this.resolve(entry));
     }
   }
 }

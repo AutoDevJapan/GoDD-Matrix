@@ -72,6 +72,17 @@ describe("validateDesignIndex", () => {
       /重複した entry id/,
     );
   });
+
+  it("異なる id でも重複 path で投げる", () => {
+    const duplicatePath = {
+      ...validEntry,
+      id: "7281_h17b-lt_trustworthy_v2",
+      variant: 2,
+    };
+    expect(() => validateDesignIndex({ version: 1, entries: [validEntry, duplicatePath] })).toThrow(
+      /重複した entry path/,
+    );
+  });
 });
 
 describe("parseDesignIndex", () => {

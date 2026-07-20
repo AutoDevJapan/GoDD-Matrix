@@ -123,12 +123,17 @@ export function validateDesignIndex(raw: unknown): DesignIndex {
 
   const entries = raw.entries.map((entry, i) => validateEntry(entry, `entries[${i}]`));
 
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
+  const seenPaths = new Set<string>();
   for (const entry of entries) {
-    if (seen.has(entry.id)) {
+    if (seenIds.has(entry.id)) {
       throw new DesignIndexError(`重複した entry id です: ${entry.id}`);
     }
-    seen.add(entry.id);
+    if (seenPaths.has(entry.path)) {
+      throw new DesignIndexError(`重複した entry path です: ${entry.path}`);
+    }
+    seenIds.add(entry.id);
+    seenPaths.add(entry.path);
   }
 
   const index: DesignIndex = { version: raw.version, entries };
