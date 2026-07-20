@@ -22,6 +22,7 @@ import {
   labelForColor,
   labelForMood,
 } from "./lib.js";
+import { renderMatchesCount } from "./matches-count.js";
 import {
   SEARCH_COLORS,
   SEARCH_STYLES,
@@ -1070,14 +1071,12 @@ function applyState(): void {
   }
 
   // Exact integer display
-  byId("matches-count-display").replaceChildren(
-    document.createTextNode(
-      totalMatches.toLocaleString(currentLocale === "ja" ? "ja-JP" : "en-US"),
-    ),
-    el("span", {
-      class: "matches-count-label",
-      text: ` ${TRANSLATIONS[currentLocale].labelMatches}`,
-    }),
+  renderMatchesCount(
+    byId("matches-count-display"),
+    document,
+    totalMatches,
+    currentLocale,
+    TRANSLATIONS[currentLocale].labelMatches,
   );
 
   // Exact sample counts matching the pagination grid display
