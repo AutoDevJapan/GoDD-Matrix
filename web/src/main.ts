@@ -7,6 +7,7 @@ import {
   EMPTY_TAXONOMY,
   type FacetSelection,
   type Locale,
+  type Page,
   type Swatch,
   type Taxonomy,
   approxSwatchesForColor,
@@ -118,7 +119,7 @@ const TOTAL_LIBRARY = 172635600;
 // Deterministic property mapping from index entries to reference facets
 function getEntryCategory(entry: DesignIndexEntry): string {
   const hash = entry.id.charCodeAt(0) % CATEGORIES.length;
-  return CATEGORIES[hash].v;
+  return CATEGORIES[hash]?.v || "";
 }
 
 function getEntryStyle(entry: DesignIndexEntry): string {
@@ -140,12 +141,12 @@ function getEntryIndustry(entry: DesignIndexEntry): string {
   if (jsic === "5811") return "ec";
   if (jsic === "7281") return "finance";
   const hash = jsic.charCodeAt(jsic.length - 1) % INDUSTRIES.length;
-  return INDUSTRIES[hash].v;
+  return INDUSTRIES[hash]?.v || "";
 }
 
 function getEntryFont(entry: DesignIndexEntry): string {
   const hash = entry.id.charCodeAt(entry.id.length - 1) % FONTS.length;
-  return FONTS[hash].v;
+  return FONTS[hash]?.v || "";
 }
 
 function getDownloadsCount(entry: DesignIndexEntry): number {
@@ -461,7 +462,7 @@ async function openDetail(entry: DesignIndexEntry, opts: { scroll?: boolean } = 
   }
 
   // Synthesize Markdown Content
-  const prompt = composePromptForCell({ entry, taxonomy });
+  const prompt = composePromptForCell({ entry, hashVerified: !isVirtual });
 
   // Combine system prompt and markdown preview
   const finalMarkdown = `${prompt.systemPrompt}\n\n${prompt.userPrompt}`;
@@ -755,7 +756,7 @@ function getFilteredList(): readonly DesignIndexEntry[] {
         item.title?.toLowerCase().includes(q) ||
         nameJa.toLowerCase().includes(q) ||
         item.jsic.toLowerCase().includes(q) ||
-        item.tags.some((t) => t.toLowerCase().includes(q));
+        (item.tags || []).some((t) => t.toLowerCase().includes(q));
       return textMatches;
     });
   }
@@ -786,15 +787,15 @@ function getFilteredList(): readonly DesignIndexEntry[] {
 
 function paginate<T>(items: readonly T[], page: number, pageSize: number): Page<T> {
   const total = items.length;
-  const totalPages = Math.ceil(total / pageSize) || 1;
-  const p = Math.max(1, Math.min(page, totalPages));
+  const pageCount = Math.ceil(total / pageSize) || 1;
+  const p = Math.max(1, Math.min(page, pageCount));
   const start = (p - 1) * pageSize;
   return {
     items: items.slice(start, start + pageSize),
     page: p,
     pageSize,
     total,
-    totalPages,
+    pageCount,
   };
 }
 
@@ -807,10 +808,10 @@ function renderPager(pg: Page<DesignIndexEntry>): void {
   prev.onclick = () => goToPage(pg.page - 1);
   pager.appendChild(prev);
 
-  pager.appendChild(el("span", { class: "pager-info", text: ` ${pg.page} / ${pg.totalPages} ` }));
+  pager.appendChild(el("span", { class: "pager-info", text: ` ${pg.page} / ${pg.pageCount} ` }));
 
   const next = el("button", { text: currentLocale === "ja" ? "次へ" : "Next" });
-  next.disabled = pg.page >= pg.totalPages;
+  next.disabled = pg.page >= pg.pageCount;
   next.onclick = () => goToPage(pg.page + 1);
   pager.appendChild(next);
 }
