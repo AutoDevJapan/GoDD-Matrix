@@ -8,7 +8,6 @@ import {
   type Locale,
   type Page,
   type Taxonomy,
-  VIRTUAL_COLOR_CATALOG,
   approxSwatchesForColor,
   colorFamily,
   composePromptForCell,
