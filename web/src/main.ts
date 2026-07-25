@@ -44,7 +44,6 @@ import { findColorValue, findStyleValue } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
 import { localizePromptPreview } from "./ui-localization.js";
 import {
-  canonicalVirtualTotal,
   decodeCatalogCursor,
   enrichWithMaterialized,
   pageVirtualCatalog,
@@ -118,8 +117,6 @@ const filters: Filters = {
   colors: [],
 };
 
-let animatedTotal = 0;
-const TOTAL_LIBRARY = canonicalVirtualTotal();
 /** Last query-bound cursor written to the URL (0-based start rank). */
 let currentCursor: string | null = null;
 /** Detail-view color overrides (original → custom hex). */
@@ -463,8 +460,6 @@ interface TranslationKeys {
   previewLabel: string;
   footerText: string;
   brandSubtitle: string;
-  heroTag: string;
-  heroSub: string;
   placeholderSearch: string;
   labelFacetCategory: string;
   labelFacetStyle: string;
@@ -513,9 +508,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     pagerLabel: "ページ送り",
     previewLabel: "プレビュー",
     footerText: "データ提供元: GoDD Design System 公開コーパス（ブラウザから取得）",
-    brandSubtitle: "1億件以上のDESIGNファイルを検索・共有",
-    heroTag: "世界最大のDESIGNファイルライブラリ",
-    heroSub: "件のDESIGN.mdファイルが検索可能",
+    brandSubtitle: "DESIGN.md を探してカスタマイズ",
     placeholderSearch: "検索例: ゲーム ミニマル ダッシュボード",
     labelFacetCategory: "カテゴリ",
     labelFacetStyle: "スタイル",
@@ -562,9 +555,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     pagerLabel: "Pagination",
     previewLabel: "Preview",
     footerText: "Data source: GoDD Design System public corpus (fetched client-side)",
-    brandSubtitle: "Search & share 100M+ DESIGN files",
-    heroTag: "World's largest DESIGN.md library",
-    heroSub: "DESIGN.md files ready to search",
+    brandSubtitle: "Find and customize DESIGN.md",
     placeholderSearch: "Search e.g. 'game minimal dashboard'",
     labelFacetCategory: "Category",
     labelFacetStyle: "Style",
@@ -637,27 +628,6 @@ function copyText(text: string, toastMsg: string): void {
     });
 }
 
-// Total Space Animate Counter
-function animateCounter(): void {
-  const target = TOTAL_LIBRARY;
-  let step = 0;
-  const steps = 26;
-  const counterEl = byId("live-total-counter");
-  const timer = setInterval(() => {
-    step++;
-    const progress = 1 - (1 - step / steps) ** 3;
-    animatedTotal = Math.min(target, Math.round(target * progress));
-    if (counterEl) {
-      counterEl.textContent = animatedTotal.toLocaleString(
-        currentLocale === "ja" ? "ja-JP" : "en-US",
-      );
-    }
-    if (step >= steps) {
-      clearInterval(timer);
-    }
-  }, 40);
-}
-
 // Dynamic UI Text Localization updates
 function translateUI(): void {
   const t = TRANSLATIONS[currentLocale];
@@ -683,8 +653,6 @@ function translateUI(): void {
   byId("label-footer").textContent = t.footerText;
 
   byId("label-brand-subtitle").textContent = t.brandSubtitle;
-  byId("label-hero-tag").textContent = t.heroTag;
-  byId("label-hero-sub").textContent = t.heroSub;
   const searchInput = byId<HTMLInputElement>("main-search-input");
   searchInput.placeholder = t.placeholderSearch;
   searchInput.setAttribute("aria-label", t.placeholderSearch);
@@ -1300,7 +1268,6 @@ async function bootstrap(): Promise<void> {
   pageSize = clampPageSize(Number.isFinite(savedPageSize) ? savedPageSize : 25);
   byId<HTMLSelectElement>("page-size-select").value = String(pageSize);
   translateUI();
-  animateCounter();
 
   // Load Data
   let indexData: ReturnType<typeof parseDesignIndex>;
