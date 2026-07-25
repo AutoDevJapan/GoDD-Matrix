@@ -921,31 +921,6 @@ function findCategoryValue(term: string): string | null {
   return null;
 }
 
-function getEntryTitle(entry: DesignIndexEntry, locale: Locale): string {
-  if (entry.title && locale === "ja") {
-    if (entry.title.startsWith("VIRTUAL DESIGN: ")) {
-      const colLabel = labelForColor(entry.color, taxonomy, "ja");
-      const mdLabel = labelForMood(entry.mood, taxonomy, "ja");
-      return `【仮想】${jsicName(entry.jsic) || entry.jsic} × ${colLabel} × ${mdLabel}`;
-    }
-    return entry.title;
-  }
-
-  const colLabel = labelForColor(entry.color, taxonomy, locale);
-  const mdLabel = labelForMood(entry.mood, taxonomy, locale);
-
-  if (locale === "en") {
-    const major = jsicMajor(entry.jsic);
-    const indName = major.label_en || jsicName(entry.jsic) || entry.jsic;
-    if (entry.id?.startsWith("virtual_") || entry.title?.startsWith("VIRTUAL DESIGN: ")) {
-      return `Virtual Design: ${indName} / ${mdLabel} / ${colLabel}`;
-    }
-    return `Design System: ${indName} / ${mdLabel} / ${colLabel}`;
-  }
-
-  return entry.title || `${jsicName(entry.jsic) || entry.jsic} × ${colLabel} × ${mdLabel}`;
-}
-
 // Apply states, filter lists, and render UI
 function applyState(): void {
   renderFilters();
@@ -1347,10 +1322,6 @@ function restoreVirtualEntry(id: string): DesignIndexEntry | undefined {
       getEntryIndustry({ jsic: axes.jsic, path: "" } as DesignIndexEntry),
     ],
   };
-}
-
-function matchColorFamily(entryColor: string, familyKey: string): boolean {
-  return colorFamily(entryColor).key === familyKey;
 }
 
 function paginate<T>(items: readonly T[], page: number, pageSize: number): Page<T> {
