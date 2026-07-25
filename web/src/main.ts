@@ -27,7 +27,6 @@ import {
   familySwatchHex,
   findEntryById,
   jsicMajor,
-  jsicName,
   labelForColor,
   labelForMood,
   listJsicMajors,
@@ -836,9 +835,7 @@ function downloadMarkdown(filename: string, content: string): void {
 function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
   const major = jsicMajor(entry.jsic);
   const industry =
-    locale === "ja"
-      ? jsicName(entry.jsic) || entry.jsic
-      : major.label_en || major.label || entry.jsic;
+    locale === "en" ? major.label_en || major.label || entry.jsic : major.label || entry.jsic;
   return buildVirtualDesign(entry, locale, {
     title: buildDirectionTitle(entry, locale, taxonomy),
     industry,
@@ -886,16 +883,16 @@ async function openDetail(
   byId("detail-title-ja").textContent = mainTitle;
   byId("detail-title-en").textContent = subTitle;
 
-  // Description text
+  // Description text — industry label matches badges/tags (major division).
+  const major = jsicMajor(entry.jsic);
   if (currentLocale === "ja") {
     byId("detail-desc-ja").textContent =
-      `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」のデザイン仕様書。`;
+      `業種コード ${entry.jsic} （${major.label || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」のデザイン仕様書。`;
     byId("detail-desc-ja").classList.remove("hidden");
     byId("detail-desc-en").classList.add("hidden");
   } else {
-    const major = jsicMajor(entry.jsic);
     byId("detail-desc-en").textContent =
-      `Design specification matching industry code ${entry.jsic} (${major.label_en || jsicName(entry.jsic) || "Unknown"}), color tone "${labelForColor(entry.color, taxonomy, "en")}", and design mood "${labelForMood(entry.mood, taxonomy, "en")}".`;
+      `Design specification matching industry code ${entry.jsic} (${major.label_en || major.label || "Unknown"}), color tone "${labelForColor(entry.color, taxonomy, "en")}", and design mood "${labelForMood(entry.mood, taxonomy, "en")}".`;
     byId("detail-desc-en").classList.remove("hidden");
     byId("detail-desc-ja").classList.add("hidden");
   }

@@ -1,6 +1,6 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { FILTER_CATEGORIES } from "./filter-taxonomy.js";
-import { type Locale, type Taxonomy, jsicMajor, jsicName, labelForMood } from "./lib.js";
+import { type Locale, type Taxonomy, jsicMajor, labelForMood } from "./lib.js";
 import { SEARCH_STYLES } from "./search-parser.js";
 
 export interface ResultTag {
@@ -84,8 +84,8 @@ export function buildEntryTags(
 ): ResultTag[] {
   const tags: ResultTag[] = [];
   const major = jsicMajor(entry.jsic);
-  const industry =
-    locale === "en" ? (major.label_en ?? major.label) : jsicName(entry.jsic) || major.label;
+  // Browse tags match facet/detail badges: major division for both locales.
+  const industry = locale === "en" ? (major.label_en ?? major.label) : major.label;
   if (industry) tags.push({ kind: "industry", label: industry });
 
   const variant = entry.variant ?? 0;

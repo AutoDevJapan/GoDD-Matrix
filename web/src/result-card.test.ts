@@ -50,6 +50,7 @@ describe("buildEntryTags", () => {
     const tags = buildEntryTags(entry, "ja");
     const labels = tags.map((t) => t.label);
     expect(tags.some((t) => t.kind === "industry" && t.label.length > 0)).toBe(true);
+    expect(labels).toContain("卸売業，小売業");
     expect(labels).toContain("バリエーション 2");
     expect(labels).not.toContain("ミニマル");
     expect(labels).not.toContain("ダッシュボード");
@@ -58,6 +59,20 @@ describe("buildEntryTags", () => {
     expect(tags.some((t) => t.kind === "mood")).toBe(false);
     expect(tags.some((t) => t.kind === "source")).toBe(false);
     expect(labels.join(" ")).not.toMatch(/材化|合成|Virtual|Pre-generated/i);
+  });
+
+  it("uses JSIC major-division labels for both JA and EN (not fine-class 本社等)", () => {
+    const hqEntry: DesignIndexEntry = {
+      ...entry,
+      id: "virtual_0100_h2v-vv_minimal_clp_sminimal_v0",
+      jsic: "0100",
+      variant: 0,
+    };
+    const ja = buildEntryTags(hqEntry, "ja");
+    const en = buildEntryTags(hqEntry, "en");
+    expect(ja.find((t) => t.kind === "industry")?.label).toBe("農業，林業");
+    expect(en.find((t) => t.kind === "industry")?.label).toBe("Agriculture and Forestry");
+    expect(ja.map((t) => t.label).join(" ")).not.toContain("本社");
   });
 
   it("dedupes identical labels", () => {
