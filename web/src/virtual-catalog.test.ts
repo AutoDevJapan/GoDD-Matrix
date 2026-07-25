@@ -23,13 +23,13 @@ import { parseVirtualPermalinkId } from "./virtual-permalink.js";
 
 describe("canonical virtual space", () => {
   it("is versioned and exceeds 100 million unique cells", () => {
-    expect(VIRTUAL_SPACE_VERSION).toBe(2);
-    expect(VIRTUAL_VARIANT_COUNT).toBe(35);
+    expect(VIRTUAL_SPACE_VERSION).toBe(3);
+    expect(VIRTUAL_VARIANT_COUNT).toBe(4000);
     expect(CANONICAL_CATEGORIES.length).toBe(16);
     expect(CANONICAL_STYLES.length).toBe(16);
     expect(CANONICAL_COLORS.length).toBeGreaterThanOrEqual(6);
     expect(CANONICAL_JSIC_CODES.length).toBeGreaterThan(1400);
-    expect(canonicalVirtualTotal()).toBeGreaterThan(100_000_000);
+    expect(canonicalVirtualTotal()).toBeGreaterThan(1_000_000_000);
     expect(canonicalVirtualTotal()).toBe(
       CANONICAL_CATEGORIES.length *
         CANONICAL_STYLES.length *

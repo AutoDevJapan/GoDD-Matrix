@@ -626,7 +626,7 @@ interface TranslationKeys {
 const TRANSLATIONS: Record<Locale, TranslationKeys> = {
   ja: {
     siteTitle: "DESIGN.md Library",
-    siteDescription: "1億件以上のDESIGNファイルを検索・共有",
+    siteDescription: "約200億件のDESIGNファイルを検索・共有",
     brandTitle: "GoDD Matrix",
     localeLabel: "言語",
     labelSidebarTitle: "フィルタ",
@@ -673,7 +673,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
   },
   en: {
     siteTitle: "DESIGN.md Library",
-    siteDescription: "Search and share more than 100 million DESIGN files",
+    siteDescription: "Search and share about 20 billion DESIGN files",
     brandTitle: "GoDD Matrix",
     localeLabel: "Language",
     labelSidebarTitle: "Filters",
@@ -1038,28 +1038,30 @@ async function openDetail(
   }
 }
 
-function appendCheckboxOption(
+/** Multi-select facet option as a badge chip (issue #92). */
+function appendBadgeOption(
   list: HTMLElement,
   options: {
     value: string;
     label: string;
-    checked: boolean;
+    selected: boolean;
     title?: string;
     onToggle: () => void;
   },
 ): void {
-  const label = el("label", { class: "facet-checkbox" });
-  if (options.title) label.title = options.title;
-  const input = document.createElement("input");
-  input.type = "checkbox";
-  input.checked = options.checked;
-  input.onchange = () => {
+  const chip = el("button", {
+    class: `facet-chip ${options.selected ? "selected" : ""}`,
+    text: options.label,
+  });
+  chip.type = "button";
+  chip.setAttribute("aria-pressed", options.selected ? "true" : "false");
+  if (options.title) chip.title = options.title;
+  chip.onclick = () => {
     options.onToggle();
     currentPage = 1;
     applyState();
   };
-  label.append(input, document.createTextNode(options.label));
-  list.appendChild(label);
+  list.appendChild(chip);
 }
 
 /** Render multi-select filter options inside accordion panels. */
@@ -1067,10 +1069,10 @@ function renderFilters(): void {
   const verticalList = byId("facet-list-verticals");
   verticalList.replaceChildren();
   for (const vertical of VERTICALS) {
-    appendCheckboxOption(verticalList, {
+    appendBadgeOption(verticalList, {
       value: vertical.v,
       label: verticalLabel(vertical.v, currentLocale),
-      checked: filters.verticals.includes(vertical.v),
+      selected: filters.verticals.includes(vertical.v),
       onToggle: () => {
         filters.verticals = toggleSelection(filters.verticals, vertical.v);
       },
@@ -1081,11 +1083,11 @@ function renderFilters(): void {
   indList.replaceChildren();
   for (const industry of INDUSTRIES) {
     const label = currentLocale === "ja" ? industry.ja : industry.en;
-    appendCheckboxOption(indList, {
+    appendBadgeOption(indList, {
       value: industry.v,
       label,
       title: `${industry.v}: ${label}`,
-      checked: filters.industries.includes(industry.v),
+      selected: filters.industries.includes(industry.v),
       onToggle: () => {
         filters.industries = toggleSelection(filters.industries, industry.v);
       },
@@ -1116,10 +1118,10 @@ function renderFilters(): void {
   const catList = byId("facet-list-category");
   catList.replaceChildren();
   for (const category of CATEGORIES) {
-    appendCheckboxOption(catList, {
+    appendBadgeOption(catList, {
       value: category.v,
       label: categoryLabel(category.v, currentLocale),
-      checked: filters.categories.includes(category.v),
+      selected: filters.categories.includes(category.v),
       onToggle: () => {
         filters.categories = toggleSelection(filters.categories, category.v);
       },
@@ -1129,10 +1131,10 @@ function renderFilters(): void {
   const styleList = byId("facet-list-style");
   styleList.replaceChildren();
   for (const style of STYLES) {
-    appendCheckboxOption(styleList, {
+    appendBadgeOption(styleList, {
       value: style.v,
       label: styleLabel(style.v, currentLocale),
-      checked: filters.styles.includes(style.v),
+      selected: filters.styles.includes(style.v),
       onToggle: () => {
         filters.styles = toggleSelection(filters.styles, style.v);
       },

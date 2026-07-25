@@ -40,7 +40,7 @@ test("browses the virtual catalog, preserves URL state, and jumps by ordinal", a
 
   await page.locator("#main-search-input").fill("dashboard minimal");
   await expect(page).toHaveURL(/q=dashboard/);
-  await expect(page).toHaveURL(/cursor=v2\./);
+  await expect(page).toHaveURL(/cursor=v3\./);
 
   await expect(page.locator("#results .card").first()).toBeVisible();
   await expect(page.locator("#results .card-title-ja").first()).not.toBeEmpty();
@@ -48,7 +48,7 @@ test("browses the virtual catalog, preserves URL state, and jumps by ordinal", a
   await page.locator("#pager-top .pager-jump").fill("500");
   await page.locator("#pager-top button", { hasText: /移動|Go/ }).click();
   await expect(page.locator("#pager-top .pager-info")).toContainText("500 /");
-  await expect(page).toHaveURL(/cursor=v2\./);
+  await expect(page).toHaveURL(/cursor=v3\./);
 
   const jumpedUrl = page.url();
   await page.goto(jumpedUrl);
