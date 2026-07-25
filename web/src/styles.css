@@ -223,7 +223,7 @@ body {
 
 .filter-sidebar {
   position: sticky;
-  top: 88px;
+  top: 72px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -231,8 +231,11 @@ body {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  max-height: calc(100vh - 120px);
-  overflow: auto;
+  max-height: calc(100vh - 88px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar-header {
@@ -268,6 +271,15 @@ body {
   border-radius: 10px;
   background: var(--bg-card);
   overflow: hidden;
+  flex-shrink: 0;
+}
+
+.filter-accordion[open] {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(52vh, 440px);
+  flex-shrink: 1;
 }
 
 .filter-accordion > summary {
@@ -275,6 +287,11 @@ body {
   cursor: pointer;
   padding: 10px 12px;
   user-select: none;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-card);
 }
 
 .filter-accordion > summary::-webkit-details-marker {
@@ -297,6 +314,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .facet-subsection {
@@ -317,6 +340,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-height: 0;
 }
 
 .facet-checkbox {
@@ -339,8 +363,8 @@ body {
 }
 
 .facet-list-scroll {
-  max-height: 180px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 2px;
 }
 
@@ -379,16 +403,25 @@ body {
     left: 0;
     z-index: 200;
     width: min(92vw, 420px);
-    height: 100vh;
-    max-height: none;
+    height: 100dvh;
+    max-height: 100dvh;
     border-radius: 0 14px 14px 0;
     transform: translateX(-105%);
     transition: transform 0.22s ease-out;
     box-shadow: 8px 0 32px rgba(15, 18, 28, 0.18);
+    overflow-y: auto;
   }
 
   .filter-sidebar.open {
     transform: translateX(0);
+  }
+
+  .filter-accordion[open] {
+    max-height: min(60dvh, 520px);
+  }
+
+  body.filter-drawer-open {
+    overflow: hidden;
   }
 
   .filter-close-btn {
