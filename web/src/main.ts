@@ -314,28 +314,150 @@ function refreshDetailColors(): void {
   }
 }
 
+/** Compact visual palette for detail-color customization. */
+const COLOR_PALETTE_PRESETS = [
+  "#ffffff",
+  "#f1f5f9",
+  "#cbd5e1",
+  "#64748b",
+  "#1e293b",
+  "#0f172a",
+  "#000000",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#84cc16",
+  "#22c55e",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#a855f7",
+  "#ec4899",
+  "#f43f5e",
+  "#78716c",
+  "#a8a29e",
+  "#fafaf9",
+  "#7c2d12",
+] as const;
+
+function closeAllColorPalettes(except?: HTMLElement): void {
+  for (const panel of document.querySelectorAll(".color-editor-palette.open")) {
+    if (except && panel === except) continue;
+    panel.classList.remove("open");
+  }
+}
+
+function applyDetailColorAt(
+  index: number,
+  hex: string,
+  targets: {
+    swatch: HTMLElement;
+    textInput: HTMLInputElement;
+    colorInput: HTMLInputElement;
+  },
+): void {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return;
+  detailColorOverrides[index] = normalized;
+  targets.swatch.style.backgroundColor = normalized;
+  targets.textInput.value = normalized;
+  targets.colorInput.value = normalized;
+  refreshDetailColors();
+}
+
 function renderColorEditor(entry: DesignIndexEntry): void {
   const editor = byId("detail-color-editor");
   editor.replaceChildren();
   const labels = currentLocale === "ja" ? ["プライマリ", "アクセント"] : ["Primary", "Accent"];
+  const customLabel = currentLocale === "ja" ? "カスタム…" : "Custom…";
+  const openLabel = currentLocale === "ja" ? "カラーパレットを開く" : "Open color palette";
+
   detailColorOverrides.forEach((hex, index) => {
+    const block = el("div", { class: "color-editor-block" });
     const row = el("div", { class: "color-editor-row" });
-    const swatch = el("div", { class: "color-editor-swatch" });
-    swatch.style.backgroundColor = hex;
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "color-editor-input";
-    input.value = hex;
-    input.setAttribute("aria-label", `${labels[index] ?? `Color ${index + 1}`} (${entry.color})`);
-    input.oninput = () => {
-      const normalized = normalizeHex(input.value);
-      if (!normalized) return;
-      detailColorOverrides[index] = normalized;
-      swatch.style.backgroundColor = normalized;
-      refreshDetailColors();
+    const label = labels[index] ?? `Color ${index + 1}`;
+
+    const swatchBtn = el("button", {
+      class: "color-editor-swatch",
+      title: openLabel,
+    });
+    swatchBtn.type = "button";
+    swatchBtn.style.backgroundColor = hex;
+    swatchBtn.setAttribute("aria-label", `${label}: ${openLabel}`);
+    swatchBtn.setAttribute("aria-expanded", "false");
+    swatchBtn.setAttribute("aria-haspopup", "dialog");
+
+    const textInput = document.createElement("input");
+    textInput.type = "text";
+    textInput.className = "color-editor-input";
+    textInput.value = hex;
+    textInput.spellcheck = false;
+    textInput.setAttribute("aria-label", `${label} (${entry.color})`);
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.className = "color-editor-native";
+    colorInput.value = normalizeHex(hex) ?? "#6366f1";
+    colorInput.setAttribute("aria-label", `${label}: ${customLabel}`);
+
+    const palette = el("div", { class: "color-editor-palette" });
+    palette.setAttribute("role", "dialog");
+    palette.setAttribute(
+      "aria-label",
+      currentLocale === "ja" ? `${label}のカラーパレット` : `${label} color palette`,
+    );
+
+    const grid = el("div", { class: "color-editor-palette-grid" });
+    for (const preset of COLOR_PALETTE_PRESETS) {
+      const chip = el("button", { class: "color-editor-preset", title: preset });
+      chip.type = "button";
+      chip.style.backgroundColor = preset;
+      chip.setAttribute("aria-label", preset);
+      chip.onclick = () => {
+        applyDetailColorAt(index, preset, { swatch: swatchBtn, textInput, colorInput });
+        closeAllColorPalettes();
+        swatchBtn.setAttribute("aria-expanded", "false");
+      };
+      grid.appendChild(chip);
+    }
+
+    const customBtn = el("button", {
+      class: "color-editor-custom-btn",
+      text: customLabel,
+    });
+    customBtn.type = "button";
+    customBtn.onclick = () => {
+      colorInput.click();
     };
-    row.append(swatch, input);
-    editor.appendChild(row);
+
+    palette.append(grid, customBtn, colorInput);
+
+    const setPaletteOpen = (open: boolean): void => {
+      if (open) closeAllColorPalettes(palette);
+      palette.classList.toggle("open", open);
+      swatchBtn.setAttribute("aria-expanded", String(open));
+    };
+
+    swatchBtn.onclick = () => {
+      setPaletteOpen(!palette.classList.contains("open"));
+    };
+
+    textInput.oninput = () => {
+      applyDetailColorAt(index, textInput.value, { swatch: swatchBtn, textInput, colorInput });
+    };
+    colorInput.oninput = () => {
+      applyDetailColorAt(index, colorInput.value, { swatch: swatchBtn, textInput, colorInput });
+    };
+    colorInput.onchange = () => {
+      applyDetailColorAt(index, colorInput.value, { swatch: swatchBtn, textInput, colorInput });
+      setPaletteOpen(false);
+    };
+
+    row.append(swatchBtn, textInput);
+    block.append(row, palette);
+    editor.appendChild(block);
   });
 }
 
@@ -1342,6 +1464,16 @@ async function bootstrap(): Promise<void> {
   byId("filter-toggle-btn").onclick = () => setFilterDrawerOpen(true);
   byId("filter-close-btn").onclick = () => setFilterDrawerOpen(false);
   byId("filter-drawer-backdrop").onclick = () => setFilterDrawerOpen(false);
+
+  document.addEventListener("pointerdown", (event) => {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (target instanceof Element && target.closest(".color-editor-block")) return;
+    closeAllColorPalettes();
+    for (const swatch of document.querySelectorAll(".color-editor-swatch[aria-expanded='true']")) {
+      swatch.setAttribute("aria-expanded", "false");
+    }
+  });
 
   byId("scroll-top-btn").onclick = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
