@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import {
   BUNDLED_COLOR_LABELS_EN,
+  BUNDLED_MOOD_LABELS_EN,
   EMPTY_SELECTION,
   EMPTY_TAXONOMY,
   type Swatch,
@@ -178,6 +179,19 @@ describe("labelForColor / labelForMood (name_ja 優先・フォールバック)"
     };
     expect(labelForColor("h2v-vv", tx, "ja")).toBe("ビビッドレッド");
     expect(labelForColor("h2v-vv", EMPTY_TAXONOMY, "ja")).toBe("ビビッドレッド");
+  });
+
+  it("locale='en' のムードも日本語へ落とさず英語 bundled へフォールバックする", () => {
+    const partial: Taxonomy = {
+      colors: {},
+      moods: { minimal: { name_ja: "極小" } }, // name_en なし
+    };
+    expect(labelForMood("minimal", partial, "en")).toBe("Minimal");
+    expect(labelForMood("trustworthy", EMPTY_TAXONOMY, "en")).toBe("Trustworthy");
+    expect(labelForMood("unknown-mood", EMPTY_TAXONOMY, "en")).toBe("unknown-mood");
+    for (const [slug, en] of Object.entries(BUNDLED_MOOD_LABELS_EN)) {
+      expect(labelForMood(slug, EMPTY_TAXONOMY, "en")).toBe(en);
+    }
   });
 
   describe("facetLabel and computeFacetGroups i18n", () => {

@@ -49,6 +49,15 @@ export const BUNDLED_COLOR_LABELS_EN: Readonly<Record<string, string>> = {
   black: "Black",
 };
 
+/** Bundled English labels for MINIMAL_MOODS (same en-fallback contract as colors). */
+export const BUNDLED_MOOD_LABELS_EN: Readonly<Record<string, string>> = {
+  trustworthy: "Trustworthy",
+  minimal: "Minimal",
+  energetic: "Energetic",
+  elegant: "Elegant",
+  playful: "Playful",
+};
+
 // ---------------------------------------------------------------------------
 // DS taxonomy.json (issue #33): ムード/カラーの機械可読な日本語名を実行時に取り込む。
 // 契約: { version, colors: { "<slug>": { name_ja, family, family_ja } },
@@ -143,13 +152,16 @@ export function labelForColor(slug: string, taxonomy?: Taxonomy, locale: Locale 
 }
 
 /**
- * ムード slug → 表示ラベル。`locale === "en"` なら taxonomy の `name_en` を最優先し、無ければ
- * `name_ja` → bundled ラベル → slug の順にフォールバックする。既定は `"ja"`（従来どおり）。
+ * ムード slug → 表示ラベル。
+ * - `ja`: taxonomy `name_ja` → Japanese bundled → slug
+ * - `en`: taxonomy `name_en` → English bundled → slug（日本語へは落とさない）
  */
 export function labelForMood(slug: string, taxonomy?: Taxonomy, locale: Locale = "ja"): string {
   const entry = taxonomy?.moods[slug];
-  const localized = locale === "en" ? (entry?.name_en ?? entry?.name_ja) : entry?.name_ja;
-  return localized ?? moodLabelBySlug.get(slug) ?? slug;
+  if (locale === "en") {
+    return entry?.name_en ?? BUNDLED_MOOD_LABELS_EN[slug] ?? slug;
+  }
+  return entry?.name_ja ?? moodLabelBySlug.get(slug) ?? slug;
 }
 
 /** カラー slug → 表示ラベル (未知 slug は slug のまま返す)。{@link labelForColor} の taxonomy 無し版。 */
