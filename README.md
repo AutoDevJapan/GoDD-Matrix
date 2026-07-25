@@ -26,6 +26,7 @@ GoDD SSOT における **item3 (選定/合成ツール)**。データフロー�
 
 - **データ取得**: 公開 Design-Systems の `index-summary.json`（raw main）を先読みし、件数・
   ファセットを `index.json` 無しで描画する (issue #88 / DS `index-paging` / ADR-0003)。
+  初回ブート中（summary 到着前）は件数を `0` と出さず「読み込み中… / Loading…」と表示する (issue #94)。
   明細の正本は GitHub Release タグ `index-pages` の `{n}.json`。Release asset はブラウザ
   CORS 非対応のため、Pages デプロイ時に同オリジンへミラー同期して取得する。シャード取得
   失敗時のみ非推奨ログ付きで `index.json` 全件へフォールバックする。`DESIGN.md` は
