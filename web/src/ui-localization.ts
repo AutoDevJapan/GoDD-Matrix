@@ -17,23 +17,36 @@ function lineValue(lines: readonly string[], prefix: string, fallback = "Not spe
   return value;
 }
 
-function localizeNotice(notice: string): string {
+/** User-facing notes: never expose materialization / synthesis jargon. */
+function localizeNotice(notice: string, locale: Locale): string | null {
   if (notice.startsWith("警告: DESIGN.md の hash 検証に失敗")) {
-    return "Warning: DESIGN.md hash verification failed; the body may not match the index.";
+    return locale === "ja"
+      ? "警告: DESIGN.md の整合性チェックに失敗しました。本文が index と一致しない可能性があります。"
+      : "Warning: DESIGN.md integrity check failed; the body may not match the index.";
   }
-  if (notice.startsWith("未材化セルのため")) {
-    return "This cell is not materialized; using the Generator-rendered fallback body.";
+  if (notice.startsWith("未材化セルのため") || notice.includes("材化品質ゲート")) {
+    return null;
   }
   if (notice.startsWith("確定 DESIGN.md 本文がありません:")) {
-    const reason = notice.slice("確定 DESIGN.md 本文がありません:".length).trim();
-    return /^[\x20-\x7e]+$/.test(reason)
-      ? `The resolved DESIGN.md body is unavailable: ${reason}`
+    return locale === "ja"
+      ? "DESIGN.md 本文を取得できませんでした。"
       : "The resolved DESIGN.md body is unavailable.";
   }
   const color = /^カラー軸は要望で未指定のため、推定 slug '(.+)' を適用しました。$/.exec(notice);
-  if (color) return `No color was requested; inferred slug '${color[1]}' is applied.`;
+  if (color) {
+    return locale === "ja"
+      ? `カラーが未指定のため、推定 slug '${color[1]}' を適用しました。`
+      : `No color was requested; inferred slug '${color[1]}' is applied.`;
+  }
   const mood = /^ムード軸は要望で未指定のため、推定 slug '(.+)' を適用しました。$/.exec(notice);
-  if (mood) return `No mood was requested; inferred slug '${mood[1]}' is applied.`;
+  if (mood) {
+    return locale === "ja"
+      ? `ムードが未指定のため、推定 slug '${mood[1]}' を適用しました。`
+      : `No mood was requested; inferred slug '${mood[1]}' is applied.`;
+  }
+  if (/材化|未材化|リアルタイム合成|materializ|synthesis/i.test(notice)) {
+    return null;
+  }
   return notice;
 }
 
@@ -46,31 +59,28 @@ function designBody(systemPrompt: string): string | undefined {
   return systemPrompt.slice(start + begin.length, finish).replace(/^\n|\n$/g, "");
 }
 
-function localizedSource(prompt: ComposedPrompt, systemLines: readonly string[]): string {
+function localizedSource(prompt: ComposedPrompt, locale: Locale): string {
   if (prompt.provenance === "materialized") {
-    const source = systemLines.find((line) => line.startsWith("材化済みセルの確定 DESIGN.md 本文"));
-    const match = /\(id: (.+), hash検証: (済|不一致)\)/.exec(source ?? "");
-    if (match) {
-      return `Resolved from materialized DESIGN.md (id: ${match[1]}, hash verification: ${match[2] === "済" ? "passed" : "failed"}).`;
-    }
-    return "Resolved from a materialized DESIGN.md.";
+    return locale === "ja" ? "DESIGN.md 本文を取得済み。" : "Resolved DESIGN.md body is available.";
   }
   if (prompt.provenance === "rendered") {
-    return "Resolved from a deterministic fallback render (not through the materialization quality gate).";
+    return locale === "ja"
+      ? "DESIGN.md 本文を生成して表示しています。"
+      : "DESIGN.md body was generated for this preview.";
   }
-  return "No resolved DESIGN.md body is available.";
+  return locale === "ja"
+    ? "DESIGN.md 本文は取得できませんでした。"
+    : "No resolved DESIGN.md body is available.";
 }
 
-/** Localize only the generated prompt shell; corpus DESIGN.md content is preserved verbatim. */
-export function localizePromptPreview(prompt: ComposedPrompt, locale: Locale): string {
-  if (locale === "ja") return `${prompt.systemPrompt}\n\n${prompt.userPrompt}`;
-
+function buildEnglishShell(prompt: ComposedPrompt): string {
   const systemLines = prompt.systemPrompt.split("\n");
   const userLines = prompt.userPrompt.split("\n");
   const body = designBody(prompt.systemPrompt);
-  const source = localizedSource(prompt, systemLines);
-  const notices =
-    prompt.notices.length > 0 ? prompt.notices.map(localizeNotice) : ["No special notes."];
+  const source = localizedSource(prompt, "en");
+  const notices = prompt.notices
+    .map((notice) => localizeNotice(notice, "en"))
+    .filter((notice): notice is string => Boolean(notice));
 
   const system = [
     "# Role",
@@ -89,7 +99,7 @@ export function localizePromptPreview(prompt: ComposedPrompt, locale: Locale): s
     source,
     "",
     "# Notes",
-    ...notices.map((notice) => `- ${notice}`),
+    ...(notices.length > 0 ? notices.map((notice) => `- ${notice}`) : ["- No special notes."]),
     "",
     "# Hard requirements",
     "- Prefer the colors, typography, spacing, radii, shadows, and mood defined in DESIGN.md. Do not invent extra tokens.",
@@ -134,4 +144,82 @@ export function localizePromptPreview(prompt: ComposedPrompt, locale: Locale): s
   ].join("\n");
 
   return `${system}\n\n${user}`;
+}
+
+function buildJapaneseShell(prompt: ComposedPrompt): string {
+  const systemLines = prompt.systemPrompt.split("\n");
+  const userLines = prompt.userPrompt.split("\n");
+  const body = designBody(prompt.systemPrompt);
+  const source = localizedSource(prompt, "ja");
+  const notices = prompt.notices
+    .map((notice) => localizeNotice(notice, "ja"))
+    .filter((notice): notice is string => Boolean(notice));
+
+  const system = [
+    "# 役割",
+    "あなたはプロダクション志向のデザインエンジニアです。確定した DESIGN.md を単一の正とし、要望に沿った実装可能な成果物を生成してください。",
+    "",
+    "# 出力言語（最優先）",
+    "ユーザー向けの文言・見出し・本文・ボタン・ラベル・プレースホルダ・エラーメッセージはすべて **日本語** で生成してください。コード識別子・技術用語・ファイルパスはそのままで構いません。",
+    "",
+    "# 確定軸 (SSOT §2)",
+    `- 業種 (JSIC 細分類): ${lineValue(systemLines, "- 業種 (JSIC 細分類):", "指定なし")}`,
+    `- カラー: ${lineValue(systemLines, "- カラー:", "指定なし")}`,
+    `- ムード: ${lineValue(systemLines, "- ムード:", "指定なし")}`,
+    `- 補助タグ: ${lineValue(systemLines, "- 補助タグ:", "なし")}`,
+    "",
+    "# 出典",
+    source,
+    "",
+    "# 注意",
+    ...(notices.length > 0 ? notices.map((notice) => `- ${notice}`) : ["- 特記事項なし。"]),
+    "",
+    "# 必須要件",
+    "- DESIGN.md で定義された色・タイポ・余白・半径・影・ムードを優先し、余分なトークンを発明しない。",
+    "- 本文にトークンがある場合はそれを正とする。",
+    "- 最初のビューポートは一つの構図として保つ。ダッシュボード以外をダッシュボード化しない。",
+    "- 各セクションは一つの目的・一つの見出し・短い補足文にする。",
+    "- ブランド／プロダクト名はナビ文言だけでなくヒーロー級のシグナルにする。",
+    "- モーションは意図的な 2〜3 箇所に限り、prefers-reduced-motion を尊重する。",
+    "- コントラスト・可読性・フォーカス可視性を保つ。",
+    "",
+    "# 禁止事項",
+    "- 汎用的な AI 見た目（紫グラデ既定、過度なグロー、ピル密集、多層装飾影、絵文字装飾）。",
+    "- ヒーロー上の浮遊バッジ／ステッカーや装飾的な統計帯。",
+    "- 操作コンテナでないカードの乱用。",
+    "- DESIGN.md を無関係なデザインシステムで置き換えること。",
+    "- 成果物にプレースホルダ文言（lorem / TODO / サンプル）を残すこと。",
+    "",
+    "# 事前チェック",
+    "- 色・書体・ムードが DESIGN.md と一致している",
+    "- 主 CTA が一つで次の行動が明確",
+    "- 最初のビューポートがモバイルでも成立する",
+    "- コントラストとキーボード操作が可能",
+    "",
+    "# 確定デザイン仕様（DESIGN.md 全文）",
+    body === undefined
+      ? "DESIGN.md 本文を読み込めませんでした。上記の確定軸を尊重し、一般原則に基づいて生成してください。"
+      : `===== DESIGN.md ここから =====\n${body}\n===== DESIGN.md ここまで =====`,
+  ].join("\n");
+
+  const user = [
+    "# 要望",
+    `- 業種: ${lineValue(userLines, "- 業種:", "指定なし")}`,
+    `- 希望カラー: ${lineValue(userLines, "- 希望カラー:", "指定なし")}`,
+    `- 希望ムード: ${lineValue(userLines, "- 希望ムード:", "指定なし")}`,
+    `- 追加タグ: ${lineValue(userLines, "- 追加タグ:", "なし")}`,
+    "- 出力言語: 日本語",
+    "",
+    "# 成果物の指示",
+    "要望と確定仕様から、実装可能なデザイン成果物を生成してください。",
+    "可能なら (1) レイアウト要約 (2) 主要コンポーネント方針 (3) トークン適用メモ (4) 実装上の注意 を含めてください。",
+    "仕様を無関係なトレンド美学で上書きしないでください。",
+  ].join("\n");
+
+  return `${system}\n\n${user}`;
+}
+
+/** Localize the prompt shell for the detail UI; never expose internal materialization jargon. */
+export function localizePromptPreview(prompt: ComposedPrompt, locale: Locale): string {
+  return locale === "ja" ? buildJapaneseShell(prompt) : buildEnglishShell(prompt);
 }
