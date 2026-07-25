@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import {
+  buildCardColorCue,
   buildDirectionTitle,
   buildEntryTags,
   clampPageSize,
@@ -79,6 +80,32 @@ describe("buildEntryTags", () => {
     const tags = buildEntryTags(entry, "ja");
     const labels = tags.map((t) => t.label);
     expect(new Set(labels).size).toBe(labels.length);
+  });
+});
+
+describe("buildCardColorCue", () => {
+  it("returns a short family label and swatch even when variant is 0", () => {
+    const base = { ...entry, variant: 0 };
+    const cue = buildCardColorCue(base, "ja");
+    expect(cue.familyKey).toBe("blue");
+    expect(cue.label).toBe("青系");
+    expect(cue.swatchHex).toMatch(/^#[0-9a-f]{6}$/i);
+    // Tags stay industry-focused — no Variant N when variant=0
+    expect(buildEntryTags(base, "ja").some((t) => t.kind === "variant")).toBe(false);
+  });
+
+  it("distinguishes adjacent popular results that differ only by color", () => {
+    const blue = buildCardColorCue({ ...entry, color: "h17b-lt", variant: 0 }, "ja");
+    const red = buildCardColorCue({ ...entry, color: "v-h03", variant: 0 }, "ja");
+    expect(blue.familyKey).not.toBe(red.familyKey);
+    expect(blue.label).not.toBe(red.label);
+    expect(blue.swatchHex.toLowerCase()).not.toBe(red.swatchHex.toLowerCase());
+  });
+
+  it("uses English family labels without putting color into the title", () => {
+    const cue = buildCardColorCue(entry, "en");
+    expect(cue.label).toBe("Blues");
+    expect(buildDirectionTitle(entry, "en").toLowerCase()).not.toContain("blue");
   });
 });
 

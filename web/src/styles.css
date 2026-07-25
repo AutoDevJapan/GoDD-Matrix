@@ -703,7 +703,7 @@ body {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  min-height: 268px;
+  min-height: 296px;
   padding: 0;
   color: inherit;
   font: inherit;
@@ -772,6 +772,32 @@ body {
 
 .card-title-en {
   display: none;
+}
+
+/* Compact color differentiator for popular-order color twins (#97). */
+.card-color-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-height: 18px;
+  max-height: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-color-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
 .card-tags {
