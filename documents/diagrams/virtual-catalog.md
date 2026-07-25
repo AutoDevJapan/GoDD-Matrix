@@ -1,6 +1,6 @@
 # Virtual Catalog (issue #71)
 
-Last updated: 2026-07-25
+Last updated: 2026-07-25 (v3 / issue #92 — variant axis restored to 4000)
 
 Versioned canonical virtual space for the Matrix static web UI. Exact filtered
 counts and page materialization are O(axis sizes), never O(total cells).

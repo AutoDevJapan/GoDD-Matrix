@@ -281,7 +281,8 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: min(52vh, 440px);
+  /* Wider panel so industry / category chips remain selectable (#92). */
+  max-height: min(72vh, 720px);
   flex-shrink: 1;
 }
 
@@ -318,11 +319,14 @@ body {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  /* Explicit cap: <details> flex height is unreliable; body must own the scroll. */
+  max-height: min(62vh, 640px);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .facet-subsection {
@@ -339,11 +343,12 @@ body {
   letter-spacing: 0.04em;
 }
 
-.facet-list-checkboxes {
+.facet-list-badges {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
   min-height: 0;
+  align-content: flex-start;
 }
 
 .facet-checkbox {
@@ -420,7 +425,11 @@ body {
   }
 
   .filter-accordion[open] {
-    max-height: min(60dvh, 520px);
+    max-height: min(78dvh, 760px);
+  }
+
+  .filter-accordion-body {
+    max-height: min(68dvh, 680px);
   }
 
   body.filter-drawer-open {
@@ -511,6 +520,8 @@ body {
   cursor: pointer;
   font-family: inherit;
   transition: var(--transition);
+  text-align: left;
+  line-height: 1.25;
 }
 
 .facet-chip:hover {

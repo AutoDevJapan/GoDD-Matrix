@@ -16,8 +16,12 @@ export interface VirtualPermalinkCatalog {
 }
 
 const SLUG = "[a-z0-9][a-z0-9-]*";
-/** Inclusive max variant; keep product of axes above 100M after category/style expansion. */
-export const MAX_VIRTUAL_VARIANT = 34;
+/**
+ * Inclusive max variant (count = MAX + 1).
+ * Restored to 3999 (#92) after #77 shrank the space to 34 and dropped cardinality
+ * from ~19.6B back near the 100M floor.
+ */
+export const MAX_VIRTUAL_VARIANT = 3999;
 const VIRTUAL_ID = new RegExp(
   `^virtual_([0-9]{4})_(${SLUG})_(${SLUG})_c(${SLUG})_s(${SLUG})_v(0|[1-9][0-9]*)$`,
 );

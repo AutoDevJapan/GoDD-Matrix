@@ -27,7 +27,7 @@ import {
 } from "./virtual-permalink.js";
 
 /** Bump when axis membership or mixed-radix digit order changes. */
-export const VIRTUAL_SPACE_VERSION = 2 as const;
+export const VIRTUAL_SPACE_VERSION = 3 as const;
 
 /** Inclusive max variant; count is MAX_VIRTUAL_VARIANT + 1. */
 export const VIRTUAL_VARIANT_COUNT = MAX_VIRTUAL_VARIANT + 1;
@@ -94,7 +94,7 @@ function assertSafeProduct(factors: readonly number[]): number {
   return total;
 }
 
-/** Full canonical cardinality (must stay above 100 million for issue #71). */
+/** Full canonical cardinality (must stay far above 100 million for issues #71 / #92). */
 export function canonicalVirtualTotal(): number {
   return assertSafeProduct([
     CANONICAL_CATEGORIES.length,
