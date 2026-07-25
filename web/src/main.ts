@@ -1,5 +1,6 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
+import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
 import {
   COLOR_FAMILIES,
@@ -116,29 +117,28 @@ const TOTAL_LIBRARY = canonicalVirtualTotal();
 /** Last query-bound cursor written to the URL (0-based start rank). */
 let currentCursor: string | null = null;
 
-// Deterministic property mapping from index entries to reference facets
+// Deterministic property mapping from index entries to reference facets.
+// Prefer published `canonicalCellId` (#272); keep legacy heuristics for older index rows.
 function getEntryCategory(entry: DesignIndexEntry): string {
-  if (entry.id?.startsWith("virtual_")) {
-    return entry.tags?.[0] || "";
-  }
-  const hash = (entry.id || "").charCodeAt(0) % CATEGORIES.length;
-  return CATEGORIES[hash]?.v || "";
+  return categoryFromEntry(entry, () => {
+    const hash = (entry.id || "").charCodeAt(0) % CATEGORIES.length;
+    return CATEGORIES[hash]?.v || "";
+  });
 }
 
 function getEntryStyle(entry: DesignIndexEntry): string {
-  if (entry.id?.startsWith("virtual_")) {
-    return entry.tags?.[1] || "";
-  }
-  const mood = entry.mood;
-  if (mood === "minimal") return "minimal";
-  if (mood === "elegant") return "glass";
-  if (mood === "bold") return "brutalist";
-  if (mood === "brutalist") return "brutalist";
-  if (mood === "tech") return "dark";
-  if (mood === "organic") return "playful";
-  if (mood === "warm") return "neu";
-  if (mood === "vintage") return "retro";
-  return "minimal";
+  return styleFromEntry(entry, () => {
+    const mood = entry.mood;
+    if (mood === "minimal") return "minimal";
+    if (mood === "elegant") return "glass";
+    if (mood === "bold") return "brutalist";
+    if (mood === "brutalist") return "brutalist";
+    if (mood === "tech") return "dark";
+    if (mood === "organic") return "playful";
+    if (mood === "warm") return "neu";
+    if (mood === "vintage") return "retro";
+    return "minimal";
+  });
 }
 
 function getEntryMajor(entry: DesignIndexEntry): string {

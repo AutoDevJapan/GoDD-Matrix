@@ -193,4 +193,37 @@ describe("addressability and materialized overlay", () => {
     expect(enriched.hash).toBe("sha256:abc");
     expect(enriched.path).toBe(materialized[0]?.path);
   });
+
+  it("overlays only the canonicalCellId slot when coordinates are published", () => {
+    const intended = entryFromVirtualAxes({
+      jsic: "6061",
+      color: "white",
+      mood: "minimal",
+      category: "admin",
+      style: "minimal",
+      variant: 0,
+    });
+    const otherSlot = entryFromVirtualAxes({
+      jsic: "6061",
+      color: "white",
+      mood: "minimal",
+      category: "dashboard",
+      style: "minimal",
+      variant: 0,
+    });
+    const materialized = [
+      {
+        id: "6061_white_minimal",
+        path: "design-md/6061/white/minimal/DESIGN.md",
+        jsic: "6061",
+        color: "white",
+        mood: "minimal",
+        hash: "sha256:abc",
+        createdAt: "2026-07-21T00:00:00Z",
+        canonicalCellId: "v1:virtual_6061_white_minimal_cadmin_sminimal_v0",
+      },
+    ];
+    expect(enrichWithMaterialized(intended, materialized).hash).toBe("sha256:abc");
+    expect(enrichWithMaterialized(otherSlot, materialized).hash).toBe("");
+  });
 });

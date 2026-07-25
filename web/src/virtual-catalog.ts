@@ -8,6 +8,7 @@
 import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
 import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
+import { parseCanonicalCellId } from "./catalog-coordinates.js";
 import {
   type Locale,
   VIRTUAL_COLOR_CATALOG,
@@ -294,24 +295,45 @@ export function entryFromVirtualAxes(axes: {
   };
 }
 
-/** Prefer materialized path/hash when the same jsic×color×mood exists in the index. */
+/** Prefer materialized path/hash for the intended catalog slot (#272). */
 export function enrichWithMaterialized(
   entry: DesignIndexEntry,
   materialized: readonly DesignIndexEntry[],
 ): DesignIndexEntry {
-  const hit = materialized.find(
-    (item) =>
-      Boolean(item.hash) &&
-      item.jsic === entry.jsic &&
-      item.color === entry.color &&
-      item.mood === entry.mood,
-  );
+  // Published canonicalCellId pins the exact virtual slot (category/style inclusive).
+  const byCanonical = materialized.find((item) => {
+    if (!item.hash || !item.canonicalCellId) return false;
+    const coords = parseCanonicalCellId(item.canonicalCellId);
+    if (!coords) return false;
+    return (
+      buildVirtualPermalinkId({
+        jsic: coords.jsic,
+        color: coords.color,
+        mood: coords.mood,
+        category: coords.category,
+        style: coords.style,
+        variant: coords.variant,
+      }) === entry.id
+    );
+  });
+  // Legacy rows without coordinates: keep jsic×color×mood overlay.
+  const hit =
+    byCanonical ??
+    materialized.find(
+      (item) =>
+        Boolean(item.hash) &&
+        !item.canonicalCellId &&
+        item.jsic === entry.jsic &&
+        item.color === entry.color &&
+        item.mood === entry.mood,
+    );
   if (!hit) return entry;
   return {
     ...entry,
     path: hit.path,
     hash: hit.hash,
     createdAt: hit.createdAt ?? entry.createdAt,
+    ...(hit.canonicalCellId === undefined ? {} : { canonicalCellId: hit.canonicalCellId }),
   };
 }
 

@@ -18,6 +18,8 @@ const ID = /^[0-9]{4}_[a-z0-9]+(-[a-z0-9]+)*_[a-z0-9]+(-[a-z0-9]+)*(_v[1-9][0-9]
 const ENTRY_PATH =
   /^design-md\/[0-9]{4}\/[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*(\/v[1-9][0-9]*)?\/DESIGN\.md$/;
 const HASH = /^sha256:[0-9a-f]{64}$/;
+const CANONICAL_CELL_ID =
+  /^v[1-9][0-9]*:virtual_[0-9]{4}_[a-z0-9]+(-[a-z0-9]+)*_[a-z0-9]+(-[a-z0-9]+)*_c[a-z0-9]+(-[a-z0-9]+)*_s[a-z0-9]+(-[a-z0-9]+)*_v(0|[1-9][0-9]*)$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -102,6 +104,10 @@ function validateEntry(raw: unknown, where: string): DesignIndexEntry {
 
   const license = optionalString(raw, "license", where);
   if (license !== undefined) entry.license = license;
+
+  if (raw.canonicalCellId !== undefined) {
+    entry.canonicalCellId = requireString(raw, "canonicalCellId", where, CANONICAL_CELL_ID);
+  }
 
   return entry;
 }
