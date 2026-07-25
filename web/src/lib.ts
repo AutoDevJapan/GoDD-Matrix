@@ -28,6 +28,27 @@ const jsicNameByCode = new Map(JSIC_SUBCLASSES.map((e) => [e.code, e.name]));
 const colorLabelBySlug = new Map(MINIMAL_COLORS.map((e) => [e.slug, e.label]));
 const moodLabelBySlug = new Map(MINIMAL_MOODS.map((e) => [e.slug, e.label]));
 
+/**
+ * Bundled English labels for virtual-catalog representatives (+ MINIMAL_COLORS).
+ * Used when taxonomy `name_en` is missing so English UI never falls back to Japanese.
+ * (issue #85)
+ */
+export const BUNDLED_COLOR_LABELS_EN: Readonly<Record<string, string>> = {
+  "h2v-vv": "Vivid red",
+  "h5b-sf": "Soft orange",
+  "h8b-lt": "Light yellow",
+  "h11b-sf": "Soft yellow-green",
+  "h12s-sf": "Soft green",
+  "h15b-lt": "Light blue-green",
+  "h17b-lt": "Light blue",
+  "h19b-sf": "Soft blue-purple",
+  "h21b-lt": "Light purple",
+  "h23b-sf": "Soft red-purple",
+  white: "White",
+  "gray-3": "Gray",
+  black: "Black",
+};
+
 // ---------------------------------------------------------------------------
 // DS taxonomy.json (issue #33): ムード/カラーの機械可読な日本語名を実行時に取り込む。
 // 契約: { version, colors: { "<slug>": { name_ja, family, family_ja } },
@@ -109,14 +130,16 @@ export function jsicName(code: string): string {
 }
 
 /**
- * カラー slug → 表示ラベル。`locale === "en"` なら taxonomy の `name_en` を最優先し、無ければ
- * `name_ja` → bundled ラベル → slug の順にフォールバックする。既定は `"ja"`（従来どおり）。
- * 英語データが無い slug（未達 taxonomy 等）でも必ず何か表示できる。
+ * カラー slug → 表示ラベル。
+ * - `ja`: taxonomy `name_ja` → Japanese bundled → slug
+ * - `en`: taxonomy `name_en` → English bundled → slug（日本語へは落とさない, issue #85）
  */
 export function labelForColor(slug: string, taxonomy?: Taxonomy, locale: Locale = "ja"): string {
   const entry = taxonomy?.colors[slug];
-  const localized = locale === "en" ? (entry?.name_en ?? entry?.name_ja) : entry?.name_ja;
-  return localized ?? colorLabelBySlug.get(slug) ?? slug;
+  if (locale === "en") {
+    return entry?.name_en ?? BUNDLED_COLOR_LABELS_EN[slug] ?? slug;
+  }
+  return entry?.name_ja ?? colorLabelBySlug.get(slug) ?? slug;
 }
 
 /**

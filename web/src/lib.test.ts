@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import {
+  BUNDLED_COLOR_LABELS_EN,
   EMPTY_SELECTION,
   EMPTY_TAXONOMY,
   type Swatch,
   type Taxonomy,
+  VIRTUAL_COLOR_CATALOG,
   approxSwatchesForColor,
   buildCellPermalink,
   colorFamily,
@@ -146,14 +148,36 @@ describe("labelForColor / labelForMood (name_ja 優先・フォールバック)"
     expect(labelForColor("b-h01", en)).toBe("赤紫みの赤");
   });
 
-  it("locale='en' で name_en が無ければ name_ja → bundled → slug へフォールバック", () => {
+  it("locale='en' で name_en が無ければ英語 bundled → slug へフォールバック（日本語は出さない）", () => {
     const partial: Taxonomy = {
       colors: { "h17b-lt": { name_ja: "空色" } }, // name_en なし
       moods: {},
     };
-    expect(labelForColor("h17b-lt", partial, "en")).toBe("空色"); // name_ja へ
-    expect(labelForColor("white", partial, "en")).toBe("ホワイト"); // bundled へ
-    expect(labelForMood("unknown", partial, "en")).toBe("unknown"); // slug へ
+    // name_ja があっても英語 UI では使わない
+    expect(labelForColor("h17b-lt", partial, "en")).toBe("Light blue");
+    expect(labelForColor("white", partial, "en")).toBe("White");
+    expect(labelForColor("h2v-vv", partial, "en")).toBe("Vivid red");
+    expect(labelForColor("h99z-xx", partial, "en")).toBe("h99z-xx"); // slug へ
+    expect(labelForMood("unknown", partial, "en")).toBe("unknown");
+  });
+
+  it("仮想カタログ代表色はすべて英語 bundled ラベルを持つ", () => {
+    for (const slug of VIRTUAL_COLOR_CATALOG) {
+      expect(BUNDLED_COLOR_LABELS_EN[slug], `missing EN label for ${slug}`).toBeTruthy();
+      expect(labelForColor(slug, EMPTY_TAXONOMY, "en")).toBe(BUNDLED_COLOR_LABELS_EN[slug]);
+      // JA は従来どおり（taxonomy 無し時は Japanese bundled or slug）
+      const ja = labelForColor(slug, EMPTY_TAXONOMY, "ja");
+      expect(ja).not.toBe(BUNDLED_COLOR_LABELS_EN[slug]);
+    }
+  });
+
+  it("locale='ja' は name_en があっても name_ja / Japanese bundled を使う", () => {
+    const tx: Taxonomy = {
+      colors: { "h2v-vv": { name_ja: "ビビッドレッド", name_en: "Vivid red" } },
+      moods: {},
+    };
+    expect(labelForColor("h2v-vv", tx, "ja")).toBe("ビビッドレッド");
+    expect(labelForColor("h2v-vv", EMPTY_TAXONOMY, "ja")).toBe("ビビッドレッド");
   });
 
   describe("facetLabel and computeFacetGroups i18n", () => {
