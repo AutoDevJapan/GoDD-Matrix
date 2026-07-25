@@ -7,25 +7,27 @@ import {
 } from "./catalog-url-state.js";
 
 describe("catalog URL state", () => {
-  it("round-trips search, filters, sort, and cursor", () => {
+  it("round-trips search, multi-filters, sort, and cursor", () => {
     const state = {
       q: "dashboard minimal",
-      category: "dashboard",
-      style: "minimal",
-      industry: "saas",
-      color: "indigo",
+      categories: ["dashboard", "saas"],
+      styles: ["minimal", "tech"],
+      industries: ["G", "I"],
+      verticals: ["game-dev"],
+      colors: ["blue", "neutral"],
       sort: "newest" as const,
-      cursor: "v1.abcd1234.2400",
+      cursor: "v2.abcd1234.2400",
       cell: null,
     };
     const search = buildCatalogUrlSearch(state);
     expect(search).toContain("q=dashboard");
     expect(search).toContain("cat=dashboard");
     expect(search).toContain("style=minimal");
-    expect(search).toContain("ind=saas");
-    expect(search).toContain("color=indigo");
+    expect(search).toContain("ind=G");
+    expect(search).toContain("job=game-dev");
+    expect(search).toContain("color=blue");
     expect(search).toContain("sort=newest");
-    expect(search).toContain("cursor=v1.abcd1234.2400");
+    expect(search).toContain("cursor=v2.abcd1234.2400");
     expect(parseCatalogUrlState(search)).toEqual(state);
   });
 

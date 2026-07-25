@@ -1,4 +1,5 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
+import { FILTER_CATEGORIES } from "./filter-taxonomy.js";
 import {
   type Locale,
   type Taxonomy,
@@ -12,20 +13,13 @@ import {
 import { SEARCH_STYLES } from "./search-parser.js";
 
 export interface ResultTag {
-  readonly kind: "industry" | "color" | "mood" | "category" | "style" | "variant" | "source";
+  readonly kind: "industry" | "color" | "mood" | "category" | "style" | "variant";
   readonly label: string;
 }
 
-const CATEGORY_LABELS: Readonly<Record<string, { ja: string; en: string }>> = {
-  lp: { ja: "ランディングページ", en: "Landing Page" },
-  dashboard: { ja: "ダッシュボード", en: "Dashboard" },
-  mobile: { ja: "モバイルアプリ", en: "Mobile App" },
-  portfolio: { ja: "ポートフォリオ", en: "Portfolio" },
-  ecommerce: { ja: "ECサイト", en: "E-commerce" },
-  admin: { ja: "管理画面", en: "Admin Panel" },
-  blog: { ja: "ブログ", en: "Blog" },
-  form: { ja: "フォーム", en: "Form" },
-};
+const CATEGORY_LABELS: Readonly<Record<string, { ja: string; en: string }>> = Object.fromEntries(
+  FILTER_CATEGORIES.map((item) => [item.v, { ja: item.ja, en: item.en }]),
+);
 
 const STYLE_LABELS: Readonly<Record<string, { ja: string; en: string }>> = Object.fromEntries(
   SEARCH_STYLES.map((style) => [style.v, { ja: style.ja, en: style.en }]),
@@ -78,10 +72,6 @@ export function buildEntryTags(
   entry: DesignIndexEntry,
   locale: Locale,
   taxonomy?: Taxonomy,
-  options: { materializedLabel: string; virtualLabel: string } = {
-    materializedLabel: "OSS 材化済み",
-    virtualLabel: "リアルタイム合成",
-  },
 ): ResultTag[] {
   const tags: ResultTag[] = [];
   const major = jsicMajor(entry.jsic);
@@ -112,12 +102,6 @@ export function buildEntryTags(
     });
   }
 
-  const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
-  tags.push({
-    kind: "source",
-    label: isVirtual ? options.virtualLabel : options.materializedLabel,
-  });
-
   return tags;
 }
 
@@ -139,7 +123,6 @@ export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
 export function clampPageSize(value: number): PageSizeOption {
   const n = Math.floor(value);
   if (PAGE_SIZE_OPTIONS.includes(n as PageSizeOption)) return n as PageSizeOption;
-  // 10〜1000 の範囲で最も近い許可値へ
   let best: PageSizeOption = 25;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const option of PAGE_SIZE_OPTIONS) {

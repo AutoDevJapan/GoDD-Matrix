@@ -8,13 +8,13 @@ materialized index.
 
 ## Canonical space (versioned)
 
-- **Version**: `VIRTUAL_SPACE_VERSION = 1` (bump when axis membership or rank digit order changes)
+- **Version**: `VIRTUAL_SPACE_VERSION = 2` (bump when axis membership or rank digit order changes)
 - **Axes** (stable order):
-  1. category (8)
-  2. style (8, maps 1:1 to mood)
+  1. category (16 — see `web/src/filter-taxonomy.ts`)
+  2. style (16, maps to mood via `resolveMoodSlug`)
   3. JSIC fine class (sorted catalog codes)
   4. color (`VIRTUAL_COLOR_CATALOG` — one representative slug per color family + neutrals)
-  5. variant (`0 … MAX_VIRTUAL_VARIANT`, count = 4000)
+  5. variant (`0 … MAX_VIRTUAL_VARIANT`, count = 35)
 - **Cardinality**: product of axis sizes (must remain **> 100,000,000**)
 - **Identity**: `virtual_{jsic}_{color}_{mood}_c{category}_s{style}_v{variant}`
 

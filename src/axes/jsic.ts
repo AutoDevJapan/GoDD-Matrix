@@ -153,6 +153,16 @@ export const JSIC_OVERLAY: Readonly<
     aliases: ["カフェ"],
     keywords: ["カフェ", "喫茶", "coffee", "cafe"],
   },
+  // ゲームソフトウェア業
+  "3914": {
+    aliases: ["ゲーム開発", "ゲームソフト業", "ゲームソフトウェア業"],
+    keywords: ["ゲーム", "ゲーム開発", "ゲームソフト", "game", "gaming", "gamedev"],
+  },
+  // ゲームセンター
+  "8065": {
+    aliases: ["アミューズメント", "ゲームセンター"],
+    keywords: ["ゲーム", "ゲームセンター", "アミューズメント", "arcade", "amusement"],
+  },
 };
 
 /** DS 細分類 + overlay をマージして {@link JsicEntry} 群を構築する。 */

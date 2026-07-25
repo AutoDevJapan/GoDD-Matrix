@@ -45,7 +45,8 @@ describe("buildEntryTags", () => {
     expect(labels).toContain("ミニマル");
     expect(labels).toContain("ライトブルー");
     expect(labels).toContain("バリエーション 2");
-    expect(tags.some((t) => t.kind === "source")).toBe(true);
+    expect(tags.some((t) => t.kind === "source")).toBe(false);
+    expect(labels.join(" ")).not.toMatch(/材化|合成|Virtual|Pre-generated/i);
   });
 });
 
