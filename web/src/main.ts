@@ -2,6 +2,7 @@ import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
 import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
+import { resolveDetailColorOverrides } from "./detail-color-state.js";
 import {
   FILTER_CATEGORIES,
   FILTER_STYLES,
@@ -837,7 +838,7 @@ function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
 // Render the detailed view of a resolved specification
 async function openDetail(
   entry: DesignIndexEntry,
-  opts: { scroll?: boolean; focus?: boolean } = {},
+  opts: { scroll?: boolean; focus?: boolean; preserveColors?: boolean } = {},
 ): Promise<void> {
   const requestId = ++detailRequestId;
   selectedEntry = entry;
@@ -887,7 +888,12 @@ async function openDetail(
   }
 
   detailBaseSwatches = getSwatchHexes(entry);
-  detailColorOverrides = [...detailBaseSwatches];
+  // Locale re-render must keep user-selected colors; only reset on fresh open.
+  detailColorOverrides = resolveDetailColorOverrides(
+    detailBaseSwatches,
+    detailColorOverrides,
+    opts.preserveColors,
+  );
   renderColorEditor(entry);
 
   // Draw metadata badges
@@ -1413,7 +1419,13 @@ async function bootstrap(): Promise<void> {
     localStorage.setItem("godd_locale", val);
     translateUI();
     applyState();
-    if (selectedEntry) void openDetail(selectedEntry, { scroll: false, focus: false });
+    if (selectedEntry) {
+      void openDetail(selectedEntry, {
+        scroll: false,
+        focus: false,
+        preserveColors: true,
+      });
+    }
   };
 
   byId("page-size-select").onchange = (e) => {
