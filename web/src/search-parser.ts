@@ -1,4 +1,11 @@
-import { type Taxonomy, colorFamily } from "./lib.js";
+import {
+  COLOR_FAMILIES,
+  type Taxonomy,
+  colorFamily,
+  expandColorFilter,
+  facetLabel,
+  isColorFamilyKey,
+} from "./lib.js";
 
 export const SEARCH_STYLES = [
   { v: "minimal", ja: "ミニマル", en: "Minimal" },
@@ -11,19 +18,46 @@ export const SEARCH_STYLES = [
   { v: "playful", ja: "プレイフル", en: "Playful" },
 ] as const;
 
-export const SEARCH_COLORS = [
-  { hex: "#6366f1", name: "Indigo / インディゴ", slug: "indigo" },
-  { hex: "#0ea5e9", name: "Sky / スカイ", slug: "light-blue" },
-  { hex: "#10b981", name: "Emerald / エメラルド", slug: "green" },
-  { hex: "#f59e0b", name: "Amber / アンバー", slug: "yellow" },
-  { hex: "#f43f5e", name: "Rose / ローズ", slug: "orange" },
-  { hex: "#8b5cf6", name: "Violet / バイオレット", slug: "blue" },
-  { hex: "#64748b", name: "Slate / スレート", slug: "warm-gray" },
-  { hex: "#0f172a", name: "Ink / インク", slug: "black" },
-] as const;
+/** 旧パレット slug / 別名 → 色合い（系統）キー。 */
+const PALETTE_TO_FAMILY: Readonly<Record<string, string>> = {
+  indigo: "blue",
+  インディゴ: "blue",
+  "light-blue": "blue",
+  lightblue: "blue",
+  sky: "blue",
+  スカイ: "blue",
+  水色: "blue",
+  青: "blue",
+  green: "green",
+  emerald: "green",
+  エメラルド: "green",
+  緑: "green",
+  yellow: "yellow",
+  amber: "yellow",
+  アンバー: "yellow",
+  黄: "yellow",
+  orange: "orange",
+  rose: "red",
+  ローズ: "red",
+  red: "red",
+  赤: "red",
+  blue: "blue",
+  violet: "purple",
+  バイオレット: "purple",
+  purple: "purple",
+  紫: "purple",
+  "warm-gray": "neutral",
+  slate: "neutral",
+  スレート: "neutral",
+  gray: "neutral",
+  grey: "neutral",
+  black: "neutral",
+  ink: "neutral",
+  インク: "neutral",
+  white: "neutral",
+};
 
 type StyleKey = (typeof SEARCH_STYLES)[number]["v"];
-type ColorKey = (typeof SEARCH_COLORS)[number]["slug"];
 
 const STYLE_TAXONOMY_MAP: Readonly<Record<string, StyleKey>> = {
   vintage: "retro",
@@ -31,14 +65,6 @@ const STYLE_TAXONOMY_MAP: Readonly<Record<string, StyleKey>> = {
   tech: "dark",
   warm: "neu",
   organic: "playful",
-};
-
-const COLOR_TAXONOMY_MAP: Readonly<Record<string, ColorKey>> = {
-  "h17b-lt": "indigo",
-  "h12s-sf": "green",
-  "gray-3": "yellow",
-  "h2v-vv": "orange",
-  black: "black",
 };
 
 /** Resolve a free-text style/mood term to the UI style key. */
@@ -68,20 +94,33 @@ export function findStyleValue(term: string, taxonomy?: Taxonomy): string | null
   return null;
 }
 
-/** Resolve a free-text color term to the UI palette key. */
+/** Resolve a free-text color term to a color-family key (色合い). */
 export function findColorValue(term: string, taxonomy?: Taxonomy): string | null {
   const normalized = term.toLowerCase().trim();
   if (!normalized) return null;
 
-  for (const color of SEARCH_COLORS) {
-    if (
-      color.slug === normalized ||
-      color.name.toLowerCase().includes(normalized) ||
-      color.slug.replace("-", "").toLowerCase().includes(normalized)
-    ) {
-      return color.slug;
+  const alias = PALETTE_TO_FAMILY[normalized] ?? PALETTE_TO_FAMILY[normalized.replace(/\s+/g, "-")];
+  if (alias) return alias;
+
+  // Exact family key / label first, then substring (prefer shorter keys like green over yellowgreen).
+  for (const family of COLOR_FAMILIES) {
+    const ja = facetLabel("color", family.key, taxonomy, "ja").toLowerCase();
+    const en = facetLabel("color", family.key, taxonomy, "en").toLowerCase();
+    if (family.key === normalized || ja === normalized || en === normalized) {
+      return family.key;
     }
   }
+  const substringHits = COLOR_FAMILIES.filter((family) => {
+    const ja = facetLabel("color", family.key, taxonomy, "ja").toLowerCase();
+    const en = facetLabel("color", family.key, taxonomy, "en").toLowerCase();
+    return (
+      ja.includes(normalized) ||
+      en.includes(normalized) ||
+      normalized.includes(family.key) ||
+      family.key.includes(normalized)
+    );
+  }).sort((a, b) => a.key.length - b.key.length);
+  if (substringHits[0]) return substringHits[0].key;
 
   for (const [slug, item] of Object.entries(taxonomy?.colors ?? {})) {
     if (
@@ -92,9 +131,16 @@ export function findColorValue(term: string, taxonomy?: Taxonomy): string | null
       item.family_ja?.toLowerCase().includes(normalized) ||
       item.family_en?.toLowerCase().includes(normalized)
     ) {
-      return COLOR_TAXONOMY_MAP[slug] ?? slug;
+      if (item.family && isColorFamilyKey(item.family)) return item.family;
+      return colorFamily(slug).key;
     }
   }
+
+  // 旧パレット表示名の部分一致（Indigo / スカイ など）
+  for (const [key, family] of Object.entries(PALETTE_TO_FAMILY)) {
+    if (normalized.includes(key) || key.includes(normalized)) return family;
+  }
+
   return null;
 }
 
@@ -114,16 +160,12 @@ export function resolveMoodSlug(style: string): string {
   return STYLE_TO_MOOD[style as StyleKey] ?? style;
 }
 
-/** Convert a UI color key or dynamically matched taxonomy slug into concrete taxonomy colors. */
+/**
+ * 色合いキー（または具体 slug）を仮想/材化カタログの具体色 slug 群へ展開する。
+ * 系統フィルタで 0 件やグレー偏りにならないことが契約。
+ */
 export function resolveColorSlugs(color: string, taxonomy?: Taxonomy): string[] {
-  if (taxonomy?.colors[color]) return [color];
-
-  const family = colorFamily(color).key;
-  if (family === "blue" || family === "bluepurple" || family === "purple") return ["h17b-lt"];
-  if (family === "green" || family === "yellowgreen" || family === "bluegreen") return ["h12s-sf"];
-  if (family === "yellow") return ["gray-3"];
-  if (family === "red" || family === "orange" || family === "redpurple") return ["h2v-vv"];
-  if (color.includes("white") || color.includes("lt")) return ["white"];
-  if (color.includes("black") || color.includes("dk")) return ["black"];
-  return ["gray-3"];
+  const family = PALETTE_TO_FAMILY[color] ?? (isColorFamilyKey(color) ? color : null);
+  if (family) return expandColorFilter(family, undefined, taxonomy);
+  return expandColorFilter(color, undefined, taxonomy);
 }

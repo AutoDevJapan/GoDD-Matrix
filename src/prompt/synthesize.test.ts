@@ -45,6 +45,9 @@ describe("synthesizePrompt (材化済み)", () => {
     expect(out.hasDesignBody).toBe(true);
     // 必須要素
     expect(out.systemPrompt).toContain("# 役割");
+    expect(out.systemPrompt).toContain("# 遵守事項 (必須)");
+    expect(out.systemPrompt).toContain("# 禁止事項");
+    expect(out.systemPrompt).toContain("# 出力前チェック");
     expect(out.systemPrompt).toContain("# 確定軸 (SSOT §2)");
     expect(out.systemPrompt).toContain("業種 (JSIC 細分類): 7281");
     expect(out.systemPrompt).toContain("カラー: h17b-lt");
@@ -64,6 +67,7 @@ describe("synthesizePrompt (材化済み)", () => {
     expect(out.userPrompt).toContain("業種: 経営コンサルタント");
     expect(out.userPrompt).toContain("希望カラー: ライトブルー");
     expect(out.userPrompt).toContain("希望ムード: 信頼");
+    expect(out.userPrompt).toContain("# 成果物への指示");
   });
 
   it("軸が全指定なら特記事項なし", () => {
