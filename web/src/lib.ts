@@ -18,15 +18,39 @@ import { type ComposedPrompt, synthesizePrompt } from "../../src/prompt/synthesi
 export const DS_RAW_BASE =
   "https://raw.githubusercontent.com/AutoDevJapan/GoDD-Design-Systems/main/";
 
-/** 公開 index.json の URL（全件。ページシャード未公開時の非推奨フォールバック）。 */
+/** 公開 index.json の URL（全件。ページシャード取得失敗時の非推奨フォールバック）。 */
 export const DS_INDEX_URL = `${DS_RAW_BASE}index.json`;
 
 /** 公開 index-summary.json の URL（件数・ファセット・ページメタ。先読み契約, issue #88）。 */
 export const DS_INDEX_SUMMARY_URL = `${DS_RAW_BASE}index-summary.json`;
 
-/** 公開 index ページシャード URL（0-based, PAGE_SIZE=1000）。 */
+/**
+ * index/pages シャードの Release タグ（Design-Systems ADR-0003 / #65）。
+ * git `main` には置かない。正本は Release asset。
+ */
+export const DS_INDEX_PAGES_RELEASE_TAG = "index-pages";
+
+/** Release asset の download ベース（末尾スラッシュ必須）。 */
+export const DS_INDEX_PAGES_RELEASE_BASE = `https://github.com/AutoDevJapan/GoDD-Design-Systems/releases/download/${DS_INDEX_PAGES_RELEASE_TAG}/`;
+
+/**
+ * 公開 index ページシャードの正本 URL（0-based, PAGE_SIZE=1000）。
+ * 例: `.../releases/download/index-pages/0.json`
+ *
+ * 注意: GitHub Release asset はブラウザ CORS を返さない。Pages UI は
+ * {@link dsIndexPageMirrorUrl}（deploy 時に Release から同期した同オリジンミラー）を使う。
+ */
 export function dsIndexPageUrl(page: number): string {
-  return `${DS_RAW_BASE}index/pages/${page}.json`;
+  return `${DS_INDEX_PAGES_RELEASE_BASE}${page}.json`;
+}
+
+/**
+ * Matrix Pages 上の同オリジンミラー URL（Release を deploy 時に同期）。
+ * `siteBase` はサイトルート（末尾スラッシュ任意。相対 `./` 可）。
+ */
+export function dsIndexPageMirrorUrl(page: number, siteBase = "./"): string {
+  const base = siteBase.endsWith("/") ? siteBase : `${siteBase}/`;
+  return `${base}index/pages/${page}.json`;
 }
 
 /** 公開 taxonomy.json の URL (DS がムード/カラーの機械可読な日本語名を公開する契約, issue #33)。 */

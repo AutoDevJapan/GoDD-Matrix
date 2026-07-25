@@ -6,6 +6,7 @@ import {
   parseIndexSummary,
   summaryFromEntries,
 } from "./index-loader.js";
+import { DS_INDEX_PAGES_RELEASE_BASE, dsIndexPageUrl } from "./lib.js";
 
 const ENTRY_A = {
   id: "6061_white_minimal",
@@ -69,6 +70,15 @@ describe("summaryFromEntries", () => {
   });
 });
 
+describe("dsIndexPageUrl (Release正本)", () => {
+  it("builds GitHub Release download URLs for page shards", () => {
+    expect(dsIndexPageUrl(0)).toBe(
+      "https://github.com/AutoDevJapan/GoDD-Design-Systems/releases/download/index-pages/0.json",
+    );
+    expect(dsIndexPageUrl(51)).toBe(`${DS_INDEX_PAGES_RELEASE_BASE}51.json`);
+  });
+});
+
 describe("loadCatalogIndex", () => {
   it("prefers local web-index when present", async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
@@ -85,12 +95,12 @@ describe("loadCatalogIndex", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("loads summary then page shards without touching index.json", async () => {
+  it("loads summary then Release page shards without touching index.json", async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("web-index.json")) return new Response(null, { status: 404 });
       if (url.includes("index-summary.json")) return jsonResponse(SUMMARY);
-      if (url.includes("index/pages/0.json")) {
+      if (url === dsIndexPageUrl(0) || url.endsWith("/releases/download/index-pages/0.json")) {
         return jsonResponse({
           version: 1,
           page: 0,
@@ -100,7 +110,9 @@ describe("loadCatalogIndex", () => {
           entries: [ENTRY_A, ENTRY_B],
         });
       }
-      if (url.includes("index.json")) throw new Error("full index must not be fetched");
+      if (url.includes("index.json") && !url.includes("index-summary")) {
+        throw new Error("full index must not be fetched");
+      }
       throw new Error(`unexpected fetch: ${url}`);
     });
     const warn = vi.fn();
@@ -109,18 +121,22 @@ describe("loadCatalogIndex", () => {
     expect(boot.summary.facets.mood[0]?.value).toBe("minimal");
     expect(boot.entries.map((e) => e.id)).toEqual([ENTRY_A.id, ENTRY_B.id]);
     expect(warn).not.toHaveBeenCalled();
-    expect(fetcher.mock.calls.some(([u]) => /(?:^|\/)index\.json(?:\?|$)/.test(String(u)))).toBe(
-      false,
-    );
+    expect(fetcher.mock.calls.map(([u]) => String(u))).toContain(dsIndexPageUrl(0));
+    expect(
+      fetcher.mock.calls.some(
+        ([u]) => /(?:^|\/)index\.json(?:\?|$)/.test(String(u)) && !String(u).includes("summary"),
+      ),
+    ).toBe(false);
   });
 
-  it("falls back to full index.json with a deprecation warning when shards are missing", async () => {
+  it("falls back to full index.json with a deprecation warning when Release shards fail", async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("web-index.json")) return new Response(null, { status: 404 });
       if (url.includes("index-summary.json")) return jsonResponse(SUMMARY);
-      if (url.includes("index/pages/")) return new Response(null, { status: 404 });
-      if (url.includes("index.json")) {
+      if (url.includes("/releases/download/index-pages/"))
+        return new Response(null, { status: 404 });
+      if (url.includes("index.json") && !url.includes("index-summary")) {
         return jsonResponse({ version: 1, generatedAt: SUMMARY.generatedAt, entries: [ENTRY_A] });
       }
       throw new Error(`unexpected fetch: ${url}`);
@@ -145,7 +161,9 @@ describe("loadCatalogBootstrap", () => {
       const url = String(input);
       if (url.includes("web-index.json")) return new Response(null, { status: 404 });
       if (url.includes("index-summary.json")) return jsonResponse(SUMMARY);
-      if (url.includes("index/pages/0.json")) return pageGate;
+      if (url === dsIndexPageUrl(0) || url.endsWith("/releases/download/index-pages/0.json")) {
+        return pageGate;
+      }
       throw new Error(`unexpected fetch: ${url}`);
     });
 

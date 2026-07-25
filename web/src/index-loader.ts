@@ -1,10 +1,11 @@
 /**
- * Design-Systems index の取得 (issue #88 / index-paging 契約)。
+ * Design-Systems index の取得 (issue #88 / index-paging / ADR-0003)。
  *
  * 1. 任意: ローカル `web-index.json`（E2E / オフライン）
- * 2. 公開 `index-summary.json` を先読み（ファセット・件数・pageCount）
- * 3. 明細は `index/pages/{n}.json` を取得（利用可能なとき）
- * 4. ページシャード未公開時は `index.json` 全件へフォールバック（非推奨ログ付き）
+ * 2. 公開 `index-summary.json` を raw main から先読み（ファセット・件数・pageCount）
+ * 3. 明細はページシャードを取得（既定: Release `index-pages` の `{n}.json`。
+ *    ブラウザ CORS 回避のため Pages は同オリジンミラーを `pageUrl` で渡す）
+ * 4. シャード取得失敗時のみ `index.json` 全件へフォールバック（非推奨ログ付き）
  */
 import type { DesignIndex, DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
@@ -54,7 +55,7 @@ export interface LoadCatalogOptions {
 }
 
 export const INDEX_FULL_FETCH_DEPRECATED =
-  "[GoDD Matrix] index/pages が未公開のため index.json 全件取得にフォールバックしています（非推奨）。https://github.com/AutoDevJapan/GoDD-Design-Systems/blob/main/documents/spec/index-paging.md";
+  "[GoDD Matrix] Release `index-pages` のページシャード取得に失敗したため index.json 全件取得にフォールバックしています（非推奨）。https://github.com/AutoDevJapan/GoDD-Design-Systems/blob/main/documents/spec/index-paging.md";
 
 const EMPTY_FACETS: IndexSummary["facets"] = {
   jsic: [],

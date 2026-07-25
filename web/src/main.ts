@@ -21,6 +21,7 @@ import {
   approxSwatchesForColor,
   colorFamily,
   composePromptForCell,
+  dsIndexPageMirrorUrl,
   extractColorTokens,
   facetLabel,
   familySwatchHex,
@@ -1405,8 +1406,12 @@ async function bootstrap(): Promise<void> {
   byId<HTMLSelectElement>("page-size-select").value = String(pageSize);
   translateUI();
 
-  // Load Data: summary 先読み → 明細はシャード or 非推奨の全件フォールバック (issue #88)
-  const catalogBoot = await loadCatalogBootstrap();
+  // Load Data: summary 先読み → 明細はシャード or 非推奨の全件フォールバック (issue #88)。
+  // 正本は Release `index-pages` (ADR-0003)。Release asset は CORS 非対応のため、
+  // Pages では deploy 時に同期した同オリジンミラーへ向ける。
+  const catalogBoot = await loadCatalogBootstrap({
+    pageUrl: (page) => dsIndexPageMirrorUrl(page),
+  });
   indexSummary = catalogBoot.summary;
   document.documentElement.dataset.dsEntryCount = String(indexSummary.entryCount);
   document.documentElement.dataset.dsIndexSource = catalogBoot.entriesSource;
