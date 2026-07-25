@@ -1,3 +1,4 @@
+import { FILTER_STYLES } from "./filter-taxonomy.js";
 import {
   COLOR_FAMILIES,
   type Taxonomy,
@@ -7,16 +8,8 @@ import {
   isColorFamilyKey,
 } from "./lib.js";
 
-export const SEARCH_STYLES = [
-  { v: "minimal", ja: "ミニマル", en: "Minimal" },
-  { v: "retro", ja: "レトロ", en: "Retro" },
-  { v: "brutalist", ja: "ブルータリズム", en: "Brutalist" },
-  { v: "glass", ja: "グラスモーフィズム", en: "Glassmorphism" },
-  { v: "corporate", ja: "コーポレート", en: "Corporate" },
-  { v: "dark", ja: "ダーク", en: "Dark" },
-  { v: "neu", ja: "ニューモーフィズム", en: "Neumorphism" },
-  { v: "playful", ja: "プレイフル", en: "Playful" },
-] as const;
+/** UI style axis — kept in sync with filter-taxonomy / virtual catalog. */
+export const SEARCH_STYLES = FILTER_STYLES;
 
 /** 旧パレット slug / 別名 → 色合い（系統）キー。 */
 const PALETTE_TO_FAMILY: Readonly<Record<string, string>> = {
@@ -59,12 +52,20 @@ const PALETTE_TO_FAMILY: Readonly<Record<string, string>> = {
 
 type StyleKey = (typeof SEARCH_STYLES)[number]["v"];
 
+/** Legacy taxonomy mood slugs → current UI style keys. */
 const STYLE_TAXONOMY_MAP: Readonly<Record<string, StyleKey>> = {
   vintage: "retro",
   elegant: "glass",
-  tech: "dark",
-  warm: "neu",
-  organic: "playful",
+  tech: "tech",
+  warm: "warm",
+  organic: "organic",
+  neu: "soft",
+  neumorphism: "soft",
+  corporate: "corporate",
+  brutalist: "brutalist",
+  minimal: "minimal",
+  dark: "dark",
+  playful: "playful",
 };
 
 /** Resolve a free-text style/mood term to the UI style key. */
@@ -80,6 +81,10 @@ export function findStyleValue(term: string, taxonomy?: Taxonomy): string | null
     ) {
       return style.v;
     }
+  }
+
+  if (normalized === "neu" || normalized === "neumorphism" || normalized.includes("ニューモ")) {
+    return "soft";
   }
 
   for (const [slug, item] of Object.entries(taxonomy?.moods ?? {})) {
@@ -102,7 +107,6 @@ export function findColorValue(term: string, taxonomy?: Taxonomy): string | null
   const alias = PALETTE_TO_FAMILY[normalized] ?? PALETTE_TO_FAMILY[normalized.replace(/\s+/g, "-")];
   if (alias) return alias;
 
-  // Exact family key / label first, then substring (prefer shorter keys like green over yellowgreen).
   for (const family of COLOR_FAMILIES) {
     const ja = facetLabel("color", family.key, taxonomy, "ja").toLowerCase();
     const en = facetLabel("color", family.key, taxonomy, "en").toLowerCase();
@@ -136,7 +140,6 @@ export function findColorValue(term: string, taxonomy?: Taxonomy): string | null
     }
   }
 
-  // 旧パレット表示名の部分一致（Indigo / スカイ など）
   for (const [key, family] of Object.entries(PALETTE_TO_FAMILY)) {
     if (normalized.includes(key) || key.includes(normalized)) return family;
   }
@@ -144,20 +147,30 @@ export function findColorValue(term: string, taxonomy?: Taxonomy): string | null
   return null;
 }
 
-const STYLE_TO_MOOD: Readonly<Record<StyleKey, string>> = {
+const STYLE_TO_MOOD: Readonly<Record<string, string>> = {
   minimal: "minimal",
-  retro: "vintage",
+  corporate: "corporate",
+  editorial: "editorial",
   brutalist: "brutalist",
   glass: "elegant",
-  corporate: "corporate",
+  soft: "warm",
   dark: "tech",
-  neu: "warm",
   playful: "organic",
+  luxury: "elegant",
+  retro: "vintage",
+  industrial: "brutalist",
+  flat: "minimal",
+  swiss: "minimal",
+  organic: "organic",
+  tech: "tech",
+  warm: "warm",
+  // Legacy UI key
+  neu: "warm",
 };
 
 /** Convert a UI style key or dynamically matched taxonomy slug into a downstream mood slug. */
 export function resolveMoodSlug(style: string): string {
-  return STYLE_TO_MOOD[style as StyleKey] ?? style;
+  return STYLE_TO_MOOD[style] ?? style;
 }
 
 /**

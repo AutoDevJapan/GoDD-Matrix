@@ -23,10 +23,10 @@ import { parseVirtualPermalinkId } from "./virtual-permalink.js";
 
 describe("canonical virtual space", () => {
   it("is versioned and exceeds 100 million unique cells", () => {
-    expect(VIRTUAL_SPACE_VERSION).toBe(1);
-    expect(VIRTUAL_VARIANT_COUNT).toBe(4000);
-    expect(CANONICAL_CATEGORIES.length).toBe(8);
-    expect(CANONICAL_STYLES.length).toBe(8);
+    expect(VIRTUAL_SPACE_VERSION).toBe(2);
+    expect(VIRTUAL_VARIANT_COUNT).toBe(35);
+    expect(CANONICAL_CATEGORIES.length).toBe(16);
+    expect(CANONICAL_STYLES.length).toBe(16);
     expect(CANONICAL_COLORS.length).toBeGreaterThanOrEqual(6);
     expect(CANONICAL_JSIC_CODES.length).toBeGreaterThan(1400);
     expect(canonicalVirtualTotal()).toBeGreaterThan(100_000_000);
@@ -53,9 +53,9 @@ describe("exact filtered counts", () => {
 
   it("computes exact products without enumerating cells", () => {
     const query = {
-      category: "dashboard",
-      style: "minimal",
-      colorPalette: "neutral",
+      categories: ["dashboard"],
+      styles: ["minimal"],
+      colors: ["neutral"],
       sort: "popular" as const,
     };
     const axes = resolveFilteredAxes(query);
@@ -72,26 +72,39 @@ describe("exact filtered counts", () => {
   });
 
   it("returns zero for an unknown category instead of inventing cells", () => {
-    expect(exactFilteredCount({ category: "not-a-category", sort: "popular" })).toBe(0);
+    expect(exactFilteredCount({ categories: ["not-a-category"], sort: "popular" })).toBe(0);
+  });
+
+  it("matches game development JSIC when filtering for ゲーム", () => {
+    const axes = resolveFilteredAxes({
+      industryTerms: ["ゲーム"],
+      sort: "popular",
+    });
+    expect(axes.jsicCodes).toContain("3914");
+    expect(axes.jsicCodes).toContain("8065");
+  });
+
+  it("narrows to game-dev vertical codes", () => {
+    const axes = resolveFilteredAxes({
+      verticals: ["game-dev"],
+      sort: "popular",
+    });
+    expect(axes.jsicCodes).toContain("3914");
+    expect(axes.jsicCodes.length).toBeGreaterThanOrEqual(1);
   });
 });
 
 describe("rank / unrank bijection", () => {
   it("round-trips every digit at the boundaries", () => {
-    const filtered = resolveFilteredAxes({
-      category: "lp",
-      style: "minimal",
-      industry: "G",
-      colorPalette: "neutral",
-      sort: "popular",
-    });
-    const total = exactFilteredCount({
-      category: "lp",
-      style: "minimal",
-      industry: "G",
-      colorPalette: "neutral",
-      sort: "popular",
-    });
+    const query = {
+      categories: ["lp"],
+      styles: ["minimal"],
+      industries: ["G"],
+      colors: ["neutral"],
+      sort: "popular" as const,
+    };
+    const filtered = resolveFilteredAxes(query);
+    const total = exactFilteredCount(query);
     expect(total).toBeGreaterThan(0);
 
     for (const rank of [0, 1, total - 1, Math.floor(total / 2)]) {
@@ -119,7 +132,7 @@ describe("rank / unrank bijection", () => {
 
   it("produces unique IDs across a page window", () => {
     const page = pageVirtualCatalog(
-      { category: "dashboard", style: "minimal", sort: "popular" },
+      { categories: ["dashboard"], styles: ["minimal"], sort: "popular" },
       { pageSize: 48, page: 1 },
     );
     const ids = page.items.map((item) => item.id);
@@ -129,7 +142,7 @@ describe("rank / unrank bijection", () => {
 
 describe("query-bound cursor pagination", () => {
   it("encodes and decodes a fingerprint-bound cursor", () => {
-    const query = { category: "blog", sort: "newest" as const };
+    const query = { categories: ["blog"], sort: "newest" as const };
     const fingerprint = queryFingerprint(query);
     const cursor = encodeCatalogCursor(fingerprint, 2400);
     expect(decodeCatalogCursor(cursor, fingerprint)).toBe(2400);

@@ -21,12 +21,12 @@ describe("virtual permalink IDs", () => {
       mood: "minimal",
       category: "dashboard",
       style: "minimal",
-      variant: 3971,
+      variant: 34,
     } as const;
 
     const id = buildVirtualPermalinkId(axes);
 
-    expect(id).toBe("virtual_6061_h17b-lt_minimal_cdashboard_sminimal_v3971");
+    expect(id).toBe("virtual_6061_h17b-lt_minimal_cdashboard_sminimal_v34");
     expect(parseVirtualPermalinkId(id)).toEqual(axes);
   });
 
@@ -38,6 +38,7 @@ describe("virtual permalink IDs", () => {
     "virtual_6061_h17b-lt_minimal_cdashboard_sminimal_v01",
     "virtual_6061_h17b-lt_minimal_cdashboard_sminimal_v1_extra",
     "virtual_6061_H17B-LT_minimal_cdashboard_sminimal_v1",
+    "virtual_6061_h17b-lt_minimal_cdashboard_sminimal_v35",
     "virtual_6061_h17b-lt_minimal_cdashboard_sminimal_v4000",
     "virtual_6061_h17b-lt_minimal_cdashboard_sminimal_v9007199254740992",
   ])("rejects malformed or unsafe ID %s", (id) => {

@@ -3,6 +3,15 @@ import { parseDesignIndex } from "../../src/ds/validate.js";
 import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
 import {
+  FILTER_CATEGORIES,
+  FILTER_STYLES,
+  INDUSTRY_VERTICALS,
+  categoryLabel,
+  styleLabel,
+  toggleSelection,
+  verticalLabel,
+} from "./filter-taxonomy.js";
+import {
   COLOR_FAMILIES,
   DS_INDEX_URL,
   EMPTY_TAXONOMY,
@@ -31,7 +40,7 @@ import {
   dedupeEntriesById,
 } from "./result-card.js";
 import type { ResultSortOrder } from "./result-sorting.js";
-import { SEARCH_STYLES, findColorValue, findStyleValue } from "./search-parser.js";
+import { findColorValue, findStyleValue } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
 import { localizePromptPreview } from "./ui-localization.js";
 import {
@@ -63,19 +72,9 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   return node as T;
 }
 
-// Static definitions matching the reference DESIGN.md library design
-const CATEGORIES = [
-  { v: "lp", ja: "ランディングページ", en: "Landing Page" },
-  { v: "dashboard", ja: "ダッシュボード", en: "Dashboard" },
-  { v: "mobile", ja: "モバイルアプリ", en: "Mobile App" },
-  { v: "portfolio", ja: "ポートフォリオ", en: "Portfolio" },
-  { v: "ecommerce", ja: "ECサイト", en: "E-commerce" },
-  { v: "admin", ja: "管理画面", en: "Admin Panel" },
-  { v: "blog", ja: "ブログ", en: "Blog" },
-  { v: "form", ja: "フォーム", en: "Form" },
-];
-
-const STYLES = SEARCH_STYLES;
+const CATEGORIES = FILTER_CATEGORIES;
+const STYLES = FILTER_STYLES;
+const VERTICALS = INDUSTRY_VERTICALS;
 
 const INDUSTRIES = listJsicMajors().map((m) => ({
   v: m.code,
@@ -105,17 +104,28 @@ let detailRequestId = 0;
 let pageSize: PageSizeOption = 25;
 
 interface Filters {
-  category: string | null;
-  style: string | null;
-  industry: string | null;
-  color: string | null;
+  categories: string[];
+  styles: string[];
+  industries: string[];
+  verticals: string[];
+  colors: string[];
 }
-const filters: Filters = { category: null, style: null, industry: null, color: null };
+const filters: Filters = {
+  categories: [],
+  styles: [],
+  industries: [],
+  verticals: [],
+  colors: [],
+};
 
 let animatedTotal = 0;
 const TOTAL_LIBRARY = canonicalVirtualTotal();
 /** Last query-bound cursor written to the URL (0-based start rank). */
 let currentCursor: string | null = null;
+/** Detail-view color overrides (original → custom hex). */
+let detailColorOverrides: string[] = [];
+let detailBaseMarkdown = "";
+let detailBaseSwatches: string[] = [];
 
 // Deterministic property mapping from index entries to reference facets.
 // Prefer published `canonicalCellId` (#272); keep legacy heuristics for older index rows.
@@ -133,10 +143,11 @@ function getEntryStyle(entry: DesignIndexEntry): string {
     if (mood === "elegant") return "glass";
     if (mood === "bold") return "brutalist";
     if (mood === "brutalist") return "brutalist";
-    if (mood === "tech") return "dark";
-    if (mood === "organic") return "playful";
-    if (mood === "warm") return "neu";
+    if (mood === "tech") return "tech";
+    if (mood === "organic") return "organic";
+    if (mood === "warm") return "warm";
     if (mood === "vintage") return "retro";
+    if (mood === "corporate") return "corporate";
     return "minimal";
   });
 }
@@ -153,10 +164,11 @@ function isLocallyRendered(entry: DesignIndexEntry): boolean {
 function syncBrowseUrl(cellId: string | null = selectedEntry?.id ?? null): void {
   const url = applyCatalogUrlState(window.location.href, {
     q: searchQuery,
-    category: filters.category,
-    style: filters.style,
-    industry: filters.industry,
-    color: filters.color,
+    categories: filters.categories,
+    styles: filters.styles,
+    industries: filters.industries,
+    verticals: filters.verticals,
+    colors: filters.colors,
     sort: sortOrder,
     cursor: currentCursor,
     cell: cellId,
@@ -164,18 +176,23 @@ function syncBrowseUrl(cellId: string | null = selectedEntry?.id ?? null): void 
   window.history.replaceState(null, "", url);
 }
 
+function addUnique(list: string[], value: string): string[] {
+  return list.includes(value) ? list : [...list, value];
+}
+
 /** Resolve smart-search tokens + facet chips into a virtual-catalog query. */
 function buildCatalogQuery(): {
-  category: string | null;
-  style: string | null;
-  industry: string | null;
-  colorPalette: string | null;
+  categories: string[];
+  styles: string[];
+  industries: string[];
+  verticals: string[];
+  colors: string[];
   industryTerms: string[];
   sort: ResultSortOrder;
 } {
-  let parsedCategory = filters.category;
-  let parsedStyle = filters.style;
-  let parsedColor = filters.color;
+  let categories = [...filters.categories];
+  let styles = [...filters.styles];
+  let colors = [...filters.colors];
   const industryTerms: string[] = [];
 
   if (searchQuery) {
@@ -187,18 +204,18 @@ function buildCatalogQuery(): {
 
     for (const term of terms) {
       const catMatch = findCategoryValue(term);
-      if (catMatch && !parsedCategory) {
-        parsedCategory = catMatch;
+      if (catMatch) {
+        categories = addUnique(categories, catMatch);
         continue;
       }
       const styleMatch = findStyleValue(term, taxonomy);
-      if (styleMatch && !parsedStyle) {
-        parsedStyle = styleMatch;
+      if (styleMatch) {
+        styles = addUnique(styles, styleMatch);
         continue;
       }
       const colorMatch = findColorValue(term, taxonomy);
-      if (colorMatch && !parsedColor) {
-        parsedColor = colorMatch;
+      if (colorMatch) {
+        colors = addUnique(colors, colorMatch);
         continue;
       }
       industryTerms.push(term);
@@ -206,13 +223,47 @@ function buildCatalogQuery(): {
   }
 
   return {
-    category: parsedCategory,
-    style: parsedStyle,
-    industry: filters.industry,
-    colorPalette: parsedColor,
+    categories,
+    styles,
+    industries: [...filters.industries],
+    verticals: [...filters.verticals],
+    colors,
     industryTerms,
     sort: sortOrder,
   };
+}
+
+function normalizeHex(value: string): string | null {
+  const trimmed = value.trim();
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(trimmed);
+  if (!match?.[1]) return null;
+  return `#${match[1].toLowerCase()}`;
+}
+
+function applyColorOverridesToMarkdown(
+  markdown: string,
+  originals: string[],
+  overrides: string[],
+): string {
+  let next = markdown;
+  for (let index = 0; index < originals.length; index++) {
+    const from = originals[index];
+    const to = overrides[index];
+    if (!from || !to || from.toLowerCase() === to.toLowerCase()) continue;
+    const pattern = new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    next = next.replace(pattern, to);
+  }
+  return next;
+}
+
+function setFilterDrawerOpen(open: boolean): void {
+  const sidebar = byId("filter-sidebar");
+  const backdrop = byId("filter-drawer-backdrop");
+  const toggle = byId<HTMLButtonElement>("filter-toggle-btn");
+  sidebar.classList.toggle("open", open);
+  backdrop.classList.toggle("hidden", !open);
+  toggle.setAttribute("aria-expanded", String(open));
+  document.body.classList.toggle("filter-drawer-open", open);
 }
 
 function getEntryFont(entry: DesignIndexEntry): string {
@@ -243,9 +294,52 @@ function getSwatchHexes(entry: DesignIndexEntry): string[] {
   return [c1, c2];
 }
 
+function thumbnailBgFromHexes(colors: readonly string[]): string {
+  const c1 = colors[0] || "#6366f1";
+  const c2 = colors[1] || c1;
+  return `repeating-linear-gradient(135deg, ${c1} 0px, ${c1} 22px, ${c2} 22px, ${c2} 44px)`;
+}
+
 function getThumbnailBg(entry: DesignIndexEntry): string {
-  const colors = getSwatchHexes(entry);
-  return `repeating-linear-gradient(135deg, ${colors[0]} 0px, ${colors[0]} 22px, ${colors[1]} 22px, ${colors[1]} 44px)`;
+  return thumbnailBgFromHexes(getSwatchHexes(entry));
+}
+
+function refreshDetailColors(): void {
+  const previewBox = document.getElementById("detail-preview-box");
+  if (previewBox) previewBox.style.background = thumbnailBgFromHexes(detailColorOverrides);
+  const codeBlock = document.getElementById("detail-code-block");
+  if (codeBlock && detailBaseMarkdown) {
+    codeBlock.textContent = applyColorOverridesToMarkdown(
+      detailBaseMarkdown,
+      detailBaseSwatches,
+      detailColorOverrides,
+    );
+  }
+}
+
+function renderColorEditor(entry: DesignIndexEntry): void {
+  const editor = byId("detail-color-editor");
+  editor.replaceChildren();
+  const labels = currentLocale === "ja" ? ["プライマリ", "アクセント"] : ["Primary", "Accent"];
+  detailColorOverrides.forEach((hex, index) => {
+    const row = el("div", { class: "color-editor-row" });
+    const swatch = el("div", { class: "color-editor-swatch" });
+    swatch.style.backgroundColor = hex;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "color-editor-input";
+    input.value = hex;
+    input.setAttribute("aria-label", `${labels[index] ?? `Color ${index + 1}`} (${entry.color})`);
+    input.oninput = () => {
+      const normalized = normalizeHex(input.value);
+      if (!normalized) return;
+      detailColorOverrides[index] = normalized;
+      swatch.style.backgroundColor = normalized;
+      refreshDetailColors();
+    };
+    row.append(swatch, input);
+    editor.appendChild(row);
+  });
 }
 
 function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void {
@@ -375,7 +469,12 @@ interface TranslationKeys {
   labelFacetCategory: string;
   labelFacetStyle: string;
   labelFacetIndustry: string;
+  labelFacetVerticals: string;
+  labelFacetIndustryMajor: string;
   labelFacetColor: string;
+  labelColorCustomize: string;
+  labelFilterToggle: string;
+  labelFilterClose: string;
   labelActivePills: string;
   clearAll: string;
   labelMatches: string;
@@ -386,6 +485,7 @@ interface TranslationKeys {
   labelDownloads: string;
   labelUpdated: string;
   labelLicense: string;
+  fileTypeLabel: string;
   btnDownload: string;
   btnCopy: string;
   btnShare: string;
@@ -394,14 +494,7 @@ interface TranslationKeys {
   toastShareCopied: string;
   toastDownloadStarted: string;
   toastCopyFailed: string;
-  virtualNotice: string;
-  labelVirtualBadge: string;
-  catalogPrefix: string;
-  catalogSuffix: string;
-  loading: string;
   sampleCount: (shown: number, total: number) => string;
-  materializationType: string;
-  preGeneratedType: string;
   detailLoading: string;
   detailLoadError: string;
 }
@@ -420,11 +513,16 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     brandSubtitle: "1億件以上のDESIGNファイルを検索・共有",
     heroTag: "世界最大のDESIGNファイルライブラリ",
     heroSub: "件のDESIGN.mdファイルが検索可能",
-    placeholderSearch: "検索例: ミニマル ダッシュボード",
+    placeholderSearch: "検索例: ゲーム ミニマル ダッシュボード",
     labelFacetCategory: "カテゴリ",
     labelFacetStyle: "スタイル",
-    labelFacetIndustry: "業種（大分類）",
-    labelFacetColor: "色合い",
+    labelFacetIndustry: "業種 / 職種",
+    labelFacetVerticals: "職種・業態",
+    labelFacetIndustryMajor: "業種（大分類）",
+    labelFacetColor: "会社ロゴの色合い",
+    labelColorCustomize: "カラー調整",
+    labelFilterToggle: "フィルタ",
+    labelFilterClose: "フィルタを閉じる",
     labelActivePills: "適用中:",
     clearAll: "すべてクリア",
     labelMatches: "件が一致",
@@ -435,6 +533,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     labelDownloads: "提供形式",
     labelUpdated: "更新日",
     labelLicense: "ライセンス",
+    fileTypeLabel: "DESIGN.md",
     btnDownload: "ダウンロード",
     btnCopy: "コピー",
     btnShare: "共有リンク",
@@ -443,14 +542,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     toastShareCopied: "共有リンクをコピーしました",
     toastDownloadStarted: "ダウンロードを開始しました",
     toastCopyFailed: "コピーに失敗しました",
-    virtualNotice: "決定論的デザインエンジンによりリアルタイム合成されました。",
-    labelVirtualBadge: "VIRTUAL",
-    catalogPrefix: "OSS 材化済みカタログ: ",
-    catalogSuffix: " 件",
-    loading: "読み込み中...",
     sampleCount: (shown, total) => `${total.toLocaleString("ja-JP")}件中 ${shown}件を表示中`,
-    materializationType: "リアルタイム合成",
-    preGeneratedType: "OSS 材化済み",
     detailLoading: "DESIGN.md を読み込んでいます...",
     detailLoadError: "DESIGN.md の読み込みに失敗しました。時間をおいて再度お試しください。",
   },
@@ -467,11 +559,16 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     brandSubtitle: "Search & share 100M+ DESIGN files",
     heroTag: "World's largest DESIGN.md library",
     heroSub: "DESIGN.md files ready to search",
-    placeholderSearch: "Search e.g. 'Minimal Dashboard'",
+    placeholderSearch: "Search e.g. 'game minimal dashboard'",
     labelFacetCategory: "Category",
     labelFacetStyle: "Style",
-    labelFacetIndustry: "Industry (division)",
-    labelFacetColor: "Color family",
+    labelFacetIndustry: "Industry / Job",
+    labelFacetVerticals: "Job / vertical",
+    labelFacetIndustryMajor: "Industry (division)",
+    labelFacetColor: "Brand / logo color",
+    labelColorCustomize: "Customize colors",
+    labelFilterToggle: "Filters",
+    labelFilterClose: "Close filters",
     labelActivePills: "Active:",
     clearAll: "Clear all",
     labelMatches: "files match",
@@ -482,6 +579,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     labelDownloads: "Type",
     labelUpdated: "Updated",
     labelLicense: "License",
+    fileTypeLabel: "DESIGN.md",
     btnDownload: "Download",
     btnCopy: "Copy",
     btnShare: "Share",
@@ -490,14 +588,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     toastShareCopied: "Share link copied to clipboard",
     toastDownloadStarted: "Download started",
     toastCopyFailed: "Copy failed",
-    virtualNotice: "Synthesized in real-time by the deterministic design engine.",
-    labelVirtualBadge: "VIRTUAL",
-    catalogPrefix: "Pre-generated OSS Catalog: ",
-    catalogSuffix: " files",
-    loading: "Loading...",
     sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString("en-US")} results`,
-    materializationType: "Virtual",
-    preGeneratedType: "Pre-generated",
     detailLoading: "Loading DESIGN.md...",
     detailLoadError: "Failed to load DESIGN.md. Please try again later.",
   },
@@ -586,7 +677,12 @@ function translateUI(): void {
   byId("label-facet-category").textContent = t.labelFacetCategory;
   byId("label-facet-style").textContent = t.labelFacetStyle;
   byId("label-facet-industry").textContent = t.labelFacetIndustry;
+  byId("label-facet-verticals").textContent = t.labelFacetVerticals;
+  byId("label-facet-industry-major").textContent = t.labelFacetIndustryMajor;
   byId("label-facet-color").textContent = t.labelFacetColor;
+  byId("label-color-customize").textContent = t.labelColorCustomize;
+  byId("filter-toggle-btn").textContent = t.labelFilterToggle;
+  byId("filter-close-btn").setAttribute("aria-label", t.labelFilterClose);
   byId("label-active-pills").textContent = t.labelActivePills;
   byId("clear-all-btn").textContent = t.clearAll;
   byId("label-matches-count").textContent = t.labelMatches;
@@ -602,23 +698,6 @@ function translateUI(): void {
   byId("btn-copy").textContent = t.btnCopy;
   byId("btn-share").textContent = t.btnShare;
   byId("label-related-title").textContent = t.labelRelated;
-
-  const catalogBadge = byId("label-hero-catalog");
-  if (catalogBadge) {
-    catalogBadge.replaceChildren();
-    const countSpan = el("span", {
-      text:
-        allEntries.length > 0
-          ? allEntries.length.toLocaleString(currentLocale === "ja" ? "ja-JP" : "en-US")
-          : t.loading,
-    });
-    countSpan.id = "stat-materialized-count";
-    catalogBadge.append(
-      document.createTextNode(t.catalogPrefix),
-      countSpan,
-      document.createTextNode(t.catalogSuffix),
-    );
-  }
 }
 
 // Build and trigger file download
@@ -681,10 +760,7 @@ async function openDetail(
 
   // Title & Filename
   const mainTitle = buildDirectionTitle(entry, currentLocale, taxonomy);
-  const subTitle = buildEntryTags(entry, currentLocale, taxonomy, {
-    materializedLabel: TRANSLATIONS[currentLocale].preGeneratedType,
-    virtualLabel: TRANSLATIONS[currentLocale].materializationType,
-  })
+  const subTitle = buildEntryTags(entry, currentLocale, taxonomy)
     .map((tag) => tag.label)
     .join(" · ");
   byId("detail-filename").textContent = `${entry.id}.design.md`;
@@ -694,29 +770,20 @@ async function openDetail(
   // Description text
   if (currentLocale === "ja") {
     byId("detail-desc-ja").textContent =
-      `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」の決定論的デザイン仕様書。`;
+      `業種コード ${entry.jsic} （${jsicName(entry.jsic) || "不明"}）における、カラー「${labelForColor(entry.color, taxonomy, "ja")}」とムード「${labelForMood(entry.mood, taxonomy, "ja")}」のデザイン仕様書。`;
     byId("detail-desc-ja").classList.remove("hidden");
     byId("detail-desc-en").classList.add("hidden");
   } else {
     const major = jsicMajor(entry.jsic);
     byId("detail-desc-en").textContent =
-      `Deterministic design specification matching industry code ${entry.jsic} (${major.label_en || jsicName(entry.jsic) || "Unknown"}), color tone "${labelForColor(entry.color, taxonomy, "en")}", and design mood "${labelForMood(entry.mood, taxonomy, "en")}".`;
+      `Design specification matching industry code ${entry.jsic} (${major.label_en || jsicName(entry.jsic) || "Unknown"}), color tone "${labelForColor(entry.color, taxonomy, "en")}", and design mood "${labelForMood(entry.mood, taxonomy, "en")}".`;
     byId("detail-desc-en").classList.remove("hidden");
     byId("detail-desc-ja").classList.add("hidden");
   }
 
-  // Draw swatches
-  const swatches = getSwatchHexes(entry);
-  const swatchBox = byId("detail-swatches");
-  swatchBox.replaceChildren();
-  for (const hex of swatches) {
-    const swatchItem = el("div", { class: "swatch-item" });
-    const swatchColor = el("div", { class: "swatch-color" });
-    swatchColor.style.backgroundColor = hex;
-    swatchItem.appendChild(swatchColor);
-    swatchItem.appendChild(el("span", { class: "swatch-hex", text: hex }));
-    swatchBox.appendChild(swatchItem);
-  }
+  detailBaseSwatches = getSwatchHexes(entry);
+  detailColorOverrides = [...detailBaseSwatches];
+  renderColorEditor(entry);
 
   // Draw metadata badges
   const badgeBox = byId("detail-badges");
@@ -726,29 +793,17 @@ async function openDetail(
   if (industryText) badgeBox.appendChild(el("span", { class: "badge-tag", text: industryText }));
   if (fontText) badgeBox.appendChild(el("span", { class: "badge-tag", text: fontText }));
 
-  // Draw preview background pattern
   const previewBox = byId("detail-preview-box");
-  previewBox.style.background = getThumbnailBg(entry);
+  previewBox.style.background = thumbnailBgFromHexes(detailColorOverrides);
 
   const isVirtual = isLocallyRendered(entry);
 
-  // Set file type and metadata
   const t = TRANSLATIONS[currentLocale];
-  byId("detail-downloads-val").textContent = isVirtual ? t.materializationType : t.preGeneratedType;
+  byId("detail-downloads-val").textContent = t.fileTypeLabel;
   byId("detail-updated-val").textContent = entry.createdAt
     ? entry.createdAt.slice(0, 10)
     : "2026-07-20";
   byId("detail-license-val").textContent = "MIT";
-
-  // Hide virtual notice by default unless it is dynamic virtual cell
-  const virtualNotice = byId("detail-virtual-notice");
-  if (isVirtual) {
-    virtualNotice.classList.remove("hidden");
-    byId("label-virtual-badge").textContent = TRANSLATIONS[currentLocale].labelVirtualBadge;
-    byId("detail-virtual-notice-text").textContent = TRANSLATIONS[currentLocale].virtualNotice;
-  } else {
-    virtualNotice.classList.add("hidden");
-  }
 
   const codeBlock = byId("detail-code-block");
   const loadStatus = byId("detail-load-status");
@@ -762,7 +817,6 @@ async function openDetail(
   loadStatus.textContent = t.detailLoading;
   relatedGrid.replaceChildren();
 
-  // Resolve virtual content locally, or fetch and verify a materialized body.
   let renderedMarkdown: string;
   let hashVerified: boolean;
   if (isVirtual) {
@@ -776,7 +830,7 @@ async function openDetail(
       hashVerified = materialized.hashVerified;
     } catch (error) {
       if (requestId !== detailRequestId) return;
-      console.error("Failed to load materialized DESIGN.md:", error);
+      console.error("Failed to load DESIGN.md:", error);
       codeBlock.setAttribute("aria-busy", "false");
       codeBlock.textContent = t.detailLoadError;
       loadStatus.textContent = t.detailLoadError;
@@ -787,7 +841,6 @@ async function openDetail(
     }
   }
 
-  // Synthesize Markdown Content
   const prompt = composePromptForCell({
     entry,
     markdown: renderedMarkdown,
@@ -799,17 +852,23 @@ async function openDetail(
     outputLanguage: currentLocale === "ja" ? "日本語" : "English",
   });
 
-  // Combine system prompt and markdown preview
-  const finalMarkdown = localizePromptPreview(prompt, currentLocale);
+  detailBaseMarkdown = localizePromptPreview(prompt, currentLocale);
+  const finalMarkdown = applyColorOverridesToMarkdown(
+    detailBaseMarkdown,
+    detailBaseSwatches,
+    detailColorOverrides,
+  );
   codeBlock.setAttribute("aria-busy", "false");
   codeBlock.textContent = finalMarkdown;
   loadStatus.textContent = "";
 
-  // Bind sidebar action buttons
+  const currentMarkdown = () =>
+    applyColorOverridesToMarkdown(detailBaseMarkdown, detailBaseSwatches, detailColorOverrides);
+
   downloadButton.disabled = false;
   copyButton.disabled = false;
-  downloadButton.onclick = () => downloadMarkdown(`${entry.id}.design.md`, finalMarkdown);
-  copyButton.onclick = () => copyText(finalMarkdown, t.toastCopied);
+  downloadButton.onclick = () => downloadMarkdown(`${entry.id}.design.md`, currentMarkdown());
+  copyButton.onclick = () => copyText(currentMarkdown(), t.toastCopied);
   byId("btn-share").onclick = () => copyText(window.location.href, t.toastShareCopied);
 
   // Load related design entries
@@ -848,73 +907,105 @@ async function openDetail(
   }
 }
 
-// Render dynamic chips/filters inside facet rows
+function appendCheckboxOption(
+  list: HTMLElement,
+  options: {
+    value: string;
+    label: string;
+    checked: boolean;
+    title?: string;
+    onToggle: () => void;
+  },
+): void {
+  const label = el("label", { class: "facet-checkbox" });
+  if (options.title) label.title = options.title;
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = options.checked;
+  input.onchange = () => {
+    options.onToggle();
+    currentPage = 1;
+    applyState();
+  };
+  label.append(input, document.createTextNode(options.label));
+  list.appendChild(label);
+}
+
+/** Render multi-select filter options inside accordion panels. */
 function renderFilters(): void {
-  // Category Chips
-  const catList = byId("facet-list-category");
-  catList.replaceChildren();
-  for (const c of CATEGORIES) {
-    const active = filters.category === c.v;
-    const label = currentLocale === "ja" ? c.ja : c.en;
-    const chip = el("button", { class: `facet-chip ${active ? "selected" : ""}`, text: label });
-    chip.onclick = () => {
-      filters.category = active ? null : c.v;
-      currentPage = 1;
-      applyState();
-    };
-    catList.appendChild(chip);
+  const verticalList = byId("facet-list-verticals");
+  verticalList.replaceChildren();
+  for (const vertical of VERTICALS) {
+    appendCheckboxOption(verticalList, {
+      value: vertical.v,
+      label: verticalLabel(vertical.v, currentLocale),
+      checked: filters.verticals.includes(vertical.v),
+      onToggle: () => {
+        filters.verticals = toggleSelection(filters.verticals, vertical.v);
+      },
+    });
   }
 
-  // Style Chips (Mood)
-  const styleList = byId("facet-list-style");
-  styleList.replaceChildren();
-  for (const s of STYLES) {
-    const active = filters.style === s.v;
-    const label = currentLocale === "ja" ? s.ja : s.en;
-    const chip = el("button", { class: `facet-chip ${active ? "selected" : ""}`, text: label });
-    chip.onclick = () => {
-      filters.style = active ? null : s.v;
-      currentPage = 1;
-      applyState();
-    };
-    styleList.appendChild(chip);
-  }
-
-  // Industry chips (JSIC major divisions)
   const indList = byId("facet-list-industry");
   indList.replaceChildren();
-  for (const i of INDUSTRIES) {
-    const active = filters.industry === i.v;
-    const label = currentLocale === "ja" ? i.ja : i.en;
-    const chip = el("button", { class: `facet-chip ${active ? "selected" : ""}`, text: label });
-    chip.title = `${i.v}: ${label}`;
-    chip.onclick = () => {
-      filters.industry = active ? null : i.v;
-      currentPage = 1;
-      applyState();
-    };
-    indList.appendChild(chip);
+  for (const industry of INDUSTRIES) {
+    const label = currentLocale === "ja" ? industry.ja : industry.en;
+    appendCheckboxOption(indList, {
+      value: industry.v,
+      label,
+      title: `${industry.v}: ${label}`,
+      checked: filters.industries.includes(industry.v),
+      onToggle: () => {
+        filters.industries = toggleSelection(filters.industries, industry.v);
+      },
+    });
   }
 
-  // Color-family chips (色合い)
   const colorList = byId("facet-list-color");
   colorList.replaceChildren();
   for (const family of COLOR_FAMILIES) {
-    const active = filters.color === family.key;
+    const active = filters.colors.includes(family.key);
     const label = facetLabel("color", family.key, taxonomy, currentLocale);
     const chip = el("button", {
       class: `color-family-btn ${active ? "selected" : ""}`,
       title: label,
     });
+    chip.type = "button";
     const swatch = el("span", { class: "swatch" });
     swatch.style.backgroundColor = familySwatchHex(family.key) ?? "#94a3b8";
     chip.append(swatch, document.createTextNode(label));
     chip.onclick = () => {
-      filters.color = active ? null : family.key;
+      filters.colors = toggleSelection(filters.colors, family.key);
       currentPage = 1;
       applyState();
     };
     colorList.appendChild(chip);
+  }
+
+  const catList = byId("facet-list-category");
+  catList.replaceChildren();
+  for (const category of CATEGORIES) {
+    appendCheckboxOption(catList, {
+      value: category.v,
+      label: categoryLabel(category.v, currentLocale),
+      checked: filters.categories.includes(category.v),
+      onToggle: () => {
+        filters.categories = toggleSelection(filters.categories, category.v);
+      },
+    });
+  }
+
+  const styleList = byId("facet-list-style");
+  styleList.replaceChildren();
+  for (const style of STYLES) {
+    appendCheckboxOption(styleList, {
+      value: style.v,
+      label: styleLabel(style.v, currentLocale),
+      checked: filters.styles.includes(style.v),
+      onToggle: () => {
+        filters.styles = toggleSelection(filters.styles, style.v);
+      },
+    });
   }
 }
 
@@ -970,41 +1061,48 @@ function applyState(): void {
       },
     });
   }
-  if (filters.category) {
-    const c = CATEGORIES.find((x) => x.v === filters.category);
+  for (const value of filters.verticals) {
     pills.push({
-      label: c ? (currentLocale === "ja" ? c.ja : c.en) : filters.category,
+      label: verticalLabel(value, currentLocale),
       clear: () => {
-        filters.category = null;
+        filters.verticals = filters.verticals.filter((item) => item !== value);
         applyState();
       },
     });
   }
-  if (filters.style) {
-    const s = STYLES.find((x) => x.v === filters.style);
+  for (const value of filters.industries) {
+    const industry = INDUSTRIES.find((item) => item.v === value);
     pills.push({
-      label: s ? (currentLocale === "ja" ? s.ja : s.en) : filters.style,
+      label: industry ? (currentLocale === "ja" ? industry.ja : industry.en) : value,
       clear: () => {
-        filters.style = null;
+        filters.industries = filters.industries.filter((item) => item !== value);
         applyState();
       },
     });
   }
-  if (filters.industry) {
-    const i = INDUSTRIES.find((x) => x.v === filters.industry);
+  for (const value of filters.colors) {
     pills.push({
-      label: i ? (currentLocale === "ja" ? i.ja : i.en) : filters.industry,
+      label: facetLabel("color", value, taxonomy, currentLocale),
       clear: () => {
-        filters.industry = null;
+        filters.colors = filters.colors.filter((item) => item !== value);
         applyState();
       },
     });
   }
-  if (filters.color) {
+  for (const value of filters.categories) {
     pills.push({
-      label: facetLabel("color", filters.color, taxonomy, currentLocale),
+      label: categoryLabel(value, currentLocale),
       clear: () => {
-        filters.color = null;
+        filters.categories = filters.categories.filter((item) => item !== value);
+        applyState();
+      },
+    });
+  }
+  for (const value of filters.styles) {
+    pills.push({
+      label: styleLabel(value, currentLocale),
+      clear: () => {
+        filters.styles = filters.styles.filter((item) => item !== value);
         applyState();
       },
     });
@@ -1075,10 +1173,7 @@ function applyState(): void {
         }),
       );
 
-      const tags = buildEntryTags(entry, currentLocale, taxonomy, {
-        materializedLabel: TRANSLATIONS[currentLocale].preGeneratedType,
-        virtualLabel: TRANSLATIONS[currentLocale].materializationType,
-      });
+      const tags = buildEntryTags(entry, currentLocale, taxonomy);
       const tagRow = el("span", { class: "card-tags" });
       for (const tag of tags) {
         const node = el("span", { class: "card-tag", text: tag.label });
@@ -1237,17 +1332,25 @@ async function bootstrap(): Promise<void> {
   byId("clear-all-btn").onclick = () => {
     searchQuery = "";
     byId<HTMLInputElement>("main-search-input").value = "";
-    filters.category = null;
-    filters.style = null;
-    filters.industry = null;
-    filters.color = null;
+    filters.categories = [];
+    filters.styles = [];
+    filters.industries = [];
+    filters.verticals = [];
+    filters.colors = [];
     currentPage = 1;
     applyState();
   };
 
+  byId("filter-toggle-btn").onclick = () => setFilterDrawerOpen(true);
+  byId("filter-close-btn").onclick = () => setFilterDrawerOpen(false);
+  byId("filter-drawer-backdrop").onclick = () => setFilterDrawerOpen(false);
+
   byId("back-btn").onclick = () => {
     detailRequestId++;
     selectedEntry = null;
+    detailBaseMarkdown = "";
+    detailBaseSwatches = [];
+    detailColorOverrides = [];
     syncBrowseUrl(null);
     byId("detail-view").classList.add("hidden");
     byId("search-view").classList.remove("hidden");
@@ -1262,10 +1365,11 @@ async function bootstrap(): Promise<void> {
   const urlState = parseCatalogUrlState(window.location.search);
   searchQuery = urlState.q;
   byId<HTMLInputElement>("main-search-input").value = searchQuery;
-  filters.category = urlState.category;
-  filters.style = urlState.style;
-  filters.industry = urlState.industry;
-  filters.color = urlState.color;
+  filters.categories = [...urlState.categories];
+  filters.styles = [...urlState.styles];
+  filters.industries = [...urlState.industries];
+  filters.verticals = [...urlState.verticals];
+  filters.colors = [...urlState.colors];
   sortOrder = urlState.sort;
   byId("sort-btn-popular").classList.toggle("active", sortOrder === "popular");
   byId("sort-btn-newest").classList.toggle("active", sortOrder === "newest");

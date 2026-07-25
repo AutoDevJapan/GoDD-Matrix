@@ -16,7 +16,8 @@ export interface VirtualPermalinkCatalog {
 }
 
 const SLUG = "[a-z0-9][a-z0-9-]*";
-export const MAX_VIRTUAL_VARIANT = 3999;
+/** Inclusive max variant; keep product of axes above 100M after category/style expansion. */
+export const MAX_VIRTUAL_VARIANT = 34;
 const VIRTUAL_ID = new RegExp(
   `^virtual_([0-9]{4})_(${SLUG})_(${SLUG})_c(${SLUG})_s(${SLUG})_v(0|[1-9][0-9]*)$`,
 );

@@ -9,6 +9,7 @@ import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
 import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseCanonicalCellId } from "./catalog-coordinates.js";
+import { FILTER_CATEGORIES, INDUSTRY_VERTICALS } from "./filter-taxonomy.js";
 import {
   type Locale,
   VIRTUAL_COLOR_CATALOG,
@@ -26,21 +27,12 @@ import {
 } from "./virtual-permalink.js";
 
 /** Bump when axis membership or mixed-radix digit order changes. */
-export const VIRTUAL_SPACE_VERSION = 1 as const;
+export const VIRTUAL_SPACE_VERSION = 2 as const;
 
 /** Inclusive max variant; count is MAX_VIRTUAL_VARIANT + 1. */
 export const VIRTUAL_VARIANT_COUNT = MAX_VIRTUAL_VARIANT + 1;
 
-export const CANONICAL_CATEGORIES = [
-  "lp",
-  "dashboard",
-  "mobile",
-  "portfolio",
-  "ecommerce",
-  "admin",
-  "blog",
-  "form",
-] as const;
+export const CANONICAL_CATEGORIES = FILTER_CATEGORIES.map((item) => item.v);
 
 export const CANONICAL_STYLES = SEARCH_STYLES.map((style) => style.v);
 
@@ -53,12 +45,16 @@ export const CANONICAL_JSIC_CODES = Object.freeze(
 );
 
 export interface VirtualCatalogQuery {
-  readonly category?: string | null;
-  readonly style?: string | null;
-  /** JSIC division letter (A–T), matching the sidebar industry facet. */
-  readonly industry?: string | null;
-  /** Color family key or concrete slug. */
-  readonly colorPalette?: string | null;
+  /** Multi-select surface categories (empty / omitted = all). */
+  readonly categories?: readonly string[];
+  /** Multi-select visual styles. */
+  readonly styles?: readonly string[];
+  /** JSIC division letters (A–T). */
+  readonly industries?: readonly string[];
+  /** Curated job vertical keys from filter-taxonomy. */
+  readonly verticals?: readonly string[];
+  /** Color family keys or concrete slugs (OR). */
+  readonly colors?: readonly string[];
   readonly industryTerms?: readonly string[];
   readonly sort: ResultSortOrder;
 }
@@ -109,64 +105,84 @@ export function canonicalVirtualTotal(): number {
   ]);
 }
 
-function jsicMatchesIndustryTerms(code: string, terms: readonly string[]): boolean {
-  if (terms.length === 0) return true;
+function jsicMatchesTerm(code: string, term: string): boolean {
+  const t = term.toLowerCase();
   const name = jsicName(code) || "";
   const major = jsicMajor(code);
   const overlay = JSIC_OVERLAY[code];
-  return terms.every((term) => {
-    const t = term.toLowerCase();
-    if (
-      code.toLowerCase().includes(t) ||
-      name.toLowerCase().includes(t) ||
-      major.code.toLowerCase().includes(t) ||
-      major.label.toLowerCase().includes(t) ||
-      major.label_en?.toLowerCase().includes(t)
-    ) {
-      return true;
-    }
-    if (overlay?.aliases?.some((alias) => alias.toLowerCase().includes(t))) return true;
-    if (overlay?.keywords?.some((keyword) => keyword.toLowerCase().includes(t))) return true;
-    return false;
-  });
+  if (
+    code.toLowerCase().includes(t) ||
+    name.toLowerCase().includes(t) ||
+    major.code.toLowerCase().includes(t) ||
+    major.label.toLowerCase().includes(t) ||
+    major.label_en?.toLowerCase().includes(t)
+  ) {
+    return true;
+  }
+  if (overlay?.aliases?.some((alias) => alias.toLowerCase().includes(t))) return true;
+  if (overlay?.keywords?.some((keyword) => keyword.toLowerCase().includes(t))) return true;
+  return false;
 }
 
-/** Resolve the filtered axis lists for a query (no cell enumeration). */
-export function resolveFilteredAxes(query: VirtualCatalogQuery): FilteredVirtualAxes {
-  const categories = query.category
-    ? CANONICAL_CATEGORIES.includes(query.category as (typeof CANONICAL_CATEGORIES)[number])
-      ? [query.category]
-      : []
-    : [...CANONICAL_CATEGORIES];
+/** Free-text industry tokens: every term must match (AND). */
+function jsicMatchesIndustryTerms(code: string, terms: readonly string[]): boolean {
+  if (terms.length === 0) return true;
+  return terms.every((term) => jsicMatchesTerm(code, term));
+}
 
-  const styles = query.style
-    ? (CANONICAL_STYLES as readonly string[]).includes(query.style)
-      ? [query.style]
-      : []
-    : [...CANONICAL_STYLES];
+function pickKnown(selected: readonly string[] | undefined, known: readonly string[]): string[] {
+  if (!selected || selected.length === 0) return [...known];
+  const knownSet = new Set(known);
+  return selected.filter((value) => knownSet.has(value));
+}
 
-  let jsicCodes = [...CANONICAL_JSIC_CODES];
-  if (query.industry) {
-    const major = query.industry;
-    jsicCodes = jsicCodes.filter((code) => jsicMajor(code).code === major);
+function expandColorSelections(selected: readonly string[] | undefined): string[] {
+  if (!selected || selected.length === 0) return [...CANONICAL_COLORS];
+  const out = new Set<string>();
+  for (const value of selected) {
+    for (const color of expandColorFilter(value, CANONICAL_COLORS)) {
+      if (CANONICAL_COLORS.includes(color)) out.add(color);
+    }
   }
+  return [...out];
+}
+
+function resolveJsicCodes(query: VirtualCatalogQuery): string[] {
+  const majors = query.industries ?? [];
+  const verticals = query.verticals ?? [];
+  let jsicCodes = [...CANONICAL_JSIC_CODES];
+
+  if (majors.length > 0 || verticals.length > 0) {
+    const verticalCodeSet = new Set<string>();
+    const verticalKeywords: string[] = [];
+    for (const key of verticals) {
+      const vertical = INDUSTRY_VERTICALS.find((item) => item.v === key);
+      if (!vertical) continue;
+      for (const code of vertical.codes) verticalCodeSet.add(code);
+      verticalKeywords.push(...vertical.keywords);
+    }
+    jsicCodes = jsicCodes.filter((code) => {
+      if (majors.includes(jsicMajor(code).code)) return true;
+      if (verticalCodeSet.has(code)) return true;
+      if (verticalKeywords.some((keyword) => jsicMatchesTerm(code, keyword))) return true;
+      return false;
+    });
+  }
+
   const industryTerms = query.industryTerms ?? [];
   if (industryTerms.length > 0) {
     jsicCodes = jsicCodes.filter((code) => jsicMatchesIndustryTerms(code, industryTerms));
   }
+  return jsicCodes;
+}
 
-  const colorPalette = query.colorPalette;
-  const colors = colorPalette
-    ? expandColorFilter(colorPalette, CANONICAL_COLORS).filter((color) =>
-        CANONICAL_COLORS.includes(color),
-      )
-    : [...CANONICAL_COLORS];
-
+/** Resolve the filtered axis lists for a query (no cell enumeration). */
+export function resolveFilteredAxes(query: VirtualCatalogQuery): FilteredVirtualAxes {
   return {
-    categories,
-    styles,
-    jsicCodes,
-    colors,
+    categories: pickKnown(query.categories, CANONICAL_CATEGORIES),
+    styles: pickKnown(query.styles, CANONICAL_STYLES),
+    jsicCodes: resolveJsicCodes(query),
+    colors: expandColorSelections(query.colors),
     variantCount: VIRTUAL_VARIANT_COUNT,
   };
 }
@@ -287,7 +303,7 @@ export function entryFromVirtualAxes(axes: {
     jsic: axes.jsic,
     color: axes.color,
     mood: axes.mood,
-    title: `VIRTUAL DESIGN: ${jsicName(axes.jsic)} × ${axes.color} × ${axes.mood}`,
+    title: `${jsicName(axes.jsic) || axes.jsic} × ${axes.color} × ${axes.mood}`,
     hash: "",
     variant: axes.variant,
     createdAt: "2026-07-20",
@@ -350,10 +366,11 @@ function fnv1aHex(value: string): string {
 export function queryFingerprint(query: VirtualCatalogQuery): string {
   const normalized = {
     v: VIRTUAL_SPACE_VERSION,
-    category: query.category ?? "",
-    style: query.style ?? "",
-    industry: query.industry ?? "",
-    colorPalette: query.colorPalette ?? "",
+    categories: [...(query.categories ?? [])].sort(),
+    styles: [...(query.styles ?? [])].sort(),
+    industries: [...(query.industries ?? [])].sort(),
+    verticals: [...(query.verticals ?? [])].sort(),
+    colors: [...(query.colors ?? [])].sort(),
     industryTerms: [...(query.industryTerms ?? [])].map((term) => term.toLowerCase()).sort(),
     sort: query.sort,
   };

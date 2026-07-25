@@ -5,7 +5,7 @@ describe("web accessibility contracts", () => {
   it("exposes search and toast semantics in the static page", async () => {
     const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
 
-    expect(html).toContain('id="main-search-input" aria-label=');
+    expect(html).toMatch(/id="main-search-input"[\s\S]*?aria-label=/);
     expect(html).toContain('id="toast" class="toast" role="status" aria-live="polite"');
     expect(html).toContain('id="detail-load-status"');
     expect(html).toMatch(/id="detail-load-status"[\s\S]*?role="status"/);

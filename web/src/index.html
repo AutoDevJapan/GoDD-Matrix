@@ -47,37 +47,81 @@
             <div class="hero-tag" id="label-hero-tag">世界最大のDESIGNファイルライブラリ</div>
             <div class="hero-counter" id="live-total-counter">0</div>
             <div class="hero-sub" id="label-hero-sub">件のDESIGN.mdファイルが検索可能</div>
-            <div class="hero-catalog-badge" id="label-hero-catalog">
-              OSS 材化済みカタログ: <span id="stat-materialized-count">読み込み中...</span> 件
-            </div>
           </header>
 
           <div class="search-layout">
-            <aside class="filter-sidebar" aria-label="フィルタ">
-              <div class="sidebar-title" id="label-sidebar-title">フィルタ</div>
+            <button
+              id="filter-toggle-btn"
+              class="filter-toggle-btn"
+              type="button"
+              aria-controls="filter-sidebar"
+              aria-expanded="false"
+            >
+              フィルタ
+            </button>
+            <div id="filter-drawer-backdrop" class="filter-drawer-backdrop hidden" aria-hidden="true"></div>
 
-              <div class="facet-row" id="facet-row-category">
-                <div class="facet-label" id="label-facet-category">カテゴリ</div>
-                <div class="facet-list" id="facet-list-category"></div>
+            <aside class="filter-sidebar" id="filter-sidebar" aria-label="フィルタ">
+              <div class="sidebar-header">
+                <div class="sidebar-title" id="label-sidebar-title">フィルタ</div>
+                <button
+                  id="filter-close-btn"
+                  class="filter-close-btn"
+                  type="button"
+                  aria-label="フィルタを閉じる"
+                >
+                  ×
+                </button>
               </div>
-              <div class="facet-row" id="facet-row-style">
-                <div class="facet-label" id="label-facet-style">スタイル</div>
-                <div class="facet-list" id="facet-list-style"></div>
-              </div>
-              <div class="facet-row" id="facet-row-industry">
-                <div class="facet-label" id="label-facet-industry">業種（大分類）</div>
-                <div class="facet-list facet-list-scroll" id="facet-list-industry"></div>
-              </div>
-              <div class="facet-row" id="facet-row-color">
-                <div class="facet-label" id="label-facet-color">色合い</div>
-                <div class="facet-list" id="facet-list-color"></div>
-              </div>
+
+              <details class="filter-accordion" open>
+                <summary class="facet-label" id="label-facet-industry">業種 / 職種</summary>
+                <div class="filter-accordion-body">
+                  <div class="facet-subsection">
+                    <div class="facet-sublabel" id="label-facet-verticals">職種・業態</div>
+                    <div class="facet-list facet-list-checkboxes" id="facet-list-verticals"></div>
+                  </div>
+                  <div class="facet-subsection">
+                    <div class="facet-sublabel" id="label-facet-industry-major">業種（大分類）</div>
+                    <div
+                      class="facet-list facet-list-scroll facet-list-checkboxes"
+                      id="facet-list-industry"
+                    ></div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="filter-accordion" open>
+                <summary class="facet-label" id="label-facet-color">色合い</summary>
+                <div class="filter-accordion-body">
+                  <div class="facet-list" id="facet-list-color"></div>
+                </div>
+              </details>
+
+              <details class="filter-accordion">
+                <summary class="facet-label" id="label-facet-category">カテゴリ</summary>
+                <div class="filter-accordion-body">
+                  <div class="facet-list facet-list-checkboxes" id="facet-list-category"></div>
+                </div>
+              </details>
+
+              <details class="filter-accordion">
+                <summary class="facet-label" id="label-facet-style">スタイル</summary>
+                <div class="filter-accordion-body">
+                  <div class="facet-list facet-list-checkboxes" id="facet-list-style"></div>
+                </div>
+              </details>
             </aside>
 
             <section class="search-main">
               <div class="search-bar-wrapper">
                 <span class="search-bar-icon">⌕</span>
-                <input type="text" id="main-search-input" aria-label="検索例: ミニマル ダッシュボード" placeholder="検索例: ミニマル ダッシュボード" />
+                <input
+                  type="text"
+                  id="main-search-input"
+                  aria-label="検索例: ゲーム ミニマル ダッシュボード"
+                  placeholder="検索例: ゲーム ミニマル ダッシュボード"
+                />
               </div>
 
               <div id="active-pills-bar" class="active-pills-bar hidden">
@@ -107,7 +151,12 @@
                     </select>
                   </label>
                   <div class="sort-actions" id="sort-actions">
-                    <button id="sort-btn-popular" class="sort-btn active" type="button" aria-pressed="true">
+                    <button
+                      id="sort-btn-popular"
+                      class="sort-btn active"
+                      type="button"
+                      aria-pressed="true"
+                    >
                       人気順
                     </button>
                     <button id="sort-btn-newest" class="sort-btn" type="button" aria-pressed="false">
@@ -145,22 +194,19 @@
               <div class="detail-title-en" id="detail-title-en">English Title</div>
 
               <div class="detail-badges" id="detail-badges"></div>
-              <div class="detail-swatches" id="detail-swatches"></div>
+
+              <section class="detail-color-section" aria-labelledby="label-color-customize">
+                <div class="section-subtitle" id="label-color-customize">カラー調整</div>
+                <div class="detail-color-editor" id="detail-color-editor"></div>
+              </section>
 
               <p class="detail-desc-ja" id="detail-desc-ja">日本語の説明文</p>
               <p class="detail-desc-en" id="detail-desc-en">English description text</p>
 
-              <div id="detail-virtual-notice" class="detail-virtual-notice hidden">
-                <span class="badge warn" id="label-virtual-badge">VIRTUAL</span>
-                <span id="detail-virtual-notice-text"
-                  >決定論的デザインエンジンによりリアルタイム合成されました。</span
-                >
-              </div>
-
               <div class="meta-table">
                 <div class="meta-row">
                   <span class="meta-key" id="label-meta-downloads">提供形式</span>
-                  <span class="meta-val" id="detail-downloads-val">0</span>
+                  <span class="meta-val" id="detail-downloads-val">DESIGN.md</span>
                 </div>
                 <div class="meta-row">
                   <span class="meta-key" id="label-meta-updated">更新日</span>
