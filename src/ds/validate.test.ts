@@ -41,6 +41,21 @@ describe("validateDesignIndex", () => {
     expect(index.entries[0]?.tags).toBeUndefined();
   });
 
+  it("canonicalCellId を受理し不正形式を拒否する", () => {
+    const withCoords = {
+      ...validEntry,
+      canonicalCellId: "v1:virtual_7281_h17b-lt_trustworthy_cadmin_sminimal_v0",
+    };
+    const index = validateDesignIndex({ version: 1, entries: [withCoords] });
+    expect(index.entries[0]?.canonicalCellId).toBe(withCoords.canonicalCellId);
+    expect(() =>
+      validateDesignIndex({
+        version: 1,
+        entries: [{ ...validEntry, canonicalCellId: "virtual_7281_h17b-lt_trustworthy" }],
+      }),
+    ).toThrow(DesignIndexError);
+  });
+
   it("generatedAt 省略を許容する", () => {
     const index = validateDesignIndex({ version: 1, entries: [] });
     expect(index.generatedAt).toBeUndefined();

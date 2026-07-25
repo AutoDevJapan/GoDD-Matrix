@@ -25,6 +25,11 @@ export interface DesignIndexEntry {
   title: string;
   /** DESIGN.md 本文の内容ハッシュ。形式 `sha256:{64桁hex}`。 */
   hash: string;
+  /**
+   * Matrix 仮想カタログ上の正規セル座標。任意。
+   * 形式 `v{N}:virtual_{jsic}_{color}_{mood}_c{category}_s{style}_v{variant}`（Generator #272）。
+   */
+  canonicalCellId?: string;
   /** 材化 (初回生成) 時刻。ISO 8601 / RFC 3339。 */
   createdAt: string;
   /** 再材化/更新時刻。任意。 */
