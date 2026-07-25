@@ -3,6 +3,7 @@ import type { DesignIndexEntry } from "../../src/ds/types.js";
 import {
   BUNDLED_COLOR_LABELS_EN,
   BUNDLED_MOOD_LABELS_EN,
+  DS_INDEX_PAGES_RELEASE_BASE,
   EMPTY_SELECTION,
   EMPTY_TAXONOMY,
   type Swatch,
@@ -16,6 +17,8 @@ import {
   computeFacetGroups,
   contextFromEntry,
   designRawUrl,
+  dsIndexPageMirrorUrl,
+  dsIndexPageUrl,
   extractColorTokens,
   facetLabel,
   familySwatchHex,
@@ -256,6 +259,23 @@ describe("designRawUrl", () => {
   it("公開 raw の絶対 URL を組む", () => {
     expect(designRawUrl(bookstore)).toBe(
       "https://raw.githubusercontent.com/AutoDevJapan/GoDD-Design-Systems/main/design-md/6061/white/minimal/DESIGN.md",
+    );
+  });
+});
+
+describe("dsIndexPageUrl / dsIndexPageMirrorUrl (ADR-0003)", () => {
+  it("正本は Release download URL", () => {
+    expect(dsIndexPageUrl(0)).toBe(
+      "https://github.com/AutoDevJapan/GoDD-Design-Systems/releases/download/index-pages/0.json",
+    );
+    expect(dsIndexPageUrl(12)).toBe(`${DS_INDEX_PAGES_RELEASE_BASE}12.json`);
+    expect(dsIndexPageUrl(0)).not.toContain("raw.githubusercontent.com");
+  });
+
+  it("Pages ミラーは同オリジン相対パス", () => {
+    expect(dsIndexPageMirrorUrl(0)).toBe("./index/pages/0.json");
+    expect(dsIndexPageMirrorUrl(3, "https://autodevjapan.github.io/GoDD-Matrix")).toBe(
+      "https://autodevjapan.github.io/GoDD-Matrix/index/pages/3.json",
     );
   });
 });

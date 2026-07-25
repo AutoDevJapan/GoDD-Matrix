@@ -24,12 +24,14 @@ GoDD SSOT における **item3 (選定/合成ツール)**。データフロー�
 ブラウザだけで動く**完全クライアントサイド**の静的サイト。サーバ / サーバレス関数を
 持たないため、リクエスト課金や濫用リスクがない (閲覧者自身のブラウザで動くだけ)。
 
-- **データ取得**: 公開 Design-Systems の `index-summary.json` を先読みし、件数・ファセットを
-  `index.json` 無しで描画する (issue #88 / DS `index-paging` 契約)。明細は
-  `index/pages/{n}.json` を必要時に取得し、ページシャード未公開時のみ非推奨ログ付きで
-  `index.json` 全件へフォールバックする。`DESIGN.md` は `raw.githubusercontent.com` から
-  直接 fetch。JSIC コード→業種名は Matrix にバンドル済みの `src/axes/jsic-catalog.ts`
-  (全 1,473 件)、カラー/ムード slug の表示名は `src/axes/taxonomy.ts` を利用。
+- **データ取得**: 公開 Design-Systems の `index-summary.json`（raw main）を先読みし、件数・
+  ファセットを `index.json` 無しで描画する (issue #88 / DS `index-paging` / ADR-0003)。
+  明細の正本は GitHub Release タグ `index-pages` の `{n}.json`。Release asset はブラウザ
+  CORS 非対応のため、Pages デプロイ時に同オリジンへミラー同期して取得する。シャード取得
+  失敗時のみ非推奨ログ付きで `index.json` 全件へフォールバックする。`DESIGN.md` は
+  `raw.githubusercontent.com` から直接 fetch。JSIC コード→業種名は Matrix にバンドル済みの
+  `src/axes/jsic-catalog.ts` (全 1,473 件)、カラー/ムード slug の表示名は
+  `src/axes/taxonomy.ts` を利用。
 - **検索/絞り込み**: 左サイドバーでカテゴリ・スタイル・業種（JSIC 大分類）・色合い（系統）
   を絞り込み、自由文検索と併用できる。色フィルタは具体色ではなく色合いキーで展開するため、
   選択直後に 0 件やグレー偏りになりにくい。表示件数は 10〜1000 をユーザーが選択可能。

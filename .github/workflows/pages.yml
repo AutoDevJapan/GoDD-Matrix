@@ -55,6 +55,11 @@ jobs:
       - name: Build static site
         run: pnpm build:web
 
+      # Release `index-pages` は CORS 非対応のため、正本から同オリジンミラーを同期する
+      # （消費者契約の正本 URL は releases/download/…。ADR-0003 / Design-Systems#65）。
+      - name: Mirror index pages from Design-Systems Release
+        run: node scripts/sync-index-pages.mjs web/dist/index/pages
+
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
