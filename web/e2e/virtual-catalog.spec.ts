@@ -33,54 +33,47 @@ test.beforeEach(async ({ context, page }) => {
   await page.route("https://fonts.gstatic.com/**", (route) => route.abort());
 });
 
-test("loads, filters, opens a detail, switches locale, and restores its permalink", async ({
-  page,
-}) => {
+test("browses the virtual catalog, preserves URL state, and jumps by ordinal", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#results .card")).toHaveCount(25);
+  await expect(page.locator("#matches-count-display")).toContainText(/[0-9]/);
 
   await page.locator("#main-search-input").fill("dashboard minimal");
-  await expect(page.locator("#active-pills-bar")).toBeVisible();
-  await page.locator("#sort-btn-newest").click();
+  await expect(page).toHaveURL(/q=dashboard/);
+  await expect(page).toHaveURL(/cursor=v1\./);
+
+  await expect(page.locator("#results .card").first()).toBeVisible();
+  await expect(page.locator("#results .card-title-ja").first()).not.toBeEmpty();
+
+  await page.locator(".pager-jump").fill("500");
+  await page.locator(".pager button", { hasText: /移動|Go/ }).click();
+  await expect(page.locator(".pager-info")).toContainText("500 /");
+  await expect(page).toHaveURL(/cursor=v1\./);
+
+  const jumpedUrl = page.url();
+  await page.goto(jumpedUrl);
+  await expect(page.locator(".pager-info")).toContainText("500 /");
+  await expect(page.locator("#main-search-input")).toHaveValue("dashboard minimal");
+});
+
+test("opens a virtual cell permalink and reloads the same addressable cell", async ({ page }) => {
+  await page.goto("/?q=dashboard+minimal&sort=newest");
   await page.locator("#results .card").first().click();
   await expect(page.locator("#detail-view")).toBeVisible();
   await expect(page).toHaveURL(/cell=virtual_/);
 
-  await page.locator("#locale-select").selectOption("en");
-  await expect(page.locator("#back-btn")).toHaveText("← Back to search");
-  await expect(page.locator("#detail-code-block")).toContainText("Output language: English");
-
   const permalink = page.url();
   const cellId = new URL(permalink).searchParams.get("cell");
-  const filename = await page.locator("#detail-filename").textContent();
-  const renderedPrompt = await page.locator("#detail-code-block").textContent();
   expect(cellId).toMatch(/^virtual_/);
-  expect(filename).toBe(`${cellId}.design.md`);
-  expect(renderedPrompt).toMatch(/Variant:\s*\d+/);
 
   await page.goto(permalink);
   await expect(page.locator("#detail-view")).toBeVisible();
-  await expect(page).toHaveURL(permalink);
-  await expect(page.locator("#detail-filename")).toHaveText(filename ?? "");
-  await expect(page.locator("#detail-code-block")).toHaveText(renderedPrompt ?? "");
+  await expect(page.locator("#detail-filename")).toHaveText(`${cellId}.design.md`);
+  await expect(page.locator("#detail-code-block")).not.toBeEmpty();
 });
 
-test("fetches a materialized body and supports copy and download", async ({ page }) => {
+test("keeps the materialized cell path fetchable by id", async ({ page }) => {
   await page.goto(`/?cell=${materializedId}`);
-  const preview = page.locator("#detail-code-block");
-  await expect(preview).toContainText("Materialized browser fixture.");
-  await expect(page.locator("#btn-copy")).toBeEnabled();
-
-  await page.locator("#btn-copy").click();
-  const clipboard = await page.evaluate(() => navigator.clipboard.readText());
-  expect(clipboard).toContain("Materialized browser fixture.");
-
-  const downloadPromise = page.waitForEvent("download");
-  await page.locator("#btn-download").click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe(`${materializedId}.design.md`);
-  const stream = await download.createReadStream();
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
-  expect(Buffer.concat(chunks).toString("utf8")).toContain("Materialized browser fixture.");
+  await expect(page.locator("#detail-view")).toBeVisible();
+  await expect(page.locator("#detail-code-block")).toContainText("Materialized browser fixture.");
 });

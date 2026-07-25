@@ -56,12 +56,7 @@ jobs:
       - name: Build static web
         run: pnpm build:web
 
-      # Chromium 1種・1 worker の小さな built-site suite に限定して実行時間を抑える。
-      - name: Install Chromium for browser tests
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Browser regression tests
-        run: pnpm test:e2e
+      # Browser E2E (Playwright) はローカル専用。Actions では実行しない (issue #71 / コスト抑制)。
 
   gitleaks:
     name: シークレット走査 (gitleaks)

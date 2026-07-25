@@ -1,7 +1,6 @@
-import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
-import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
+import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
 import {
   COLOR_FAMILIES,
   DS_INDEX_URL,
@@ -11,7 +10,6 @@ import {
   type Taxonomy,
   VIRTUAL_COLOR_CATALOG,
   approxSwatchesForColor,
-  buildCellPermalink,
   colorFamily,
   composePromptForCell,
   facetLabel,
@@ -32,22 +30,18 @@ import {
   clampPageSize,
   dedupeEntriesById,
 } from "./result-card.js";
-import { type ResultSortOrder, sortDesignEntries, virtualIndexAtRank } from "./result-sorting.js";
-import {
-  SEARCH_STYLES,
-  findColorValue,
-  findStyleValue,
-  resolveColorSlugs,
-  resolveMoodSlug,
-} from "./search-parser.js";
+import type { ResultSortOrder } from "./result-sorting.js";
+import { SEARCH_STYLES, findColorValue, findStyleValue } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
 import { localizePromptPreview } from "./ui-localization.js";
-import { buildVirtualDesign } from "./virtual-design.js";
 import {
-  buildVirtualPermalinkId,
-  parseVirtualPermalinkId,
-  validateVirtualPermalinkAxes,
-} from "./virtual-permalink.js";
+  canonicalVirtualTotal,
+  decodeCatalogCursor,
+  enrichWithMaterialized,
+  pageVirtualCatalog,
+  restoreCanonicalVirtualEntry,
+} from "./virtual-catalog.js";
+import { buildVirtualDesign } from "./virtual-design.js";
 
 // DOM helper to build elements cleanly
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -119,7 +113,9 @@ interface Filters {
 const filters: Filters = { category: null, style: null, industry: null, color: null };
 
 let animatedTotal = 0;
-const TOTAL_LIBRARY = 172635600;
+const TOTAL_LIBRARY = canonicalVirtualTotal();
+/** Last query-bound cursor written to the URL (0-based start rank). */
+let currentCursor: string | null = null;
 
 // Deterministic property mapping from index entries to reference facets
 function getEntryCategory(entry: DesignIndexEntry): string {
@@ -148,6 +144,76 @@ function getEntryStyle(entry: DesignIndexEntry): string {
 
 function getEntryMajor(entry: DesignIndexEntry): string {
   return jsicMajor(entry.jsic).code;
+}
+
+function isLocallyRendered(entry: DesignIndexEntry): boolean {
+  // Prefer materialized bodies when enrichment attached a hash, even for virtual_* ids.
+  return !entry.hash;
+}
+
+function syncBrowseUrl(cellId: string | null = selectedEntry?.id ?? null): void {
+  const url = applyCatalogUrlState(window.location.href, {
+    q: searchQuery,
+    category: filters.category,
+    style: filters.style,
+    industry: filters.industry,
+    color: filters.color,
+    sort: sortOrder,
+    cursor: currentCursor,
+    cell: cellId,
+  });
+  window.history.replaceState(null, "", url);
+}
+
+/** Resolve smart-search tokens + facet chips into a virtual-catalog query. */
+function buildCatalogQuery(): {
+  category: string | null;
+  style: string | null;
+  industry: string | null;
+  colorPalette: string | null;
+  industryTerms: string[];
+  sort: ResultSortOrder;
+} {
+  let parsedCategory = filters.category;
+  let parsedStyle = filters.style;
+  let parsedColor = filters.color;
+  const industryTerms: string[] = [];
+
+  if (searchQuery) {
+    const terms = searchQuery
+      .toLowerCase()
+      .split(/[\s、,]+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    for (const term of terms) {
+      const catMatch = findCategoryValue(term);
+      if (catMatch && !parsedCategory) {
+        parsedCategory = catMatch;
+        continue;
+      }
+      const styleMatch = findStyleValue(term, taxonomy);
+      if (styleMatch && !parsedStyle) {
+        parsedStyle = styleMatch;
+        continue;
+      }
+      const colorMatch = findColorValue(term, taxonomy);
+      if (colorMatch && !parsedColor) {
+        parsedColor = colorMatch;
+        continue;
+      }
+      industryTerms.push(term);
+    }
+  }
+
+  return {
+    category: parsedCategory,
+    style: parsedStyle,
+    industry: filters.industry,
+    colorPalette: parsedColor,
+    industryTerms,
+    sort: sortOrder,
+  };
 }
 
 function getEntryFont(entry: DesignIndexEntry): string {
@@ -601,8 +667,7 @@ async function openDetail(
   if (opts.focus !== false) byId<HTMLButtonElement>("back-btn").focus();
 
   // Sync URL permalink
-  const permalink = buildCellPermalink(window.location.href, entry.id);
-  window.history.replaceState(null, "", permalink);
+  syncBrowseUrl(entry.id);
 
   // Resolve detailed fields
   const cLabel = CATEGORIES.find((c) => c.v === getEntryCategory(entry));
@@ -666,7 +731,7 @@ async function openDetail(
   const previewBox = byId("detail-preview-box");
   previewBox.style.background = getThumbnailBg(entry);
 
-  const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
+  const isVirtual = isLocallyRendered(entry);
 
   // Set file type and metadata
   const t = TRANSLATIONS[currentLocale];
@@ -868,152 +933,27 @@ function findCategoryValue(term: string): string | null {
 function applyState(): void {
   renderFilters();
 
-  // Parse searchQuery into axis terms (smart search)
-  let parsedCategory = filters.category;
-  let parsedStyle = filters.style;
-  let parsedColor = filters.color;
-  const industryTerms: string[] = [];
+  const catalogPage = pageVirtualCatalog(buildCatalogQuery(), {
+    pageSize,
+    page: currentPage,
+  });
 
-  if (searchQuery) {
-    const terms = searchQuery
-      .toLowerCase()
-      .split(/[\s、,]+/)
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
-
-    for (const term of terms) {
-      const catMatch = findCategoryValue(term);
-      if (catMatch && !parsedCategory) {
-        parsedCategory = catMatch;
-        continue;
-      }
-      const styleMatch = findStyleValue(term, taxonomy);
-      if (styleMatch && !parsedStyle) {
-        parsedStyle = styleMatch;
-        continue;
-      }
-      const colorMatch = findColorValue(term, taxonomy);
-      if (colorMatch && !parsedColor) {
-        parsedColor = colorMatch;
-        continue;
-      }
-      industryTerms.push(term);
-    }
-  }
-
-  const isFiltered = !!(
-    parsedCategory ||
-    parsedStyle ||
-    filters.industry ||
-    parsedColor ||
-    industryTerms.length > 0
+  const pageItems = dedupeEntriesById(
+    catalogPage.items.map((entry) => enrichWithMaterialized(entry, allEntries)),
   );
-
-  let pageView: Page<DesignIndexEntry>;
-  let totalMatches = TOTAL_LIBRARY;
-
-  if (!isFiltered) {
-    pageView = paginate(sortDesignEntries(allEntries, sortOrder), currentPage, pageSize);
-    totalMatches = TOTAL_LIBRARY;
-  } else {
-    // Determine combinatorics sizes
-    const cLen = parsedCategory ? 1 : CATEGORIES.length;
-    const sLen = parsedStyle ? 1 : STYLES.length;
-
-    let matchingJsic = JSIC_SUBCLASSES;
-    if (filters.industry) {
-      matchingJsic = JSIC_SUBCLASSES.filter((s) => jsicMajor(s.code).code === filters.industry);
-    }
-    if (industryTerms.length > 0) {
-      matchingJsic = matchingJsic.filter((s) => {
-        const name = jsicName(s.code) || "";
-        const major = jsicMajor(s.code);
-        const overlay = JSIC_OVERLAY[s.code];
-
-        return industryTerms.every((term) => {
-          if (
-            s.code.includes(term) ||
-            name.toLowerCase().includes(term) ||
-            major.code.toLowerCase().includes(term) ||
-            major.label.toLowerCase().includes(term) ||
-            major.label_en?.toLowerCase().includes(term)
-          ) {
-            return true;
-          }
-          if (overlay) {
-            if (overlay.aliases?.some((a) => a.toLowerCase().includes(term))) {
-              return true;
-            }
-            if (overlay.keywords?.some((k) => k.toLowerCase().includes(term))) {
-              return true;
-            }
-          }
-          return false;
-        });
-      });
-    }
-
-    let matchingColors = [...VIRTUAL_COLOR_CATALOG];
-    const colFilter = parsedColor;
-    if (colFilter) {
-      matchingColors = resolveColorSlugs(colFilter, taxonomy);
-      if (matchingColors.length === 0) matchingColors = [...VIRTUAL_COLOR_CATALOG];
-    }
-
-    const uniqueKeysCount = cLen * sLen * matchingJsic.length * matchingColors.length;
-
-    // Scale count: if all filters are selected, scale by 16; if some are selected, scale proportionally up to 4000
-    const activeFilterCount =
-      (parsedCategory ? 1 : 0) +
-      (parsedStyle ? 1 : 0) +
-      (filters.industry ? 1 : 0) +
-      (parsedColor ? 1 : 0);
-    const scale =
-      activeFilterCount >= 3
-        ? 16
-        : activeFilterCount === 2
-          ? 64
-          : activeFilterCount === 1
-            ? 500
-            : 4000;
-    totalMatches = uniqueKeysCount * scale;
-
-    const pageCount = Math.ceil(totalMatches / pageSize) || 1;
-    const p = Math.max(1, Math.min(currentPage, pageCount));
-    const start = (p - 1) * pageSize;
-
-    const pageItems: DesignIndexEntry[] = [];
-    for (let rank = start; rank < Math.min(start + pageSize, totalMatches); rank++) {
-      const idx = virtualIndexAtRank(rank, totalMatches, sortOrder);
-      pageItems.push(
-        getCombinationAtIndex(
-          idx,
-          {
-            category: parsedCategory,
-            style: parsedStyle,
-            industry: filters.industry,
-            color: parsedColor,
-          },
-          matchingJsic,
-          matchingColors,
-        ),
-      );
-    }
-
-    pageView = {
-      items: pageItems,
-      page: p,
-      pageCount,
-      total: totalMatches,
-      pageSize,
-    };
-  }
-
-  pageView = {
-    ...pageView,
-    items: dedupeEntriesById(pageView.items),
+  const pageView: Page<DesignIndexEntry> = {
+    items: pageItems,
+    page: catalogPage.page,
+    pageCount: catalogPage.pageCount,
+    total: catalogPage.total,
+    pageSize: catalogPage.pageSize,
   };
+  const totalMatches = catalogPage.total;
   currentPage = pageView.page;
+  currentCursor = catalogPage.cursor;
+  if (!selectedEntry) {
+    syncBrowseUrl(null);
+  }
 
   // Render Pills Bar
   const pillsBar = byId("active-pills-bar");
@@ -1169,114 +1109,6 @@ function applyState(): void {
   renderPager(pageView);
 }
 
-function getCombinationAtIndex(
-  index: number,
-  filters: Filters,
-  matchingJsic: typeof JSIC_SUBCLASSES,
-  matchingColors: string[],
-): DesignIndexEntry {
-  const categories = filters.category ? [filters.category] : CATEGORIES.map((c) => c.v);
-  const styles = filters.style ? [filters.style] : STYLES.map((s) => s.v);
-
-  const cLen = categories.length;
-  const sLen = styles.length;
-  const jLen = matchingJsic.length;
-  const colLen = matchingColors.length;
-
-  const baseCombinations = cLen * sLen * jLen * colLen;
-  const baseIndex = index % baseCombinations;
-  const extraIndex = Math.floor(index / baseCombinations);
-
-  let rem = baseIndex;
-  const colorIdx = rem % colLen;
-  rem = Math.floor(rem / colLen);
-
-  const jsicIdx = rem % jLen;
-  rem = Math.floor(rem / jLen);
-
-  const styleIdx = rem % sLen;
-  rem = Math.floor(rem / sLen);
-
-  const catIdx = rem % cLen;
-
-  const cat = categories[catIdx] ?? "dashboard";
-  const style = styles[styleIdx] ?? "minimal";
-  const jsicObj = matchingJsic[jsicIdx] || { code: "6061", name: "ソフトウェア業" };
-  const color = matchingColors[colorIdx] || "h17b-lt";
-
-  const mood = resolveMoodSlug(style);
-
-  const id = buildVirtualPermalinkId({
-    jsic: jsicObj.code,
-    color,
-    mood,
-    category: cat,
-    style,
-    variant: extraIndex,
-  });
-  const title = `VIRTUAL DESIGN: ${jsicName(jsicObj.code)} × ${color} × ${mood}`;
-
-  const entry: DesignIndexEntry = {
-    id,
-    path: `design-md/${jsicObj.code}/${color}/${mood}/DESIGN.md`,
-    jsic: jsicObj.code,
-    color,
-    mood,
-    title,
-    hash: "",
-    variant: extraIndex,
-    createdAt: "2026-07-20",
-    tags: [cat, style, jsicMajor(jsicObj.code).code],
-  };
-
-  return entry;
-}
-
-function restoreVirtualEntry(id: string): DesignIndexEntry | undefined {
-  const axes = parseVirtualPermalinkId(id);
-  if (!axes) return undefined;
-
-  const knownColors = new Set([...VIRTUAL_COLOR_CATALOG, ...Object.keys(taxonomy.colors)]);
-  if (
-    !validateVirtualPermalinkAxes(axes, {
-      jsic: new Set(JSIC_SUBCLASSES.map((item) => item.code)),
-      colors: knownColors,
-      categories: new Set(CATEGORIES.map((item) => item.v)),
-      styles: new Set(STYLES.map((item) => item.v)),
-      moodForStyle: resolveMoodSlug,
-    })
-  ) {
-    return undefined;
-  }
-
-  return {
-    id,
-    path: `design-md/${axes.jsic}/${axes.color}/${axes.mood}/DESIGN.md`,
-    jsic: axes.jsic,
-    color: axes.color,
-    mood: axes.mood,
-    title: `VIRTUAL DESIGN: ${jsicName(axes.jsic)} × ${axes.color} × ${axes.mood}`,
-    hash: "",
-    variant: axes.variant,
-    createdAt: "2026-07-20",
-    tags: [axes.category, axes.style, jsicMajor(axes.jsic).code],
-  };
-}
-
-function paginate<T>(items: readonly T[], page: number, pageSize: number): Page<T> {
-  const total = items.length;
-  const pageCount = Math.ceil(total / pageSize) || 1;
-  const p = Math.max(1, Math.min(page, pageCount));
-  const start = (p - 1) * pageSize;
-  return {
-    items: items.slice(start, start + pageSize),
-    page: p,
-    pageSize,
-    total,
-    pageCount,
-  };
-}
-
 function renderPager(pg: Page<DesignIndexEntry>): void {
   const pager = byId("pager");
   pager.replaceChildren();
@@ -1292,6 +1124,33 @@ function renderPager(pg: Page<DesignIndexEntry>): void {
   next.disabled = pg.page >= pg.pageCount;
   next.onclick = () => goToPage(pg.page + 1);
   pager.appendChild(next);
+
+  // Distant ordinal jump: jump to an arbitrary 1-based page without scanning intervening pages.
+  const jump = document.createElement("input");
+  jump.type = "number";
+  jump.className = "pager-jump";
+  jump.min = "1";
+  jump.max = String(pg.pageCount);
+  jump.value = String(pg.page);
+  jump.setAttribute(
+    "aria-label",
+    currentLocale === "ja" ? "ページ番号へジャンプ" : "Jump to page number",
+  );
+  const jumpBtn = el("button", {
+    text: currentLocale === "ja" ? "移動" : "Go",
+  });
+  jumpBtn.onclick = () => {
+    const target = Number.parseInt(jump.value, 10);
+    if (Number.isFinite(target)) goToPage(target);
+  };
+  jump.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      jumpBtn.click();
+    }
+  });
+  pager.appendChild(jump);
+  pager.appendChild(jumpBtn);
 }
 
 function goToPage(page: number): void {
@@ -1311,7 +1170,8 @@ async function bootstrap(): Promise<void> {
     currentLocale = lang === "en" ? "en" : "ja";
   }
   byId<HTMLSelectElement>("locale-select").value = currentLocale;
-  const savedPageSize = Number(localStorage.getItem("godd_page_size"));
+  const savedPageSizeRaw = localStorage.getItem("godd_page_size");
+  const savedPageSize = savedPageSizeRaw === null ? Number.NaN : Number(savedPageSizeRaw);
   pageSize = clampPageSize(Number.isFinite(savedPageSize) ? savedPageSize : 25);
   byId<HTMLSelectElement>("page-size-select").value = String(pageSize);
   translateUI();
@@ -1389,7 +1249,7 @@ async function bootstrap(): Promise<void> {
   byId("back-btn").onclick = () => {
     detailRequestId++;
     selectedEntry = null;
-    window.history.replaceState(null, "", window.location.pathname);
+    syncBrowseUrl(null);
     byId("detail-view").classList.add("hidden");
     byId("search-view").classList.remove("hidden");
     const returnTarget = detailReturnFocus?.isConnected
@@ -1399,17 +1259,38 @@ async function bootstrap(): Promise<void> {
     returnTarget.focus();
   };
 
-  // Restore state from URL permalink if any
-  const params = new URLSearchParams(window.location.search);
-  const cellParam = params.get("cell");
-  if (cellParam) {
-    const entry = findEntryById(allEntries, cellParam) ?? restoreVirtualEntry(cellParam);
-    if (entry) {
-      void openDetail(entry);
+  // Restore browse + cell state from the URL.
+  const urlState = parseCatalogUrlState(window.location.search);
+  searchQuery = urlState.q;
+  byId<HTMLInputElement>("main-search-input").value = searchQuery;
+  filters.category = urlState.category;
+  filters.style = urlState.style;
+  filters.industry = urlState.industry;
+  filters.color = urlState.color;
+  sortOrder = urlState.sort;
+  byId("sort-btn-popular").classList.toggle("active", sortOrder === "popular");
+  byId("sort-btn-newest").classList.toggle("active", sortOrder === "newest");
+  byId("sort-btn-popular").setAttribute("aria-pressed", String(sortOrder === "popular"));
+  byId("sort-btn-newest").setAttribute("aria-pressed", String(sortOrder === "newest"));
+
+  if (urlState.cursor) {
+    const probe = pageVirtualCatalog(buildCatalogQuery(), { pageSize, page: 1 });
+    const startRank = decodeCatalogCursor(urlState.cursor, probe.queryFingerprint);
+    if (startRank !== undefined) {
+      currentPage = Math.floor(startRank / pageSize) + 1;
+      currentCursor = urlState.cursor;
     }
   }
 
   applyState();
+
+  if (urlState.cell) {
+    const restored =
+      findEntryById(allEntries, urlState.cell) ?? restoreCanonicalVirtualEntry(urlState.cell);
+    if (restored) {
+      void openDetail(enrichWithMaterialized(restored, allEntries));
+    }
+  }
 }
 
 void bootstrap();
