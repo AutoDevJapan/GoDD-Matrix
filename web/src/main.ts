@@ -3,30 +3,37 @@ import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
 import {
+  COLOR_FAMILIES,
   DS_INDEX_URL,
-  EMPTY_SELECTION,
   EMPTY_TAXONOMY,
-  type FacetSelection,
   type Locale,
   type Page,
-  type Swatch,
   type Taxonomy,
+  VIRTUAL_COLOR_CATALOG,
   approxSwatchesForColor,
   buildCellPermalink,
   colorFamily,
   composePromptForCell,
+  facetLabel,
+  familySwatchHex,
   findEntryById,
-  highlightTermsFromText,
   jsicMajor,
   jsicName,
   labelForColor,
   labelForMood,
+  listJsicMajors,
 } from "./lib.js";
 import { renderMatchesCount } from "./matches-count.js";
 import { loadMaterializedDesign } from "./materialized-design.js";
+import {
+  type PageSizeOption,
+  buildDirectionTitle,
+  buildEntryTags,
+  clampPageSize,
+  dedupeEntriesById,
+} from "./result-card.js";
 import { type ResultSortOrder, sortDesignEntries, virtualIndexAtRank } from "./result-sorting.js";
 import {
-  SEARCH_COLORS,
   SEARCH_STYLES,
   findColorValue,
   findStyleValue,
@@ -34,7 +41,7 @@ import {
   resolveMoodSlug,
 } from "./search-parser.js";
 import { loadTaxonomy } from "./taxonomy-cache.js";
-import { localizePromptPreview, localizedColorName } from "./ui-localization.js";
+import { localizePromptPreview } from "./ui-localization.js";
 import { buildVirtualDesign } from "./virtual-design.js";
 import {
   buildVirtualPermalinkId,
@@ -76,16 +83,11 @@ const CATEGORIES = [
 
 const STYLES = SEARCH_STYLES;
 
-const INDUSTRIES = [
-  { v: "saas", ja: "SaaS", en: "SaaS" },
-  { v: "finance", ja: "金融", en: "Finance" },
-  { v: "gaming", ja: "ゲーム", en: "Gaming" },
-  { v: "education", ja: "教育", en: "Education" },
-  { v: "ec", ja: "EC", en: "Retail" },
-  { v: "healthcare", ja: "医療", en: "Healthcare" },
-  { v: "travel", ja: "旅行", en: "Travel" },
-  { v: "food", ja: "飲食", en: "Food" },
-];
+const INDUSTRIES = listJsicMajors().map((m) => ({
+  v: m.code,
+  ja: m.label,
+  en: m.label_en ?? m.label,
+}));
 
 const FONTS = [
   { v: "inter", ja: "Inter", en: "Inter" },
@@ -95,8 +97,6 @@ const FONTS = [
   { v: "noto", ja: "Noto Sans JP", en: "Noto Sans JP" },
   { v: "space", ja: "Space Grotesk", en: "Space Grotesk" },
 ];
-
-const COLOR_PALETTE = SEARCH_COLORS;
 
 // App States
 let allEntries: readonly DesignIndexEntry[] = [];
@@ -108,7 +108,7 @@ let currentPage = 1;
 let selectedEntry: DesignIndexEntry | null = null;
 let detailReturnFocus: HTMLElement | null = null;
 let detailRequestId = 0;
-const PAGE_SIZE = 24;
+let pageSize: PageSizeOption = 25;
 
 interface Filters {
   category: string | null;
@@ -146,10 +146,14 @@ function getEntryStyle(entry: DesignIndexEntry): string {
   return "minimal";
 }
 
+function getEntryMajor(entry: DesignIndexEntry): string {
+  return jsicMajor(entry.jsic).code;
+}
+
 function getEntryIndustry(entry: DesignIndexEntry): string {
   const jsic = entry.jsic;
   if (entry.id?.startsWith("virtual_")) {
-    return entry.tags?.[2] || "saas";
+    return entry.tags?.[2] || getEntryMajor(entry);
   }
   if (
     jsic.startsWith("37") ||
@@ -349,7 +353,10 @@ function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void 
 interface TranslationKeys {
   siteTitle: string;
   siteDescription: string;
+  brandTitle: string;
   localeLabel: string;
+  labelSidebarTitle: string;
+  labelPageSize: string;
   pagerLabel: string;
   previewLabel: string;
   footerText: string;
@@ -395,7 +402,10 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
   ja: {
     siteTitle: "DESIGN.md Library",
     siteDescription: "1億件以上のDESIGNファイルを検索・共有",
+    brandTitle: "GoDD Matrix",
     localeLabel: "言語",
+    labelSidebarTitle: "フィルタ",
+    labelPageSize: "表示件数",
     pagerLabel: "ページ送り",
     previewLabel: "プレビュー",
     footerText: "データ提供元: GoDD Design System 公開コーパス（ブラウザから取得）",
@@ -405,8 +415,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     placeholderSearch: "検索例: ミニマル ダッシュボード",
     labelFacetCategory: "カテゴリ",
     labelFacetStyle: "スタイル",
-    labelFacetIndustry: "業界",
-    labelFacetColor: "カラー",
+    labelFacetIndustry: "業種（大分類）",
+    labelFacetColor: "色合い",
     labelActivePills: "適用中:",
     clearAll: "すべてクリア",
     labelMatches: "件が一致",
@@ -439,7 +449,10 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
   en: {
     siteTitle: "DESIGN.md Library",
     siteDescription: "Search and share more than 100 million DESIGN files",
+    brandTitle: "GoDD Matrix",
     localeLabel: "Language",
+    labelSidebarTitle: "Filters",
+    labelPageSize: "Results per page",
     pagerLabel: "Pagination",
     previewLabel: "Preview",
     footerText: "Data source: GoDD Design System public corpus (fetched client-side)",
@@ -449,8 +462,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     placeholderSearch: "Search e.g. 'Minimal Dashboard'",
     labelFacetCategory: "Category",
     labelFacetStyle: "Style",
-    labelFacetIndustry: "Industry",
-    labelFacetColor: "Color",
+    labelFacetIndustry: "Industry (division)",
+    labelFacetColor: "Color family",
     labelActivePills: "Active:",
     clearAll: "Clear all",
     labelMatches: "files match",
@@ -546,6 +559,11 @@ function translateUI(): void {
     .querySelector<HTMLMetaElement>('meta[name="description"]')
     ?.setAttribute("content", t.siteDescription);
   byId("locale-select").setAttribute("aria-label", t.localeLabel);
+  byId("label-locale-visible").textContent = t.localeLabel;
+  byId("label-brand-title").textContent = t.brandTitle;
+  byId("label-sidebar-title").textContent = t.labelSidebarTitle;
+  byId("label-page-size").textContent = t.labelPageSize;
+  byId("page-size-select").setAttribute("aria-label", t.labelPageSize);
   byId("pager").setAttribute("aria-label", t.pagerLabel);
   byId("label-preview-overlay").textContent = t.previewLabel;
   byId("label-footer").textContent = t.footerText;
@@ -616,7 +634,7 @@ function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
       ? jsicName(entry.jsic) || entry.jsic
       : major.label_en || major.label || entry.jsic;
   return buildVirtualDesign(entry, locale, {
-    title: getEntryTitle(entry, locale),
+    title: buildDirectionTitle(entry, locale, taxonomy),
     industry,
     color: labelForColor(entry.color, taxonomy, locale),
     mood: labelForMood(entry.mood, taxonomy, locale),
@@ -646,7 +664,7 @@ async function openDetail(
   // Resolve detailed fields
   const cLabel = CATEGORIES.find((c) => c.v === getEntryCategory(entry));
   const sLabel = STYLES.find((s) => s.v === getEntryStyle(entry));
-  const iLabel = INDUSTRIES.find((i) => i.v === getEntryIndustry(entry));
+  const iLabel = INDUSTRIES.find((i) => i.v === getEntryMajor(entry));
   const fLabel = FONTS.find((f) => f.v === getEntryFont(entry));
 
   const categoryText = cLabel ? (currentLocale === "ja" ? cLabel.ja : cLabel.en) : "";
@@ -655,8 +673,13 @@ async function openDetail(
   const fontText = fLabel ? (currentLocale === "ja" ? fLabel.ja : fLabel.en) : "";
 
   // Title & Filename
-  const mainTitle = getEntryTitle(entry, currentLocale);
-  const subTitle = `${entry.jsic} × ${entry.color} × ${entry.mood}`;
+  const mainTitle = buildDirectionTitle(entry, currentLocale, taxonomy);
+  const subTitle = buildEntryTags(entry, currentLocale, taxonomy, {
+    materializedLabel: TRANSLATIONS[currentLocale].preGeneratedType,
+    virtualLabel: TRANSLATIONS[currentLocale].materializationType,
+  })
+    .map((tag) => tag.label)
+    .join(" · ");
   byId("detail-filename").textContent = `${entry.id}.design.md`;
   byId("detail-title-ja").textContent = mainTitle;
   byId("detail-title-en").textContent = subTitle;
@@ -800,10 +823,18 @@ async function openDetail(
     card.appendChild(thumb);
 
     const body = el("span", { class: "related-body" });
-    const mainTitle = getEntryTitle(item, currentLocale);
-    const subTitle = `${item.jsic} × ${item.color} × ${item.mood}`;
-    body.appendChild(el("span", { class: "related-card-title-ja", text: mainTitle }));
-    body.appendChild(el("span", { class: "related-card-title-en", text: subTitle }));
+    body.appendChild(
+      el("span", {
+        class: "related-card-title-ja",
+        text: buildDirectionTitle(item, currentLocale, taxonomy),
+      }),
+    );
+    body.appendChild(
+      el("span", {
+        class: "related-card-title-en",
+        text: `${item.jsic} · ${labelForColor(item.color, taxonomy, currentLocale)} · ${labelForMood(item.mood, taxonomy, currentLocale)}`,
+      }),
+    );
     card.appendChild(body);
 
     relatedGrid.appendChild(card);
@@ -842,15 +873,15 @@ function renderFilters(): void {
     styleList.appendChild(chip);
   }
 
-  // Industry Chips
+  // Industry chips (JSIC major divisions)
   const indList = byId("facet-list-industry");
   indList.replaceChildren();
   for (const i of INDUSTRIES) {
     const active = filters.industry === i.v;
     const label = currentLocale === "ja" ? i.ja : i.en;
     const chip = el("button", { class: `facet-chip ${active ? "selected" : ""}`, text: label });
+    chip.title = `${i.v}: ${label}`;
     chip.onclick = () => {
-      // Toggle industry selection and reset to page 1
       filters.industry = active ? null : i.v;
       currentPage = 1;
       applyState();
@@ -858,18 +889,21 @@ function renderFilters(): void {
     indList.appendChild(chip);
   }
 
-  // Color Swatches
+  // Color-family chips (色合い)
   const colorList = byId("facet-list-color");
   colorList.replaceChildren();
-  for (const c of COLOR_PALETTE) {
-    const active = filters.color === c.slug;
+  for (const family of COLOR_FAMILIES) {
+    const active = filters.color === family.key;
+    const label = facetLabel("color", family.key, taxonomy, currentLocale);
     const chip = el("button", {
-      class: `color-dot-btn ${active ? "selected" : ""}`,
-      title: localizedColorName(c.name, c.slug, currentLocale),
+      class: `color-family-btn ${active ? "selected" : ""}`,
+      title: label,
     });
-    chip.style.backgroundColor = c.hex;
+    const swatch = el("span", { class: "swatch" });
+    swatch.style.backgroundColor = familySwatchHex(family.key) ?? "#94a3b8";
+    chip.append(swatch, document.createTextNode(label));
     chip.onclick = () => {
-      filters.color = active ? null : c.slug;
+      filters.color = active ? null : family.key;
       currentPage = 1;
       applyState();
     };
@@ -961,7 +995,7 @@ function applyState(): void {
   let totalMatches = TOTAL_LIBRARY;
 
   if (!isFiltered) {
-    pageView = paginate(sortDesignEntries(allEntries, sortOrder), currentPage, PAGE_SIZE);
+    pageView = paginate(sortDesignEntries(allEntries, sortOrder), currentPage, pageSize);
     totalMatches = TOTAL_LIBRARY;
   } else {
     // Determine combinatorics sizes
@@ -970,10 +1004,7 @@ function applyState(): void {
 
     let matchingJsic = JSIC_SUBCLASSES;
     if (filters.industry) {
-      matchingJsic = JSIC_SUBCLASSES.filter((s) => {
-        const entryInd = getEntryIndustry({ jsic: s.code, path: "" } as DesignIndexEntry);
-        return entryInd === filters.industry;
-      });
+      matchingJsic = JSIC_SUBCLASSES.filter((s) => jsicMajor(s.code).code === filters.industry);
     }
     if (industryTerms.length > 0) {
       matchingJsic = matchingJsic.filter((s) => {
@@ -1004,10 +1035,11 @@ function applyState(): void {
       });
     }
 
-    let matchingColors = ["h17b-lt", "gray-3", "h12s-sf", "h2v-vv", "white", "black"];
+    let matchingColors = [...VIRTUAL_COLOR_CATALOG];
     const colFilter = parsedColor;
     if (colFilter) {
       matchingColors = resolveColorSlugs(colFilter, taxonomy);
+      if (matchingColors.length === 0) matchingColors = [...VIRTUAL_COLOR_CATALOG];
     }
 
     const uniqueKeysCount = cLen * sLen * matchingJsic.length * matchingColors.length;
@@ -1028,12 +1060,12 @@ function applyState(): void {
             : 4000;
     totalMatches = uniqueKeysCount * scale;
 
-    const pageCount = Math.ceil(totalMatches / PAGE_SIZE) || 1;
+    const pageCount = Math.ceil(totalMatches / pageSize) || 1;
     const p = Math.max(1, Math.min(currentPage, pageCount));
-    const start = (p - 1) * PAGE_SIZE;
+    const start = (p - 1) * pageSize;
 
     const pageItems: DesignIndexEntry[] = [];
-    for (let rank = start; rank < Math.min(start + PAGE_SIZE, totalMatches); rank++) {
+    for (let rank = start; rank < Math.min(start + pageSize, totalMatches); rank++) {
       const idx = virtualIndexAtRank(rank, totalMatches, sortOrder);
       pageItems.push(
         getCombinationAtIndex(
@@ -1055,10 +1087,14 @@ function applyState(): void {
       page: p,
       pageCount,
       total: totalMatches,
-      pageSize: PAGE_SIZE,
+      pageSize,
     };
   }
 
+  pageView = {
+    ...pageView,
+    items: dedupeEntriesById(pageView.items),
+  };
   currentPage = pageView.page;
 
   // Render Pills Bar
@@ -1108,9 +1144,8 @@ function applyState(): void {
     });
   }
   if (filters.color) {
-    const c = COLOR_PALETTE.find((x) => x.slug === filters.color);
     pills.push({
-      label: c ? localizedColorName(c.name, c.slug, currentLocale) : filters.color,
+      label: facetLabel("color", filters.color, taxonomy, currentLocale),
       clear: () => {
         filters.color = null;
         applyState();
@@ -1176,37 +1211,32 @@ function applyState(): void {
       card.appendChild(thumb);
 
       const body = el("span", { class: "card-body" });
-      const mainTitle = getEntryTitle(entry, currentLocale);
-      const subTitle = `${entry.jsic} × ${entry.color} × ${entry.mood}`;
-      body.appendChild(el("span", { class: "card-title-ja", text: mainTitle }));
       body.appendChild(
         el("span", {
-          class: "card-title-en",
-          text: subTitle,
+          class: "card-title-ja",
+          text: buildDirectionTitle(entry, currentLocale, taxonomy),
         }),
       );
 
-      // Add category/style badges
-      const bContainer = el("span", { class: "card-badges" });
-      const cL = CATEGORIES.find((x) => x.v === getEntryCategory(entry));
-      const sL = STYLES.find((x) => x.v === getEntryStyle(entry));
-      if (cL)
-        bContainer.appendChild(
-          el("span", { class: "badge-tag", text: currentLocale === "ja" ? cL.ja : cL.en }),
-        );
-      if (sL)
-        bContainer.appendChild(
-          el("span", { class: "badge-tag", text: currentLocale === "ja" ? sL.ja : sL.en }),
-        );
-      body.appendChild(bContainer);
+      const tags = buildEntryTags(entry, currentLocale, taxonomy, {
+        materializedLabel: TRANSLATIONS[currentLocale].preGeneratedType,
+        virtualLabel: TRANSLATIONS[currentLocale].materializationType,
+      });
+      const tagRow = el("span", { class: "card-tags" });
+      for (const tag of tags) {
+        const node = el("span", { class: "card-tag", text: tag.label });
+        node.dataset.kind = tag.kind;
+        tagRow.appendChild(node);
+      }
+      body.appendChild(tagRow);
 
-      // Card footer
       const footer = el("span", { class: "card-footer" });
-      const isVirtual = entry.id.startsWith("virtual_") || !entry.hash;
-      const typeText = isVirtual
-        ? TRANSLATIONS[currentLocale].materializationType
-        : TRANSLATIONS[currentLocale].preGeneratedType;
-      footer.appendChild(el("span", { class: "card-type-label", text: typeText }));
+      footer.appendChild(
+        el("span", {
+          class: "card-type-label",
+          text: colorFamily(entry.color).label,
+        }),
+      );
       footer.appendChild(
         el("span", { text: entry.createdAt ? entry.createdAt.slice(0, 10) : "2026-07-20" }),
       );
@@ -1288,15 +1318,7 @@ function restoreVirtualEntry(id: string): DesignIndexEntry | undefined {
   const axes = parseVirtualPermalinkId(id);
   if (!axes) return undefined;
 
-  const knownColors = new Set([
-    "h17b-lt",
-    "gray-3",
-    "h12s-sf",
-    "h2v-vv",
-    "white",
-    "black",
-    ...Object.keys(taxonomy.colors),
-  ]);
+  const knownColors = new Set([...VIRTUAL_COLOR_CATALOG, ...Object.keys(taxonomy.colors)]);
   if (
     !validateVirtualPermalinkAxes(axes, {
       jsic: new Set(JSIC_SUBCLASSES.map((item) => item.code)),
@@ -1327,38 +1349,8 @@ function restoreVirtualEntry(id: string): DesignIndexEntry | undefined {
   };
 }
 
-function matchColorFamily(entryColor: string, paletteSlug: string): boolean {
-  const family = colorFamily(entryColor).key;
-  const isNeutral = family === "neutral";
-
-  if (paletteSlug === "indigo") return family === "blue" || family === "bluepurple";
-  if (paletteSlug === "light-blue")
-    return (
-      family === "bluegreen" || family === "blue" || (isNeutral && entryColor.includes("white"))
-    );
-  if (paletteSlug === "green")
-    return family === "green" || family === "yellowgreen" || family === "bluegreen";
-  if (paletteSlug === "yellow") return family === "yellow";
-  if (paletteSlug === "orange")
-    return family === "orange" || family === "red" || family === "redpurple";
-  if (paletteSlug === "blue")
-    return family === "blue" || family === "bluepurple" || family === "purple";
-  if (paletteSlug === "warm-gray")
-    return (
-      isNeutral &&
-      (entryColor.includes("gray") ||
-        entryColor.includes("gr") ||
-        entryColor.includes("white") ||
-        entryColor.includes("off-white") ||
-        entryColor.includes("ivory"))
-    );
-  if (paletteSlug === "black")
-    return (
-      isNeutral &&
-      (entryColor.includes("black") || entryColor.includes("bk") || entryColor.includes("ink"))
-    );
-
-  return false;
+function matchColorFamily(entryColor: string, familyKey: string): boolean {
+  return colorFamily(entryColor).key === familyKey;
 }
 
 function paginate<T>(items: readonly T[], page: number, pageSize: number): Page<T> {
@@ -1409,6 +1401,9 @@ async function bootstrap(): Promise<void> {
     currentLocale = lang === "en" ? "en" : "ja";
   }
   byId<HTMLSelectElement>("locale-select").value = currentLocale;
+  const savedPageSize = Number(localStorage.getItem("godd_page_size"));
+  pageSize = clampPageSize(Number.isFinite(savedPageSize) ? savedPageSize : 25);
+  byId<HTMLSelectElement>("page-size-select").value = String(pageSize);
   translateUI();
   animateCounter();
 
@@ -1435,6 +1430,13 @@ async function bootstrap(): Promise<void> {
     translateUI();
     applyState();
     if (selectedEntry) void openDetail(selectedEntry, { scroll: false, focus: false });
+  };
+
+  byId("page-size-select").onchange = (e) => {
+    pageSize = clampPageSize(Number((e.target as HTMLSelectElement).value));
+    localStorage.setItem("godd_page_size", String(pageSize));
+    currentPage = 1;
+    applyState();
   };
 
   byId("main-search-input").oninput = (e) => {

@@ -60,6 +60,8 @@ html = html.replace('src="./assets/app.js"', `src="./assets/app.js?t=${timestamp
 await writeFile(path.join(outDir, "index.html"), html, "utf8");
 
 await cp(path.join(webSrc, "styles.css"), path.join(outDir, "styles.css"));
+await mkdir(path.join(outDir, "assets"), { recursive: true });
+await cp(path.join(webSrc, "assets"), path.join(outDir, "assets"), { recursive: true });
 try {
   await cp(path.join(webSrc, "web-index.json"), path.join(outDir, "web-index.json"));
 } catch (err) {}

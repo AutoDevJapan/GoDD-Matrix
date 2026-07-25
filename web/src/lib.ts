@@ -547,12 +547,90 @@ const familyByKey = new Map<string, ColorFamily>([
   ...HUE_FAMILIES.map((g) => [g.family.key, g.family] as const),
 ]);
 
+/** UI の色合いフィルタで使う系統一覧（無彩色含む・表示順固定）。 */
+export const COLOR_FAMILIES: readonly ColorFamily[] = [
+  ...HUE_FAMILIES.map((g) => g.family),
+  NEUTRAL_FAMILY,
+];
+
+/** 仮想カタログが必ず 1 系統以上ヒットするための代表色 slug（系統ごと）。 */
+export const VIRTUAL_COLOR_CATALOG: readonly string[] = [
+  "h2v-vv", // red
+  "h5b-sf", // orange
+  "h8b-lt", // yellow
+  "h11b-sf", // yellowgreen
+  "h12s-sf", // green
+  "h15b-lt", // bluegreen
+  "h17b-lt", // blue
+  "h19b-sf", // bluepurple
+  "h21b-lt", // purple
+  "h23b-sf", // redpurple
+  "white",
+  "gray-3",
+  "black",
+];
+
+/** JSIC 大分類の一覧（フィルタ網羅用）。 */
+export function listJsicMajors(): readonly JsicMajor[] {
+  return JSIC_DIVISIONS.map((d) => ({
+    code: d.code,
+    label: d.label,
+    ...(d.label_en ? { label_en: d.label_en } : {}),
+  }));
+}
+
+/** 系統キーかどうか。 */
+export function isColorFamilyKey(value: string): boolean {
+  return familyByKey.has(value);
+}
+
 /** カラー slug → 色系統。slug 内の `h{PCCS色相番号}` から導出。無彩色は「無彩色」。 */
 export function colorFamily(slug: string): ColorFamily {
+  const known = familyByKey.get(slug);
+  if (known) return known;
   const m = /h(\d{1,2})/i.exec(slug);
   const raw = m?.[1];
   if (raw === undefined) return NEUTRAL_FAMILY;
   return familyByHue.get(Number.parseInt(raw, 10)) ?? NEUTRAL_FAMILY;
+}
+
+/** taxonomy の family 宣言を優先し、無ければ slug から色合いを導出する。 */
+function familyKeyForSlug(slug: string, taxonomy?: Taxonomy): string {
+  const declared = taxonomy?.colors[slug]?.family;
+  if (declared && isColorFamilyKey(declared)) return declared;
+  return colorFamily(slug).key;
+}
+
+/**
+ * 色合い（系統）キーまたは具体 slug から、カタログ内の具体色 slug を展開する。
+ * 系統キーなら同系統の全 slug、具体 slug ならその 1 件。空にならないよう代表色へフォールバック。
+ */
+export function expandColorFilter(
+  colorOrFamily: string,
+  catalog: readonly string[] = VIRTUAL_COLOR_CATALOG,
+  taxonomy?: Taxonomy,
+): string[] {
+  const pool = [
+    ...new Set([
+      ...catalog,
+      ...Object.keys(taxonomy?.colors ?? {}),
+      ...MINIMAL_COLORS.map((c) => c.slug),
+    ]),
+  ];
+  if (isColorFamilyKey(colorOrFamily)) {
+    const matched = pool.filter((slug) => familyKeyForSlug(slug, taxonomy) === colorOrFamily);
+    if (matched.length > 0) return matched;
+    const fallback = VIRTUAL_COLOR_CATALOG.find(
+      (slug) => familyKeyForSlug(slug, taxonomy) === colorOrFamily,
+    );
+    return fallback ? [fallback] : [...VIRTUAL_COLOR_CATALOG];
+  }
+  if (pool.includes(colorOrFamily) || taxonomy?.colors[colorOrFamily]) {
+    return [colorOrFamily];
+  }
+  const family = familyKeyForSlug(colorOrFamily, taxonomy);
+  const matched = pool.filter((slug) => familyKeyForSlug(slug, taxonomy) === family);
+  return matched.length > 0 ? matched : [...VIRTUAL_COLOR_CATALOG];
 }
 
 /** 各軸で entry が属するファセット値 (industry=大分類 / color=系統 / mood / tag)。 */

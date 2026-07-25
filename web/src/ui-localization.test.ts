@@ -40,7 +40,10 @@ describe("detail prompt localization", () => {
 
     expect(result).toContain("# Role");
     expect(result).toContain("# Resolved axes (SSOT §2)");
+    expect(result).toContain("# Hard requirements");
+    expect(result).toContain("# Forbidden");
     expect(result).toContain("# Request");
+    expect(result).toContain("# Deliverable instructions");
     expect(result).toContain("id: cell-1, hash verification: passed");
     expect(result).toContain("No color was requested; inferred slug 'h17b-lt' is applied.");
     expect(result).not.toContain("# 役割");
