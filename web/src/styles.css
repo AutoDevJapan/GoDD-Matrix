@@ -1003,7 +1003,13 @@ body {
 .detail-color-editor {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.color-editor-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .color-editor-row {
@@ -1013,11 +1019,21 @@ body {
 }
 
 .color-editor-swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   flex-shrink: 0;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  transition: var(--transition);
+}
+
+.color-editor-swatch:hover,
+.color-editor-swatch[aria-expanded="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
 }
 
 .color-editor-input {
@@ -1036,6 +1052,69 @@ body {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.color-editor-palette {
+  display: none;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.color-editor-palette.open {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.color-editor-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.color-editor-preset {
+  aspect-ratio: 1;
+  width: 100%;
+  min-height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.12s ease-out;
+}
+
+.color-editor-preset:hover {
+  transform: scale(1.08);
+  border-color: var(--accent);
+}
+
+.color-editor-custom-btn {
+  align-self: stretch;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.color-editor-custom-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.color-editor-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .detail-swatches {
