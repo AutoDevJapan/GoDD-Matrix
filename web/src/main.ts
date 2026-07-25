@@ -1,5 +1,4 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
-import { parseDesignIndex } from "../../src/ds/validate.js";
 import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
 import { editableSwatchesFromTokens, resolveDetailColorOverrides } from "./detail-color-state.js";
@@ -12,9 +11,9 @@ import {
   toggleSelection,
   verticalLabel,
 } from "./filter-taxonomy.js";
+import { type IndexSummary, loadCatalogBootstrap } from "./index-loader.js";
 import {
   COLOR_FAMILIES,
-  DS_INDEX_URL,
   EMPTY_TAXONOMY,
   type Locale,
   type Page,
@@ -94,6 +93,8 @@ const FONTS = [
 
 // App States
 let allEntries: readonly DesignIndexEntry[] = [];
+/** 材化 index の summary（件数・ファセット）。entries 無しでも保持できる (issue #88)。 */
+let indexSummary: IndexSummary | null = null;
 let currentLocale: Locale = "ja";
 let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let searchQuery = "";
@@ -1415,18 +1416,16 @@ async function bootstrap(): Promise<void> {
   byId<HTMLSelectElement>("page-size-select").value = String(pageSize);
   translateUI();
 
-  // Load Data
-  let indexData: ReturnType<typeof parseDesignIndex>;
-  try {
-    const localRes = await fetch("web-index.json", { cache: "no-cache" });
-    if (!localRes.ok) throw new Error();
-    indexData = parseDesignIndex(await localRes.text());
-  } catch {
-    const remoteRes = await fetch(DS_INDEX_URL, { cache: "no-cache" });
-    if (!remoteRes.ok) throw new Error(`HTTP ${remoteRes.status}`);
-    indexData = parseDesignIndex(await remoteRes.text());
+  // Load Data: summary 先読み → 明細はシャード or 非推奨の全件フォールバック (issue #88)
+  const catalogBoot = await loadCatalogBootstrap();
+  indexSummary = catalogBoot.summary;
+  document.documentElement.dataset.dsEntryCount = String(indexSummary.entryCount);
+  document.documentElement.dataset.dsIndexSource = catalogBoot.entriesSource;
+  if (catalogBoot.entriesSource !== "pending") {
+    allEntries = (await catalogBoot.entriesPromise).entries;
+  } else {
+    allEntries = [];
   }
-  allEntries = indexData.entries;
   translateUI();
 
   taxonomy = await loadTaxonomy();
@@ -1555,12 +1554,35 @@ async function bootstrap(): Promise<void> {
 
   applyState();
 
-  if (urlState.cell) {
-    const restored =
-      findEntryById(allEntries, urlState.cell) ?? restoreCanonicalVirtualEntry(urlState.cell);
+  const openCellFromUrl = (cellId: string): void => {
+    const restored = findEntryById(allEntries, cellId) ?? restoreCanonicalVirtualEntry(cellId);
     if (restored) {
       void openDetail(enrichWithMaterialized(restored, allEntries));
     }
+  };
+
+  if (urlState.cell) {
+    openCellFromUrl(urlState.cell);
+  }
+
+  // summary 先読み後に明細が届いたら enrichment / 材化セル復元をやり直す。
+  if (catalogBoot.entriesSource === "pending") {
+    void catalogBoot.entriesPromise.then((ready) => {
+      allEntries = ready.entries;
+      indexSummary = ready.summary;
+      document.documentElement.dataset.dsEntryCount = String(indexSummary.entryCount);
+      document.documentElement.dataset.dsIndexSource = ready.entriesSource;
+      applyState();
+      if (urlState.cell && !selectedEntry) {
+        openCellFromUrl(urlState.cell);
+      } else if (selectedEntry) {
+        void openDetail(enrichWithMaterialized(selectedEntry, allEntries), {
+          scroll: false,
+          focus: false,
+          preserveColors: true,
+        });
+      }
+    });
   }
 }
 

@@ -18,8 +18,16 @@ import { type ComposedPrompt, synthesizePrompt } from "../../src/prompt/synthesi
 export const DS_RAW_BASE =
   "https://raw.githubusercontent.com/AutoDevJapan/GoDD-Design-Systems/main/";
 
-/** 公開 index.json の URL。 */
+/** 公開 index.json の URL（全件。ページシャード未公開時の非推奨フォールバック）。 */
 export const DS_INDEX_URL = `${DS_RAW_BASE}index.json`;
+
+/** 公開 index-summary.json の URL（件数・ファセット・ページメタ。先読み契約, issue #88）。 */
+export const DS_INDEX_SUMMARY_URL = `${DS_RAW_BASE}index-summary.json`;
+
+/** 公開 index ページシャード URL（0-based, PAGE_SIZE=1000）。 */
+export function dsIndexPageUrl(page: number): string {
+  return `${DS_RAW_BASE}index/pages/${page}.json`;
+}
 
 /** 公開 taxonomy.json の URL (DS がムード/カラーの機械可読な日本語名を公開する契約, issue #33)。 */
 export const DS_TAXONOMY_URL = `${DS_RAW_BASE}taxonomy.json`;
