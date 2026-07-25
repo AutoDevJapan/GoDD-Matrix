@@ -9,6 +9,7 @@ import {
   labelForColor,
   labelForMood,
 } from "./lib.js";
+import { SEARCH_STYLES } from "./search-parser.js";
 
 export interface ResultTag {
   readonly kind: "industry" | "color" | "mood" | "category" | "style" | "variant" | "source";
@@ -26,16 +27,9 @@ const CATEGORY_LABELS: Readonly<Record<string, { ja: string; en: string }>> = {
   form: { ja: "フォーム", en: "Form" },
 };
 
-const STYLE_LABELS: Readonly<Record<string, { ja: string; en: string }>> = {
-  minimal: { ja: "ミニマル", en: "Minimal" },
-  retro: { ja: "レトロ", en: "Retro" },
-  brutalist: { ja: "ブルータリズム", en: "Brutalist" },
-  glass: { ja: "グラスモーフィズム", en: "Glassmorphism" },
-  corporate: { ja: "コーポレート", en: "Corporate" },
-  dark: { ja: "ダーク", en: "Dark" },
-  neu: { ja: "ニューモーフィズム", en: "Neumorphism" },
-  playful: { ja: "プレイフル", en: "Playful" },
-};
+const STYLE_LABELS: Readonly<Record<string, { ja: string; en: string }>> = Object.fromEntries(
+  SEARCH_STYLES.map((style) => [style.v, { ja: style.ja, en: style.en }]),
+);
 
 function categoryOf(entry: DesignIndexEntry): string | undefined {
   return entry.tags?.[0];

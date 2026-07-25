@@ -7,6 +7,8 @@ describe("web accessibility contracts", () => {
 
     expect(html).toContain('id="main-search-input" aria-label=');
     expect(html).toContain('id="toast" class="toast" role="status" aria-live="polite"');
+    expect(html).toContain('id="detail-load-status"');
+    expect(html).toMatch(/id="detail-load-status"[\s\S]*?role="status"/);
   });
 
   it("renders result and related navigation as native buttons", async () => {

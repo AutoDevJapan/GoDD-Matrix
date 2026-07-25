@@ -193,8 +193,14 @@
         </p>
       </footer>
 
-      <div id="toast" class="toast" role="status" aria-live="polite"></div>
-      <div id="detail-load-status" class="hidden" aria-live="polite"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div
+        id="detail-load-status"
+        class="hidden"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      ></div>
     </div>
 
     <script type="module" src="./assets/app.js"></script>

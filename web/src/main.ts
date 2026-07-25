@@ -150,63 +150,6 @@ function getEntryMajor(entry: DesignIndexEntry): string {
   return jsicMajor(entry.jsic).code;
 }
 
-function getEntryIndustry(entry: DesignIndexEntry): string {
-  const jsic = entry.jsic;
-  if (entry.id?.startsWith("virtual_")) {
-    return entry.tags?.[2] || getEntryMajor(entry);
-  }
-  if (
-    jsic.startsWith("37") ||
-    jsic.startsWith("38") ||
-    jsic.startsWith("39") ||
-    jsic.startsWith("40") ||
-    jsic.startsWith("41")
-  ) {
-    if (jsic === "3711") return "gaming";
-    return "saas";
-  }
-  if (
-    jsic.startsWith("62") ||
-    jsic.startsWith("63") ||
-    jsic.startsWith("64") ||
-    jsic.startsWith("65") ||
-    jsic.startsWith("66") ||
-    jsic.startsWith("67") ||
-    jsic === "7281"
-  ) {
-    return "finance";
-  }
-  if (jsic.startsWith("81") || jsic.startsWith("82")) {
-    return "education";
-  }
-  if (jsic.startsWith("83") || jsic.startsWith("84") || jsic.startsWith("85")) {
-    return "healthcare";
-  }
-  if (
-    jsic.startsWith("56") ||
-    jsic.startsWith("57") ||
-    jsic.startsWith("58") ||
-    jsic.startsWith("59") ||
-    jsic.startsWith("60") ||
-    jsic.startsWith("61")
-  ) {
-    return "ec";
-  }
-  if (jsic.startsWith("76") || jsic.startsWith("77")) {
-    return "food";
-  }
-  if (
-    jsic.startsWith("75") ||
-    jsic.startsWith("44") ||
-    jsic.startsWith("48") ||
-    jsic.startsWith("78") ||
-    jsic.startsWith("79")
-  ) {
-    return "travel";
-  }
-  return "saas";
-}
-
 function getEntryFont(entry: DesignIndexEntry): string {
   const hash = entry.id.charCodeAt(entry.id.length - 1) % FONTS.length;
   return FONTS[hash]?.v || "";
@@ -1209,7 +1152,7 @@ function applyState(): void {
       footer.appendChild(
         el("span", {
           class: "card-type-label",
-          text: colorFamily(entry.color).label,
+          text: facetLabel("color", colorFamily(entry.color).key, taxonomy, currentLocale),
         }),
       );
       footer.appendChild(
@@ -1283,7 +1226,7 @@ function getCombinationAtIndex(
     hash: "",
     variant: extraIndex,
     createdAt: "2026-07-20",
-    tags: [cat, style, getEntryIndustry({ jsic: jsicObj.code, path: "" } as DesignIndexEntry)],
+    tags: [cat, style, jsicMajor(jsicObj.code).code],
   };
 
   return entry;
@@ -1316,11 +1259,7 @@ function restoreVirtualEntry(id: string): DesignIndexEntry | undefined {
     hash: "",
     variant: axes.variant,
     createdAt: "2026-07-20",
-    tags: [
-      axes.category,
-      axes.style,
-      getEntryIndustry({ jsic: axes.jsic, path: "" } as DesignIndexEntry),
-    ],
+    tags: [axes.category, axes.style, jsicMajor(axes.jsic).code],
   };
 }
 
