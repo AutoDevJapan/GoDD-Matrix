@@ -1,11 +1,27 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { FILTER_CATEGORIES } from "./filter-taxonomy.js";
-import { type Locale, type Taxonomy, jsicMajor, labelForMood } from "./lib.js";
+import {
+  type Locale,
+  type Taxonomy,
+  approxSwatchesForColor,
+  colorFamily,
+  facetLabel,
+  familySwatchHex,
+  jsicMajor,
+  labelForMood,
+} from "./lib.js";
 import { SEARCH_STYLES } from "./search-parser.js";
 
 export interface ResultTag {
   readonly kind: "industry" | "color" | "mood" | "category" | "style" | "variant";
   readonly label: string;
+}
+
+/** カード上の色識別キュー（タイトル/業種タグとは分離。#90 密度を維持しつつ色差を区別）。 */
+export interface CardColorCue {
+  readonly familyKey: string;
+  readonly label: string;
+  readonly swatchHex: string;
 }
 
 const CATEGORY_LABELS: Readonly<Record<string, { ja: string; en: string }>> = Object.fromEntries(
@@ -76,6 +92,7 @@ export function buildDirectionTitle(
 /**
  * カード下のタグは業種（＋必要なら variant）のみ。
  * 色・ムード・カテゴリ/スタイルはタイトルと重複しやすいので出さない。
+ * 色の識別は {@link buildCardColorCue} 側へ寄せる。
  */
 export function buildEntryTags(
   entry: DesignIndexEntry,
@@ -97,6 +114,22 @@ export function buildEntryTags(
   }
 
   return dedupeTagsByLabel(tags);
+}
+
+/**
+ * 人気順などで色軸だけが違うカードを区別するための短い色キュー。
+ * variant=0 でも必ず返す（Variant タグが無い場合の識別子）。
+ */
+export function buildCardColorCue(
+  entry: DesignIndexEntry,
+  locale: Locale,
+  taxonomy?: Taxonomy,
+): CardColorCue {
+  const family = colorFamily(entry.color);
+  const label = facetLabel("color", family.key, taxonomy, locale);
+  const primary = approxSwatchesForColor(entry.color, locale)[0]?.hex;
+  const swatchHex = primary ?? familySwatchHex(family.key) ?? "#94a3b8";
+  return { familyKey: family.key, label, swatchHex };
 }
 
 /** 同一ページ内の id 重複を除去（先頭優先・順序維持）。 */

@@ -35,6 +35,7 @@ import { renderMatchesCount } from "./matches-count.js";
 import { loadMaterializedDesign } from "./materialized-design.js";
 import {
   type PageSizeOption,
+  buildCardColorCue,
   buildDirectionTitle,
   buildEntryTags,
   clampPageSize,
@@ -1327,6 +1328,18 @@ function applyState(): void {
           text: buildDirectionTitle(entry, currentLocale, taxonomy),
         }),
       );
+
+      // Compact color cue (swatch + family) — distinguishes popular-order color twins (#97)
+      // without restoring title/footer density (#90).
+      const colorCue = buildCardColorCue(entry, currentLocale, taxonomy);
+      const cueRow = el("span", { class: "card-color-cue" });
+      const swatch = el("span", { class: "card-color-swatch" });
+      swatch.style.backgroundColor = colorCue.swatchHex;
+      swatch.setAttribute("aria-hidden", "true");
+      cueRow.append(swatch, document.createTextNode(colorCue.label));
+      cueRow.title = colorCue.label;
+      cueRow.dataset.family = colorCue.familyKey;
+      body.appendChild(cueRow);
 
       const tags = buildEntryTags(entry, currentLocale, taxonomy);
       const tagRow = el("span", { class: "card-tags" });
