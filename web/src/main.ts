@@ -1308,21 +1308,10 @@ function applyState(): void {
       for (const tag of tags) {
         const node = el("span", { class: "card-tag", text: tag.label });
         node.dataset.kind = tag.kind;
+        node.title = tag.label;
         tagRow.appendChild(node);
       }
       body.appendChild(tagRow);
-
-      const footer = el("span", { class: "card-footer" });
-      footer.appendChild(
-        el("span", {
-          class: "card-type-label",
-          text: facetLabel("color", colorFamily(entry.color).key, taxonomy, currentLocale),
-        }),
-      );
-      footer.appendChild(
-        el("span", { text: entry.createdAt ? entry.createdAt.slice(0, 10) : "2026-07-20" }),
-      );
-      body.appendChild(footer);
 
       card.appendChild(body);
       resultsGrid.appendChild(card);

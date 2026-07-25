@@ -1,15 +1,6 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { FILTER_CATEGORIES } from "./filter-taxonomy.js";
-import {
-  type Locale,
-  type Taxonomy,
-  colorFamily,
-  facetLabel,
-  jsicMajor,
-  jsicName,
-  labelForColor,
-  labelForMood,
-} from "./lib.js";
+import { type Locale, type Taxonomy, jsicMajor, jsicName, labelForMood } from "./lib.js";
 import { SEARCH_STYLES } from "./search-parser.js";
 
 export interface ResultTag {
@@ -44,8 +35,20 @@ function localizeMap(
   return locale === "ja" ? hit.ja : hit.en;
 }
 
+function dedupeTagsByLabel(tags: readonly ResultTag[]): ResultTag[] {
+  const seen = new Set<string>();
+  const out: ResultTag[] = [];
+  for (const tag of tags) {
+    const key = tag.label.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+  }
+  return out;
+}
+
 /**
- * カードタイトルは「方向性」を示す短文。軸の羅列はタグ側へ寄せる。
+ * カードタイトルは方向性のみ。色は詳細で変更できるためタイトルにも載せない。
  */
 export function buildDirectionTitle(
   entry: DesignIndexEntry,
@@ -53,46 +56,37 @@ export function buildDirectionTitle(
   taxonomy?: Taxonomy,
 ): string {
   const mood = labelForMood(entry.mood, taxonomy, locale);
-  const family = facetLabel("color", colorFamily(entry.color).key, taxonomy, locale);
   const category = localizeMap(CATEGORY_LABELS, categoryOf(entry), locale);
   const style = localizeMap(STYLE_LABELS, styleOf(entry), locale);
-  const surface = category ?? style;
+  // Prefer category over style when both exist; avoid mood/style label collision in the title.
+  const surface =
+    category && style && category !== style
+      ? category
+      : (category ?? (style && style !== mood ? style : undefined));
 
   if (locale === "en") {
-    const bits = [mood, family, surface].filter(Boolean);
+    const bits = [mood, surface].filter(Boolean);
     return bits.join(" · ");
   }
 
-  if (surface) return `${mood}な${family}の${surface}`;
-  return `${mood} × ${family}`;
+  if (surface) return `${mood}な${surface}`;
+  return mood;
 }
 
-/** タイトル下に出す差分タグ（業種・色・ムード・カテゴリ等）。 */
+/**
+ * カード下のタグは業種（＋必要なら variant）のみ。
+ * 色・ムード・カテゴリ/スタイルはタイトルと重複しやすいので出さない。
+ */
 export function buildEntryTags(
   entry: DesignIndexEntry,
   locale: Locale,
-  taxonomy?: Taxonomy,
+  _taxonomy?: Taxonomy,
 ): ResultTag[] {
   const tags: ResultTag[] = [];
   const major = jsicMajor(entry.jsic);
   const industry =
     locale === "en" ? (major.label_en ?? major.label) : jsicName(entry.jsic) || major.label;
-  tags.push({ kind: "industry", label: industry });
-
-  tags.push({
-    kind: "color",
-    label: labelForColor(entry.color, taxonomy, locale),
-  });
-  tags.push({
-    kind: "mood",
-    label: labelForMood(entry.mood, taxonomy, locale),
-  });
-
-  const category = localizeMap(CATEGORY_LABELS, categoryOf(entry), locale);
-  if (category) tags.push({ kind: "category", label: category });
-
-  const style = localizeMap(STYLE_LABELS, styleOf(entry), locale);
-  if (style) tags.push({ kind: "style", label: style });
+  if (industry) tags.push({ kind: "industry", label: industry });
 
   const variant = entry.variant ?? 0;
   if (variant > 0) {
@@ -102,7 +96,7 @@ export function buildEntryTags(
     });
   }
 
-  return tags;
+  return dedupeTagsByLabel(tags);
 }
 
 /** 同一ページ内の id 重複を除去（先頭優先・順序維持）。 */
