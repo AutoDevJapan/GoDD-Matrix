@@ -598,7 +598,6 @@ interface TranslationKeys {
   labelFacetStyle: string;
   labelFacetIndustry: string;
   labelFacetVerticals: string;
-  labelFacetIndustryMajor: string;
   labelFacetColor: string;
   labelColorCustomize: string;
   labelFilterToggle: string;
@@ -646,9 +645,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     placeholderSearch: "検索例: ゲーム ミニマル ダッシュボード",
     labelFacetCategory: "カテゴリ",
     labelFacetStyle: "スタイル",
-    labelFacetIndustry: "業種 / 職種",
-    labelFacetVerticals: "職種・業態",
-    labelFacetIndustryMajor: "業種（大分類）",
+    labelFacetIndustry: "業種",
+    labelFacetVerticals: "職種",
     labelFacetColor: "会社ロゴの色合い",
     labelColorCustomize: "カラー調整",
     labelFilterToggle: "フィルタ",
@@ -694,9 +692,8 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     placeholderSearch: "Search e.g. 'game minimal dashboard'",
     labelFacetCategory: "Category",
     labelFacetStyle: "Style",
-    labelFacetIndustry: "Industry / Job",
-    labelFacetVerticals: "Job / vertical",
-    labelFacetIndustryMajor: "Industry (division)",
+    labelFacetIndustry: "Industry",
+    labelFacetVerticals: "Job",
     labelFacetColor: "Brand / logo color",
     labelColorCustomize: "Customize colors",
     labelFilterToggle: "Filters",
@@ -797,7 +794,6 @@ function translateUI(): void {
   byId("label-facet-style").textContent = t.labelFacetStyle;
   byId("label-facet-industry").textContent = t.labelFacetIndustry;
   byId("label-facet-verticals").textContent = t.labelFacetVerticals;
-  byId("label-facet-industry-major").textContent = t.labelFacetIndustryMajor;
   byId("label-facet-color").textContent = t.labelFacetColor;
   byId("label-color-customize").textContent = t.labelColorCustomize;
   byId("filter-toggle-btn").textContent = t.labelFilterToggle;

@@ -273,17 +273,17 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-card);
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
 }
 
 .filter-accordion[open] {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  /* Cap the open accordion; body fills remainder and owns scroll (not a second taller max-height). */
-  max-height: min(72vh, 720px);
-  flex-shrink: 1;
+  /* Avoid flex-on-<details>: it does not constrain children, so body grows to content
+     and parent overflow:hidden clips chips with no inner scroll (prod PC regression). */
+  display: block;
+  max-height: none;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
 .filter-accordion > summary {
@@ -314,18 +314,12 @@ body {
 }
 
 .filter-accordion-body {
-  /* Extra bottom pad so the last chip row is fully visible at scroll end. */
+  /* Explicit scrollport — required because <details> will not flex-constrain height. */
   padding: 0 12px 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 0;
-  flex: 1 1 auto;
-  /*
-   * Do not set a body max-height larger than (accordion max − summary).
-   * Parent overflow:hidden + a taller body clipped the last badge row at scroll end.
-   */
-  max-height: none;
+  max-height: min(42vh, 360px);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -429,11 +423,11 @@ body {
   }
 
   .filter-accordion[open] {
-    max-height: min(78dvh, 760px);
+    max-height: none;
   }
 
   .filter-accordion-body {
-    max-height: none;
+    max-height: min(48dvh, 420px);
   }
 
   body.filter-drawer-open {
