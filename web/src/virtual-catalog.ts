@@ -153,18 +153,16 @@ function resolveJsicCodes(query: VirtualCatalogQuery): string[] {
   let jsicCodes = [...CANONICAL_JSIC_CODES];
 
   if (majors.length > 0 || verticals.length > 0) {
+    // Vertical chips bind to curated JSIC codes only (keywords stay for free-text search).
     const verticalCodeSet = new Set<string>();
-    const verticalKeywords: string[] = [];
     for (const key of verticals) {
       const vertical = INDUSTRY_VERTICALS.find((item) => item.v === key);
       if (!vertical) continue;
       for (const code of vertical.codes) verticalCodeSet.add(code);
-      verticalKeywords.push(...vertical.keywords);
     }
     jsicCodes = jsicCodes.filter((code) => {
       if (majors.includes(jsicMajor(code).code)) return true;
       if (verticalCodeSet.has(code)) return true;
-      if (verticalKeywords.some((keyword) => jsicMatchesTerm(code, keyword))) return true;
       return false;
     });
   }

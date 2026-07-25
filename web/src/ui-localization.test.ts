@@ -44,18 +44,17 @@ describe("detail prompt localization", () => {
     expect(result).toContain("# Forbidden");
     expect(result).toContain("# Request");
     expect(result).toContain("# Deliverable instructions");
-    expect(result).toContain("id: cell-1, hash verification: passed");
+    expect(result).toContain("Resolved DESIGN.md body is available.");
     expect(result).toContain("No color was requested; inferred slug 'h17b-lt' is applied.");
     expect(result).not.toContain("# 役割");
-    expect(result).not.toContain("# 要望");
     expect(result).not.toContain("指定なし");
-    expect(result).not.toContain("ソフトウェア業");
+    expect(result).not.toMatch(/材化|未材化|materializ/i);
     expect(result).toContain("- Industry: Information and Communications");
     expect(result).toContain("- Preferred color: Not specified");
     expect(result).toContain("# ソース由来の固有名");
   });
 
-  it("does not leak a Japanese unavailable reason into the English shell", () => {
+  it("does not leak unavailable / materialization jargon into the English shell", () => {
     const unavailable = {
       ...prompt,
       notices: ["確定 DESIGN.md 本文がありません: 未材化セル: 6061"],
@@ -65,22 +64,42 @@ describe("detail prompt localization", () => {
 
     expect(result).toContain("The resolved DESIGN.md body is unavailable.");
     expect(result).not.toContain("未材化セル");
+    expect(result).not.toMatch(/材化|materializ/i);
   });
 
-  it("preserves an actionable unavailable reason that is already English", () => {
+  it("keeps actionable English unavailable reasons as a generic unavailable note", () => {
     const unavailable = {
       ...prompt,
       notices: ["確定 DESIGN.md 本文がありません: DESIGN.md not pre-materialized in Git"],
     };
 
-    expect(localizePromptPreview(unavailable, "en")).toContain(
-      "The resolved DESIGN.md body is unavailable: DESIGN.md not pre-materialized in Git",
-    );
+    const result = localizePromptPreview(unavailable, "en");
+    expect(result).toContain("The resolved DESIGN.md body is unavailable.");
+    expect(result).not.toMatch(/materializ|未材化|材化/i);
   });
 
-  it("keeps the Japanese prompt byte-for-byte apart from the existing separator", () => {
-    expect(localizePromptPreview(prompt, "ja")).toBe(
-      `${prompt.systemPrompt}\n\n${prompt.userPrompt}`,
-    );
+  it("rewrites the Japanese shell without materialization jargon", () => {
+    const result = localizePromptPreview(prompt, "ja");
+
+    expect(result).toContain("# 役割");
+    expect(result).toContain("# 確定軸 (SSOT §2)");
+    expect(result).toContain("DESIGN.md 本文を取得済み。");
+    expect(result).toContain("# ソース由来の固有名");
+    expect(result).not.toMatch(/材化|未材化|リアルタイム合成/);
+  });
+
+  it("drops Japanese materialization notices from the detail preview", () => {
+    const unavailable = {
+      ...prompt,
+      provenance: "rendered" as const,
+      notices: [
+        "未材化セルのため、Generator レンダーのフォールバック本文を使用しています (材化品質ゲート未通過)。",
+        "確定 DESIGN.md 本文がありません: 未材化セル: 6061",
+      ],
+    };
+    const result = localizePromptPreview(unavailable, "ja");
+    expect(result).toContain("DESIGN.md 本文を生成して表示しています。");
+    expect(result).toContain("DESIGN.md 本文を取得できませんでした。");
+    expect(result).not.toMatch(/材化|未材化|リアルタイム合成/);
   });
 });

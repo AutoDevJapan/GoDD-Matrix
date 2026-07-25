@@ -84,13 +84,12 @@ describe("exact filtered counts", () => {
     expect(axes.jsicCodes).toContain("8065");
   });
 
-  it("narrows to game-dev vertical codes", () => {
+  it("narrows to game-dev vertical codes only (no arcade keyword bleed)", () => {
     const axes = resolveFilteredAxes({
       verticals: ["game-dev"],
       sort: "popular",
     });
-    expect(axes.jsicCodes).toContain("3914");
-    expect(axes.jsicCodes.length).toBeGreaterThanOrEqual(1);
+    expect(axes.jsicCodes).toEqual(["3914"]);
   });
 });
 
