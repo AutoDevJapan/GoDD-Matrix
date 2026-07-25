@@ -475,6 +475,9 @@ interface TranslationKeys {
   labelColorCustomize: string;
   labelFilterToggle: string;
   labelFilterClose: string;
+  labelScrollGroup: string;
+  labelScrollTop: string;
+  labelScrollBottom: string;
   labelActivePills: string;
   clearAll: string;
   labelMatches: string;
@@ -523,6 +526,9 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     labelColorCustomize: "カラー調整",
     labelFilterToggle: "フィルタ",
     labelFilterClose: "フィルタを閉じる",
+    labelScrollGroup: "ページ内移動",
+    labelScrollTop: "最上部へ",
+    labelScrollBottom: "最下部へ",
     labelActivePills: "適用中:",
     clearAll: "すべてクリア",
     labelMatches: "件が一致",
@@ -569,6 +575,9 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     labelColorCustomize: "Customize colors",
     labelFilterToggle: "Filters",
     labelFilterClose: "Close filters",
+    labelScrollGroup: "Page navigation",
+    labelScrollTop: "Go to top",
+    labelScrollBottom: "Go to bottom",
     labelActivePills: "Active:",
     clearAll: "Clear all",
     labelMatches: "files match",
@@ -663,7 +672,13 @@ function translateUI(): void {
   byId("label-sidebar-title").textContent = t.labelSidebarTitle;
   byId("label-page-size").textContent = t.labelPageSize;
   byId("page-size-select").setAttribute("aria-label", t.labelPageSize);
-  byId("pager").setAttribute("aria-label", t.pagerLabel);
+  byId("pager-top").setAttribute("aria-label", t.pagerLabel);
+  byId("pager-bottom").setAttribute("aria-label", t.pagerLabel);
+  byId("scroll-fabs").setAttribute("aria-label", t.labelScrollGroup);
+  byId("scroll-top-btn").setAttribute("aria-label", t.labelScrollTop);
+  byId("scroll-top-btn").title = t.labelScrollTop;
+  byId("scroll-bottom-btn").setAttribute("aria-label", t.labelScrollBottom);
+  byId("scroll-bottom-btn").title = t.labelScrollBottom;
   byId("label-preview-overlay").textContent = t.previewLabel;
   byId("label-footer").textContent = t.footerText;
 
@@ -1203,11 +1218,11 @@ function applyState(): void {
   renderPager(pageView);
 }
 
-function renderPager(pg: Page<DesignIndexEntry>): void {
-  const pager = byId("pager");
+function fillPager(pager: HTMLElement, pg: Page<DesignIndexEntry>): void {
   pager.replaceChildren();
 
   const prev = el("button", { text: currentLocale === "ja" ? "前へ" : "Prev" });
+  prev.type = "button";
   prev.disabled = pg.page <= 1;
   prev.onclick = () => goToPage(pg.page - 1);
   pager.appendChild(prev);
@@ -1215,6 +1230,7 @@ function renderPager(pg: Page<DesignIndexEntry>): void {
   pager.appendChild(el("span", { class: "pager-info", text: ` ${pg.page} / ${pg.pageCount} ` }));
 
   const next = el("button", { text: currentLocale === "ja" ? "次へ" : "Next" });
+  next.type = "button";
   next.disabled = pg.page >= pg.pageCount;
   next.onclick = () => goToPage(pg.page + 1);
   pager.appendChild(next);
@@ -1233,6 +1249,7 @@ function renderPager(pg: Page<DesignIndexEntry>): void {
   const jumpBtn = el("button", {
     text: currentLocale === "ja" ? "移動" : "Go",
   });
+  jumpBtn.type = "button";
   jumpBtn.onclick = () => {
     const target = Number.parseInt(jump.value, 10);
     if (Number.isFinite(target)) goToPage(target);
@@ -1247,10 +1264,24 @@ function renderPager(pg: Page<DesignIndexEntry>): void {
   pager.appendChild(jumpBtn);
 }
 
+function renderPager(pg: Page<DesignIndexEntry>): void {
+  fillPager(byId("pager-top"), pg);
+  fillPager(byId("pager-bottom"), pg);
+}
+
+function scrollToResultsTop(): void {
+  const target = document.getElementById("pager-top") ?? document.getElementById("results");
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function goToPage(page: number): void {
   currentPage = page;
   applyState();
-  window.scrollTo(0, 0);
+  scrollToResultsTop();
 }
 
 // Initial Bootstrap
@@ -1344,6 +1375,14 @@ async function bootstrap(): Promise<void> {
   byId("filter-toggle-btn").onclick = () => setFilterDrawerOpen(true);
   byId("filter-close-btn").onclick = () => setFilterDrawerOpen(false);
   byId("filter-drawer-backdrop").onclick = () => setFilterDrawerOpen(false);
+
+  byId("scroll-top-btn").onclick = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  byId("scroll-bottom-btn").onclick = () => {
+    const bottom = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    window.scrollTo({ top: bottom, behavior: "smooth" });
+  };
 
   byId("back-btn").onclick = () => {
     detailRequestId++;

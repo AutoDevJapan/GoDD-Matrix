@@ -9,6 +9,10 @@ describe("web accessibility contracts", () => {
     expect(html).toContain('id="toast" class="toast" role="status" aria-live="polite"');
     expect(html).toContain('id="detail-load-status"');
     expect(html).toMatch(/id="detail-load-status"[\s\S]*?role="status"/);
+    expect(html).toContain('id="pager-top"');
+    expect(html).toContain('id="pager-bottom"');
+    expect(html).toContain('id="scroll-top-btn"');
+    expect(html).toContain('id="scroll-bottom-btn"');
   });
 
   it("renders result and related navigation as native buttons", async () => {

@@ -741,8 +741,50 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  margin: 40px 0;
+  margin: 16px 0 20px;
+}
+
+.pager-bottom {
+  margin: 28px 0 40px;
+}
+
+.scroll-fabs {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 160;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scroll-fab {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(15, 18, 28, 0.12);
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.scroll-fab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 960px) {
+  .scroll-fabs {
+    right: 14px;
+    bottom: 16px;
+  }
 }
 
 .pager button {

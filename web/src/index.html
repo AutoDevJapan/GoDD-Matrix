@@ -166,8 +166,9 @@
                 </div>
               </div>
 
+              <nav id="pager-top" class="pager pager-top" aria-label="ページ送り"></nav>
               <div id="results" class="results-grid"></div>
-              <nav id="pager" class="pager" aria-label="ページ送り"></nav>
+              <nav id="pager-bottom" class="pager pager-bottom" aria-label="ページ送り"></nav>
             </section>
           </div>
         </div>
@@ -247,6 +248,11 @@
         aria-live="polite"
         aria-atomic="true"
       ></div>
+
+      <div id="scroll-fabs" class="scroll-fabs" role="group" aria-label="ページ内移動">
+        <button id="scroll-top-btn" class="scroll-fab" type="button" aria-label="最上部へ">↑</button>
+        <button id="scroll-bottom-btn" class="scroll-fab" type="button" aria-label="最下部へ">↓</button>
+      </div>
     </div>
 
     <script type="module" src="./assets/app.js"></script>
