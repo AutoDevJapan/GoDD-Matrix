@@ -102,6 +102,20 @@ describe("buildCardColorCue", () => {
     expect(blue.swatchHex.toLowerCase()).not.toBe(red.swatchHex.toLowerCase());
   });
 
+  it("uses saturated family swatch, not near-white surface (#102)", () => {
+    const lightRed = buildCardColorCue({ ...entry, color: "lt-h03", variant: 0 }, "ja");
+    expect(lightRed.label).toBe("赤系");
+    // Surface approx is L≈95 (~#f2e…); family sample must stay chromatic.
+    const hex = lightRed.swatchHex.toLowerCase();
+    expect(hex).toMatch(/^#[0-9a-f]{6}$/);
+    expect(hex).not.toMatch(/^#f[0-9a-f]{5}$/i);
+    const r = Number.parseInt(hex.slice(1, 3), 16);
+    const g = Number.parseInt(hex.slice(3, 5), 16);
+    const b = Number.parseInt(hex.slice(5, 7), 16);
+    expect(r).toBeGreaterThan(g);
+    expect(r).toBeGreaterThan(b);
+  });
+
   it("uses English family labels without putting color into the title", () => {
     const cue = buildCardColorCue(entry, "en");
     expect(cue.label).toBe("Blues");

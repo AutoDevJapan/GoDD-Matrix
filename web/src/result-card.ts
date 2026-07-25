@@ -127,8 +127,11 @@ export function buildCardColorCue(
 ): CardColorCue {
   const family = colorFamily(entry.color);
   const label = facetLabel("color", family.key, taxonomy, locale);
-  const primary = approxSwatchesForColor(entry.color, locale)[0]?.hex;
-  const swatchHex = primary ?? familySwatchHex(family.key) ?? "#94a3b8";
+  // Prefer family representative. approxSwatches[0] is surface (L≈95) and reads as white.
+  const swatchHex =
+    familySwatchHex(family.key) ??
+    approxSwatchesForColor(entry.color, locale).find((s) => s.role === "primary")?.hex ??
+    "#94a3b8";
   return { familyKey: family.key, label, swatchHex };
 }
 
