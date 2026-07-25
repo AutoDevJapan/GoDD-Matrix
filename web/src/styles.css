@@ -281,7 +281,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* Wider panel so industry / category chips remain selectable (#92). */
+  /* Cap the open accordion; body fills remainder and owns scroll (not a second taller max-height). */
   max-height: min(72vh, 720px);
   flex-shrink: 1;
 }
@@ -314,14 +314,18 @@ body {
 }
 
 .filter-accordion-body {
-  padding: 0 12px 12px;
+  /* Extra bottom pad so the last chip row is fully visible at scroll end. */
+  padding: 0 12px 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-height: 0;
   flex: 1 1 auto;
-  /* Explicit cap: <details> flex height is unreliable; body must own the scroll. */
-  max-height: min(62vh, 640px);
+  /*
+   * Do not set a body max-height larger than (accordion max − summary).
+   * Parent overflow:hidden + a taller body clipped the last badge row at scroll end.
+   */
+  max-height: none;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -429,7 +433,7 @@ body {
   }
 
   .filter-accordion-body {
-    max-height: min(68dvh, 680px);
+    max-height: none;
   }
 
   body.filter-drawer-open {
