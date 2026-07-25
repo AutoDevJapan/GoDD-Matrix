@@ -2,7 +2,7 @@ import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { parseDesignIndex } from "../../src/ds/validate.js";
 import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
-import { resolveDetailColorOverrides } from "./detail-color-state.js";
+import { editableSwatchesFromTokens, resolveDetailColorOverrides } from "./detail-color-state.js";
 import {
   FILTER_CATEGORIES,
   FILTER_STYLES,
@@ -22,6 +22,7 @@ import {
   approxSwatchesForColor,
   colorFamily,
   composePromptForCell,
+  extractColorTokens,
   facetLabel,
   familySwatchHex,
   findEntryById,
@@ -964,6 +965,23 @@ async function openDetail(
   });
 
   detailBaseMarkdown = localizePromptPreview(prompt, currentLocale);
+
+  // Materialized bodies use real token hexes; approx swatches would make overrides a no-op.
+  if (!isVirtual) {
+    const tokenSwatches = editableSwatchesFromTokens(
+      extractColorTokens(renderedMarkdown, currentLocale),
+      detailBaseSwatches,
+    );
+    detailBaseSwatches = tokenSwatches;
+    detailColorOverrides = resolveDetailColorOverrides(
+      tokenSwatches,
+      detailColorOverrides,
+      opts.preserveColors,
+    );
+    renderColorEditor(entry);
+    previewBox.style.background = thumbnailBgFromHexes(detailColorOverrides);
+  }
+
   const finalMarkdown = applyColorOverridesToMarkdown(
     detailBaseMarkdown,
     detailBaseSwatches,
