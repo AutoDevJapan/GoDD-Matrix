@@ -96,6 +96,13 @@ const FONTS = [
 let allEntries: readonly DesignIndexEntry[] = [];
 /** 材化 index の summary（件数・ファセット）。entries 無しでも保持できる (issue #88)。 */
 let indexSummary: IndexSummary | null = null;
+/**
+ * Catalog boot phase for the matches-count display (issue #94).
+ * `booting` / `pending` must not render a literal `0` match count.
+ */
+let catalogEntriesSource: "booting" | "pending" | "ready" = "booting";
+let matchesCountReady = false;
+let lastMatchesTotal = 0;
 let currentLocale: Locale = "ja";
 let taxonomy: Taxonomy = EMPTY_TAXONOMY;
 let searchQuery = "";
@@ -602,6 +609,7 @@ interface TranslationKeys {
   labelActivePills: string;
   clearAll: string;
   labelMatches: string;
+  labelMatchesLoading: string;
   btnPopular: string;
   btnNewest: string;
   detailBack: string;
@@ -651,6 +659,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     labelActivePills: "適用中:",
     clearAll: "すべてクリア",
     labelMatches: "件が一致",
+    labelMatchesLoading: "読み込み中…",
     btnPopular: "人気順",
     btnNewest: "新着順",
     detailBack: "← 検索に戻る",
@@ -698,6 +707,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     labelActivePills: "Active:",
     clearAll: "Clear all",
     labelMatches: "files match",
+    labelMatchesLoading: "Loading…",
     btnPopular: "Popular",
     btnNewest: "Newest",
     detailBack: "← Back to search",
@@ -794,7 +804,7 @@ function translateUI(): void {
   byId("filter-close-btn").setAttribute("aria-label", t.labelFilterClose);
   byId("label-active-pills").textContent = t.labelActivePills;
   byId("clear-all-btn").textContent = t.clearAll;
-  byId("label-matches-count").textContent = t.labelMatches;
+  renderMatchesCountDisplay();
   byId("sort-btn-popular").textContent = t.btnPopular;
   byId("sort-btn-newest").textContent = t.btnNewest;
 
@@ -1152,6 +1162,25 @@ function findCategoryValue(term: string): string | null {
   return null;
 }
 
+/** Matches count: loading while catalog boot is pending; exact total once ready (issue #94). */
+function renderMatchesCountDisplay(): void {
+  const t = TRANSLATIONS[currentLocale];
+  const showLoading = !matchesCountReady || catalogEntriesSource === "booting";
+  if (showLoading) {
+    renderMatchesCount(byId("matches-count-display"), document, {
+      status: "loading",
+      label: t.labelMatchesLoading,
+    });
+    return;
+  }
+  renderMatchesCount(byId("matches-count-display"), document, {
+    status: "ready",
+    total: lastMatchesTotal,
+    locale: currentLocale,
+    label: t.labelMatches,
+  });
+}
+
 // Apply states, filter lists, and render UI
 function applyState(): void {
   renderFilters();
@@ -1252,14 +1281,10 @@ function applyState(): void {
     pillsBar.classList.add("hidden");
   }
 
-  // Exact integer display
-  renderMatchesCount(
-    byId("matches-count-display"),
-    document,
-    totalMatches,
-    currentLocale,
-    TRANSLATIONS[currentLocale].labelMatches,
-  );
+  // Exact integer display (never a boot-time zero placeholder — issue #94)
+  lastMatchesTotal = totalMatches;
+  matchesCountReady = catalogEntriesSource !== "booting";
+  renderMatchesCountDisplay();
 
   // Exact sample counts matching the pagination grid display
   const itemsCount = pageView.items.length;
@@ -1406,6 +1431,8 @@ async function bootstrap(): Promise<void> {
   const savedPageSize = savedPageSizeRaw === null ? Number.NaN : Number(savedPageSizeRaw);
   pageSize = clampPageSize(Number.isFinite(savedPageSize) ? savedPageSize : 25);
   byId<HTMLSelectElement>("page-size-select").value = String(pageSize);
+  catalogEntriesSource = "booting";
+  matchesCountReady = false;
   translateUI();
 
   // Load Data: summary 先読み → 明細はシャード or 非推奨の全件フォールバック (issue #88)。
@@ -1417,8 +1444,11 @@ async function bootstrap(): Promise<void> {
   indexSummary = catalogBoot.summary;
   document.documentElement.dataset.dsEntryCount = String(indexSummary.entryCount);
   document.documentElement.dataset.dsIndexSource = catalogBoot.entriesSource;
+  // summary 到着時点で仮想件数は描画可能。明細 pending 中も 0 件表示にはしない (issue #94)。
+  catalogEntriesSource = catalogBoot.entriesSource === "pending" ? "pending" : "ready";
   if (catalogBoot.entriesSource !== "pending") {
     allEntries = (await catalogBoot.entriesPromise).entries;
+    catalogEntriesSource = "ready";
   } else {
     allEntries = [];
   }
@@ -1566,6 +1596,7 @@ async function bootstrap(): Promise<void> {
     void catalogBoot.entriesPromise.then((ready) => {
       allEntries = ready.entries;
       indexSummary = ready.summary;
+      catalogEntriesSource = "ready";
       document.documentElement.dataset.dsEntryCount = String(indexSummary.entryCount);
       document.documentElement.dataset.dsIndexSource = ready.entriesSource;
       applyState();
