@@ -984,6 +984,75 @@ body {
   color: rgba(255, 255, 255, 0.65);
 }
 
+.lightweight-preview-shell {
+  position: absolute;
+  inset: 22px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, white 92%, transparent);
+  color: #18202a;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.lightweight-preview-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(24, 32, 42, 0.12);
+  font-size: 9px;
+}
+
+.lightweight-preview-brand {
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.lightweight-preview-menu {
+  opacity: 0.55;
+}
+.lightweight-preview-content {
+  padding: 28px 30px;
+}
+.lightweight-preview-kicker {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  opacity: 0.58;
+}
+.lightweight-preview-content h2 {
+  margin: 8px 0 6px;
+  font-size: 24px;
+  line-height: 1.1;
+}
+.lightweight-preview-content p {
+  max-width: 34ch;
+  margin: 0;
+  font-size: 11px;
+  opacity: 0.68;
+}
+.lightweight-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+.lightweight-preview-actions button {
+  border: 0;
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 10px;
+}
+.lightweight-preview-swatches {
+  display: flex;
+  gap: 6px;
+  margin-top: 26px;
+}
+.lightweight-preview-swatches span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+}
+
 .detail-code-section {
   margin-top: 24px;
 }
