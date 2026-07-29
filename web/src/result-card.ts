@@ -1,4 +1,5 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
+import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { FILTER_CATEGORIES } from "./filter-taxonomy.js";
 import {
   type Locale,
@@ -32,12 +33,33 @@ const STYLE_LABELS: Readonly<Record<string, { ja: string; en: string }>> = Objec
   SEARCH_STYLES.map((style) => [style.v, { ja: style.ja, en: style.en }]),
 );
 
+// A mood is an implementation detail used by the prompt generator. It is not
+// the style the user selected, so it must not replace that style in card titles.
+const STYLE_TITLE_FORMS: Readonly<Record<string, { jaSuffix: "な" | "系" | "の"; en: string }>> = {
+  minimal: { jaSuffix: "な", en: "Minimal" },
+  corporate: { jaSuffix: "な", en: "Corporate" },
+  editorial: { jaSuffix: "な", en: "Editorial" },
+  brutalist: { jaSuffix: "系", en: "Brutalist" },
+  glass: { jaSuffix: "系", en: "Glassmorphism" },
+  soft: { jaSuffix: "の", en: "Soft UI" },
+  dark: { jaSuffix: "な", en: "Dark" },
+  playful: { jaSuffix: "な", en: "Playful" },
+  luxury: { jaSuffix: "な", en: "Luxury" },
+  retro: { jaSuffix: "な", en: "Retro" },
+  industrial: { jaSuffix: "系", en: "Industrial" },
+  flat: { jaSuffix: "な", en: "Flat" },
+  swiss: { jaSuffix: "の", en: "Swiss" },
+  organic: { jaSuffix: "な", en: "Organic" },
+  tech: { jaSuffix: "系", en: "Tech" },
+  warm: { jaSuffix: "な", en: "Warm" },
+};
+
 function categoryOf(entry: DesignIndexEntry): string | undefined {
-  return entry.tags?.[0];
+  return categoryFromEntry(entry, () => entry.tags?.[0] ?? "") || undefined;
 }
 
 function styleOf(entry: DesignIndexEntry): string | undefined {
-  return entry.tags?.[1];
+  return styleFromEntry(entry, () => entry.tags?.[1] ?? "") || undefined;
 }
 
 function localizeMap(
@@ -49,6 +71,17 @@ function localizeMap(
   const hit = map[key];
   if (!hit) return key;
   return locale === "ja" ? hit.ja : hit.en;
+}
+
+function styleTitle(entry: DesignIndexEntry, locale: Locale, taxonomy?: Taxonomy): string {
+  const selectedStyle = styleOf(entry);
+  const form = selectedStyle ? STYLE_TITLE_FORMS[selectedStyle] : undefined;
+  if (form) {
+    return locale === "ja"
+      ? `${localizeMap(STYLE_LABELS, selectedStyle, locale) ?? selectedStyle}${form.jaSuffix}`
+      : form.en;
+  }
+  return labelForMood(entry.mood, taxonomy, locale);
 }
 
 function dedupeTagsByLabel(tags: readonly ResultTag[]): ResultTag[] {
@@ -71,22 +104,16 @@ export function buildDirectionTitle(
   locale: Locale,
   taxonomy?: Taxonomy,
 ): string {
-  const mood = labelForMood(entry.mood, taxonomy, locale);
+  const direction = styleTitle(entry, locale, taxonomy);
   const category = localizeMap(CATEGORY_LABELS, categoryOf(entry), locale);
-  const style = localizeMap(STYLE_LABELS, styleOf(entry), locale);
-  // Prefer category over style when both exist; avoid mood/style label collision in the title.
-  const surface =
-    category && style && category !== style
-      ? category
-      : (category ?? (style && style !== mood ? style : undefined));
 
   if (locale === "en") {
-    const bits = [mood, surface].filter(Boolean);
+    const bits = [direction, category].filter(Boolean);
     return bits.join(" · ");
   }
 
-  if (surface) return `${mood}な${surface}`;
-  return mood;
+  if (category) return `${direction}${category}`;
+  return direction;
 }
 
 /**
