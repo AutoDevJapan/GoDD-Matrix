@@ -44,6 +44,28 @@ describe("buildDirectionTitle", () => {
     expect(title).toContain("·");
     expect(title.toLowerCase()).not.toContain("blue");
   });
+
+  it.each([
+    ["swiss", "スイススタイルのダッシュボード"],
+    ["flat", "フラットなダッシュボード"],
+    ["playful", "プレイフルなダッシュボード"],
+    ["industrial", "インダストリアル系ダッシュボード"],
+    ["tech", "テック系ダッシュボード"],
+    ["editorial", "エディトリアルなダッシュボード"],
+  ])("keeps the selected %s style in Japanese", (style, expected) => {
+    const styled = { ...entry, mood: "minimal", tags: ["dashboard", style, "saas"] };
+    expect(buildDirectionTitle(styled, "ja")).toBe(expected);
+  });
+
+  it("uses canonical coordinates when materialized tags are stale", () => {
+    const materialized = {
+      ...entry,
+      id: "design-1",
+      tags: ["dashboard", "minimal", "saas"],
+      canonicalCellId: "v3:virtual_6061_h17b-lt_minimal_cdashboard_sswiss_v2",
+    };
+    expect(buildDirectionTitle(materialized, "ja")).toBe("スイススタイルのダッシュボード");
+  });
 });
 
 describe("buildEntryTags", () => {

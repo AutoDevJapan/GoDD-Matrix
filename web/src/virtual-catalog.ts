@@ -301,7 +301,9 @@ export function entryFromVirtualAxes(axes: {
     jsic: axes.jsic,
     color: axes.color,
     mood: axes.mood,
-    title: `${jsicName(axes.jsic) || axes.jsic} × ${axes.color} × ${axes.mood}`,
+    // Keep the user-selected style in metadata; mood is only the prompt-engine
+    // axis and may intentionally map several styles to one mood.
+    title: `${jsicName(axes.jsic) || axes.jsic} × ${axes.color} × ${axes.style}`,
     hash: "",
     variant: axes.variant,
     createdAt: "2026-07-20",
