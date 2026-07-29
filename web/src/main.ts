@@ -14,6 +14,7 @@ import {
   buildCellPermalink,
   colorFamily,
   composePromptForCell,
+  extractColorTokens,
   facetLabel,
   familySwatchHex,
   findEntryById,
@@ -67,6 +68,77 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) throw new Error(`Element not found: #${id}`);
   return node as T;
+}
+
+/** DESIGN.md から抽出したトークンだけで詳細画面の軽量プレビューを描く。
+ * 画像や事前生成ファイルを必要としないため、仮想セルを含む巨大な組合せ空間でもオンデマンドで表示できる。 */
+function renderLightweightPreview(
+  box: HTMLElement,
+  markdown: string,
+  entry: DesignIndexEntry,
+): void {
+  const tokens = extractColorTokens(markdown, currentLocale);
+  const colors =
+    tokens.length > 0
+      ? tokens
+      : approxSwatchesForColor(entry.color).map((swatch, index) => ({
+          role: `color-${index + 1}`,
+          hex: swatch.hex,
+          label: swatch.label || `Color ${index + 1}`,
+        }));
+  const background =
+    colors.find((token) => /background|bg|surface/i.test(token.role))?.hex ??
+    colors[0]?.hex ??
+    "#18202a";
+  const foreground = colors.find((token) => /foreground|fg/i.test(token.role))?.hex ?? "#ffffff";
+  const primary =
+    colors.find((token) => token.role === "primary")?.hex ?? colors[0]?.hex ?? "#4f8cff";
+  const secondary =
+    colors.find((token) => token.role === "secondary")?.hex ?? colors[1]?.hex ?? primary;
+
+  box.style.background = background;
+  const overlay = box.querySelector(".preview-overlay");
+  box.replaceChildren(...(overlay ? [overlay] : []));
+  const shell = el("div", { class: "lightweight-preview-shell" });
+  const topbar = el("div", { class: "lightweight-preview-topbar" }, [
+    el("span", { class: "lightweight-preview-brand", text: "DESIGN" }),
+    el("span", { class: "lightweight-preview-menu", text: "Overview   Components   Tokens" }),
+  ]);
+  const content = el("div", { class: "lightweight-preview-content" });
+  content.appendChild(el("span", { class: "lightweight-preview-kicker", text: entry.mood }));
+  content.appendChild(
+    el("h2", {
+      text: currentLocale === "ja" ? "デザインシステムの概要" : "Design system overview",
+    }),
+  );
+  content.appendChild(
+    el("p", {
+      text:
+        currentLocale === "ja"
+          ? "色・文字・余白を一貫したルールで設計します。"
+          : "A consistent system for color, type, and space.",
+    }),
+  );
+  const actions = el("div", { class: "lightweight-preview-actions" });
+  const primaryButton = el("button", { text: currentLocale === "ja" ? "はじめる" : "Get started" });
+  primaryButton.style.background = primary;
+  primaryButton.style.color = foreground;
+  const secondaryButton = el("button", {
+    text: currentLocale === "ja" ? "詳細を見る" : "Learn more",
+  });
+  secondaryButton.style.background = secondary;
+  secondaryButton.style.color = foreground;
+  actions.append(primaryButton, secondaryButton);
+  content.appendChild(actions);
+  const swatches = el("div", { class: "lightweight-preview-swatches" });
+  for (const token of colors.slice(0, 5)) {
+    const swatch = el("span", { title: token.label });
+    swatch.style.background = token.hex;
+    swatches.appendChild(swatch);
+  }
+  content.appendChild(swatches);
+  shell.append(topbar, content);
+  box.appendChild(shell);
 }
 
 // Static definitions matching the reference DESIGN.md library design
@@ -722,6 +794,8 @@ async function openDetail(
       return;
     }
   }
+
+  renderLightweightPreview(previewBox, renderedMarkdown, entry);
 
   // Synthesize Markdown Content
   const prompt = composePromptForCell({
