@@ -1,7 +1,7 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
-import { buildDesignPreviewSpec } from "./design-preview.js";
+import { buildDesignPreviewSpec, previewTextColor } from "./design-preview.js";
 import { editableSwatchesFromTokens, resolveDetailColorOverrides } from "./detail-color-state.js";
 import {
   FILTER_CATEGORIES,
@@ -89,11 +89,14 @@ function renderLightweightPreview(
     colors.find((token) => /background|bg|surface/i.test(token.role))?.hex ??
     colors[0]?.hex ??
     "#18202a";
-  const foreground = colors.find((token) => /foreground|fg/i.test(token.role))?.hex ?? "#ffffff";
+  const foregroundToken = colors.find((token) => /foreground|fg/i.test(token.role))?.hex;
   const primary =
     colors.find((token) => token.role === "primary")?.hex ?? colors[0]?.hex ?? "#4f8cff";
   const secondary =
     colors.find((token) => token.role === "secondary")?.hex ?? colors[1]?.hex ?? primary;
+  const foreground = previewTextColor(background, foregroundToken);
+  const primaryText = previewTextColor(primary, foregroundToken);
+  const secondaryText = previewTextColor(secondary, foregroundToken);
 
   box.style.background = background;
   const overlay = box.querySelector(".preview-overlay");
@@ -154,12 +157,12 @@ function renderLightweightPreview(
   const actions = el("div", { class: "lightweight-preview-actions" });
   const primaryButton = el("button", { text: copy.primary });
   primaryButton.style.background = primary;
-  primaryButton.style.color = foreground;
+  primaryButton.style.color = primaryText;
   const secondaryButton = el("button", {
     text: copy.secondary,
   });
   secondaryButton.style.background = secondary;
-  secondaryButton.style.color = foreground;
+  secondaryButton.style.color = secondaryText;
   actions.append(primaryButton, secondaryButton);
   content.appendChild(actions);
 
