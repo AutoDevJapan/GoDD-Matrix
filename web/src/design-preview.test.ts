@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
-import { buildDesignPreviewSpec } from "./design-preview.js";
+import { buildDesignPreviewSpec, previewTextColor } from "./design-preview.js";
 
 const entry: DesignIndexEntry = {
   id: "virtual_6061_h17b-lt_minimal_cdashboard_sswiss_v2",
@@ -60,5 +60,15 @@ describe("buildDesignPreviewSpec", () => {
     expect(spec.fontFamily).toBe("ui-serif, system-ui");
     expect(spec.radius).toBe("12px");
     expect(spec.componentPattern).toBe("task-first");
+  });
+});
+
+describe("previewTextColor", () => {
+  it("rejects a white foreground token on a near-white preview surface", () => {
+    expect(previewTextColor("#f8fafc", "#ffffff")).toBe("#18202a");
+  });
+
+  it("keeps white text for a dark preview surface", () => {
+    expect(previewTextColor("#10131a", "#ffffff")).toBe("#ffffff");
   });
 });

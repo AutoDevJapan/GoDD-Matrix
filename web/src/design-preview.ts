@@ -20,6 +20,50 @@ export interface DesignPreviewSpec {
   }[];
 }
 
+function rgbFromHex(value: string): readonly [number, number, number] | undefined {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value.trim());
+  if (!match?.[1]) return undefined;
+  const raw =
+    match[1].length === 3
+      ? match[1]
+          .split("")
+          .map((part) => `${part}${part}`)
+          .join("")
+      : match[1];
+  return [
+    Number.parseInt(raw.slice(0, 2), 16),
+    Number.parseInt(raw.slice(2, 4), 16),
+    Number.parseInt(raw.slice(4, 6), 16),
+  ];
+}
+
+function relativeLuminance(hex: string): number | undefined {
+  const rgb = rgbFromHex(hex);
+  if (!rgb) return undefined;
+  const linear = rgb.map((channel) => {
+    const value = channel / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
+}
+
+function contrastRatio(a: string, b: string): number {
+  const aLuminance = relativeLuminance(a);
+  const bLuminance = relativeLuminance(b);
+  if (aLuminance === undefined || bLuminance === undefined) return 0;
+  return (Math.max(aLuminance, bLuminance) + 0.05) / (Math.min(aLuminance, bLuminance) + 0.05);
+}
+
+/** Choose a readable ink color for a preview surface, preserving a supplied token when possible. */
+export function previewTextColor(background: string, preferred?: string): string {
+  const candidates = [preferred, "#18202a", "#ffffff"].filter((candidate): candidate is string =>
+    Boolean(candidate && rgbFromHex(candidate)),
+  );
+  return candidates.reduce((best, candidate) =>
+    contrastRatio(candidate, background) > contrastRatio(best, background) ? candidate : best,
+  );
+}
+
 const JAPANESE_LAYOUTS: Readonly<Record<string, PreviewLayout>> = {
   単一カラム: "single-column",
   サイドバー: "sidebar",
