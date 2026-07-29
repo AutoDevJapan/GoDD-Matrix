@@ -989,9 +989,10 @@ body {
   inset: 22px;
   border-radius: 10px;
   overflow: hidden;
-  background: color-mix(in srgb, white 92%, transparent);
-  color: #18202a;
+  background: color-mix(in srgb, var(--preview-bg) 12%, white);
+  color: var(--preview-fg, #18202a);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  font-family: var(--preview-font, system-ui, sans-serif);
 }
 
 .lightweight-preview-topbar {
@@ -1011,7 +1012,7 @@ body {
   opacity: 0.55;
 }
 .lightweight-preview-content {
-  padding: 28px 30px;
+  padding: 22px 26px;
 }
 .lightweight-preview-kicker {
   font-size: 9px;
@@ -1021,7 +1022,7 @@ body {
 }
 .lightweight-preview-content h2 {
   margin: 8px 0 6px;
-  font-size: 24px;
+  font-size: 21px;
   line-height: 1.1;
 }
 .lightweight-preview-content p {
@@ -1037,7 +1038,7 @@ body {
 }
 .lightweight-preview-actions button {
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--preview-radius, 5px);
   padding: 8px 12px;
   font-size: 10px;
 }
@@ -1051,6 +1052,140 @@ body {
   height: 24px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.65);
+}
+
+.preview-site-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.preview-site-main,
+.preview-site-sidebar {
+  border: 1px solid color-mix(in srgb, var(--preview-fg, #18202a) 16%, transparent);
+  border-radius: var(--preview-radius, 8px);
+  padding: 12px;
+  background: color-mix(in srgb, var(--preview-bg) 6%, white);
+}
+
+.preview-site-eyebrow,
+.preview-site-card-label {
+  display: block;
+  font-size: 8px;
+  opacity: 0.6;
+}
+
+.preview-site-title {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 760;
+}
+
+.preview-site-line {
+  width: 72%;
+  height: 5px;
+  border-radius: 999px;
+  margin: 10px 0;
+  background: var(--preview-primary, #4f8cff);
+}
+
+.preview-site-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.preview-site-card {
+  min-width: 0;
+  padding: 8px;
+  border-radius: var(--preview-radius, 6px);
+  background: color-mix(in srgb, var(--preview-secondary, #7c3aed) 18%, white);
+}
+
+.preview-site-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.preview-site-sidebar {
+  display: grid;
+  gap: 8px;
+  font-size: 9px;
+}
+
+.preview-site-side-item {
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--preview-fg, #18202a) 13%, transparent);
+  opacity: 0.7;
+}
+
+.preview-layout-sidebar .preview-site-content,
+.preview-layout-split-view .preview-site-content {
+  grid-template-columns: minmax(0, 1.8fr) minmax(100px, 1fr);
+}
+
+.preview-layout-modular-grid .preview-site-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preview-density-compact .preview-site-main,
+.preview-density-compact .preview-site-sidebar,
+.preview-density-compact .preview-site-card {
+  padding: 7px;
+}
+
+.preview-density-spacious .preview-site-content {
+  margin-top: 24px;
+  gap: 14px;
+}
+
+.lightweight-preview-shell.preview-style-swiss,
+.lightweight-preview-shell.preview-style-flat {
+  box-shadow: none;
+  border: 1px solid color-mix(in srgb, var(--preview-fg, #18202a) 18%, transparent);
+}
+
+.lightweight-preview-shell.preview-style-brutalist,
+.lightweight-preview-shell.preview-style-industrial {
+  border-radius: 0;
+  border: 3px solid var(--preview-fg, #18202a);
+  box-shadow: 7px 7px 0 var(--preview-secondary, #7c3aed);
+}
+
+.preview-style-brutalist .preview-site-main,
+.preview-style-industrial .preview-site-main,
+.preview-style-brutalist .preview-site-card,
+.preview-style-industrial .preview-site-card {
+  border-radius: 0;
+}
+
+.lightweight-preview-shell.preview-style-glass {
+  background: color-mix(in srgb, white 68%, var(--preview-bg));
+  backdrop-filter: blur(12px);
+}
+
+.lightweight-preview-shell.preview-style-dark {
+  background: color-mix(in srgb, #10131a 88%, var(--preview-bg));
+  color: #f8fafc;
+}
+
+.preview-style-editorial .lightweight-preview-content h2 {
+  font-family: ui-serif, Georgia, serif;
+  font-size: 27px;
+}
+
+.preview-style-playful .preview-site-card,
+.preview-style-organic .preview-site-card {
+  border-radius: 18px;
+}
+
+@media (max-width: 720px) {
+  .preview-layout-sidebar .preview-site-content,
+  .preview-layout-split-view .preview-site-content {
+    grid-template-columns: 1fr;
+  }
 }
 
 .detail-code-section {

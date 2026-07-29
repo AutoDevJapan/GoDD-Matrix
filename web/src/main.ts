@@ -1,6 +1,7 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
 import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
+import { buildDesignPreviewSpec } from "./design-preview.js";
 import { editableSwatchesFromTokens, resolveDetailColorOverrides } from "./detail-color-state.js";
 import {
   FILTER_CATEGORIES,
@@ -76,22 +77,14 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 const CATEGORIES = FILTER_CATEGORIES;
 const STYLES = FILTER_STYLES;
 const VERTICALS = INDUSTRY_VERTICALS;
-/** DESIGN.md から抽出したトークンだけで詳細画面の軽量プレビューを描く。
- * 画像や事前生成ファイルを必要としないため、仮想セルを含む巨大な組合せ空間でもオンデマンドで表示できる。 */
+/** DESIGN.md の構造化仕様を、ブラウザ内で安全な実サイト風UIとして決定論的に描画する。 */
 function renderLightweightPreview(
   box: HTMLElement,
   markdown: string,
   entry: DesignIndexEntry,
 ): void {
-  const tokens = extractColorTokens(markdown, currentLocale);
-  const colors =
-    tokens.length > 0
-      ? tokens
-      : approxSwatchesForColor(entry.color).map((swatch, index) => ({
-          role: `color-${index + 1}`,
-          hex: swatch.hex,
-          label: swatch.label || `Color ${index + 1}`,
-        }));
+  const spec = buildDesignPreviewSpec(markdown, entry, currentLocale);
+  const { colors } = spec;
   const background =
     colors.find((token) => /background|bg|surface/i.test(token.role))?.hex ??
     colors[0]?.hex ??
@@ -105,37 +98,107 @@ function renderLightweightPreview(
   box.style.background = background;
   const overlay = box.querySelector(".preview-overlay");
   box.replaceChildren(...(overlay ? [overlay] : []));
-  const shell = el("div", { class: "lightweight-preview-shell" });
+  const shell = el("div", {
+    class: `lightweight-preview-shell preview-style-${spec.style} preview-layout-${spec.layout} preview-density-${spec.density}`,
+  });
+  shell.style.setProperty("--preview-bg", background);
+  shell.style.setProperty("--preview-fg", foreground);
+  shell.style.setProperty("--preview-primary", primary);
+  shell.style.setProperty("--preview-secondary", secondary);
+  shell.style.setProperty("--preview-radius", spec.radius);
+  shell.style.setProperty("--preview-font", spec.fontFamily);
+  shell.dataset.componentPattern = spec.componentPattern;
+  const categoryName = categoryLabel(spec.category, currentLocale);
+  const styleName = styleLabel(spec.style, currentLocale);
+  const copy =
+    currentLocale === "ja"
+      ? {
+          menu: "概要　コンポーネント　トークン",
+          primary: "はじめる",
+          secondary: "詳細を見る",
+          metric: "今週の進捗",
+          activity: "最近のアクティビティ",
+          product: "おすすめのアイテム",
+          article: "注目の記事",
+          feature: "主な機能",
+        }
+      : {
+          menu: "Overview   Components   Tokens",
+          primary: "Get started",
+          secondary: "Learn more",
+          metric: "This week's progress",
+          activity: "Recent activity",
+          product: "Recommended items",
+          article: "Featured story",
+          feature: "Key features",
+        };
   const topbar = el("div", { class: "lightweight-preview-topbar" }, [
-    el("span", { class: "lightweight-preview-brand", text: "DESIGN" }),
-    el("span", { class: "lightweight-preview-menu", text: "Overview   Components   Tokens" }),
+    el("span", { class: "lightweight-preview-brand", text: categoryName.toUpperCase() }),
+    el("span", { class: "lightweight-preview-menu", text: copy.menu }),
   ]);
   const content = el("div", { class: "lightweight-preview-content" });
-  content.appendChild(el("span", { class: "lightweight-preview-kicker", text: entry.mood }));
+  content.appendChild(el("span", { class: "lightweight-preview-kicker", text: styleName }));
   content.appendChild(
     el("h2", {
-      text: currentLocale === "ja" ? "デザインシステムの概要" : "Design system overview",
+      text: buildDirectionTitle(entry, currentLocale, taxonomy),
     }),
   );
   content.appendChild(
     el("p", {
       text:
         currentLocale === "ja"
-          ? "色・文字・余白を一貫したルールで設計します。"
-          : "A consistent system for color, type, and space.",
+          ? `${categoryName}のための${styleName}スタイルの画面。${spec.componentPattern}の情報設計を反映しています。`
+          : `A ${styleName} interface for ${categoryName}, using a ${spec.componentPattern} content pattern.`,
     }),
   );
   const actions = el("div", { class: "lightweight-preview-actions" });
-  const primaryButton = el("button", { text: currentLocale === "ja" ? "はじめる" : "Get started" });
+  const primaryButton = el("button", { text: copy.primary });
   primaryButton.style.background = primary;
   primaryButton.style.color = foreground;
   const secondaryButton = el("button", {
-    text: currentLocale === "ja" ? "詳細を見る" : "Learn more",
+    text: copy.secondary,
   });
   secondaryButton.style.background = secondary;
   secondaryButton.style.color = foreground;
   actions.append(primaryButton, secondaryButton);
   content.appendChild(actions);
+
+  const site = el("div", { class: "preview-site-content" });
+  const mainPanel = el("div", { class: "preview-site-main" });
+  const eyebrow = el("span", { class: "preview-site-eyebrow", text: copy.feature });
+  mainPanel.appendChild(eyebrow);
+  mainPanel.appendChild(el("div", { class: "preview-site-title", text: categoryName }));
+  mainPanel.appendChild(el("div", { class: "preview-site-line" }));
+  const cards = el("div", { class: "preview-site-cards" });
+  const cardCount = spec.category === "dashboard" || spec.category === "admin" ? 3 : 2;
+  for (let index = 0; index < cardCount; index++) {
+    const card = el("div", { class: "preview-site-card" });
+    card.appendChild(
+      el("span", { class: "preview-site-card-label", text: `${copy.metric} ${index + 1}` }),
+    );
+    card.appendChild(el("strong", { text: `${(index + 2) * 24}%` }));
+    cards.appendChild(card);
+  }
+  mainPanel.appendChild(cards);
+  site.appendChild(mainPanel);
+
+  if (spec.layout === "sidebar" || spec.category === "dashboard" || spec.category === "admin") {
+    const side = el("aside", { class: "preview-site-sidebar" });
+    side.appendChild(el("strong", { text: copy.activity }));
+    for (let index = 0; index < 3; index++) {
+      side.appendChild(
+        el("span", { class: "preview-site-side-item", text: `0${index + 1}　${copy.metric}` }),
+      );
+    }
+    site.appendChild(side);
+  }
+
+  if (spec.category === "ecommerce") {
+    eyebrow.textContent = copy.product;
+  } else if (spec.category === "blog") {
+    eyebrow.textContent = copy.article;
+  }
+  content.appendChild(site);
   const swatches = el("div", { class: "lightweight-preview-swatches" });
   for (const token of colors.slice(0, 5)) {
     const swatch = el("span", { title: token.label });
