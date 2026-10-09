@@ -163,3 +163,12 @@ URL でホストできるため、任意のサーバレス関数 / Node ラン�
 | `GODD_MCP_MAX_BODY_BYTES` | | `POST /mcp` のリクエストボディ上限 (bytes)。既定 1 MiB。超過は 413。 |
 | `GENERATOR_RENDER_URL` | | 未材化セルの Generator レンダー API ベース URL。未設定なら未材化は `unavailable`。 |
 | `GENERATOR_RENDER_API_KEY` | | 同 API の認証キー。`GENERATOR_RENDER_URL` と両方揃った場合のみ有効。 |
+
+## 事業者情報の開示請求（2026-10-10）
+販売者は AutoDevJapan、問い合わせ先は contact@autodevjapan.com を保持する。
+氏名・所在地・電話番号の正式情報をこのリポジトリに複製せず、常時掲載しない。
+既存の法的ページ・購入前条件欄、または法的ページのない公開サイトの共通フッターから
+[事業者情報の開示請求](https://autodevjapan.com/api/disclosure)へ案内する。
+メールでの開示請求も受け付ける。請求処理と正式原本は共通の公式サイトが管理する。
+この変更は表示導線のみであり、本番POSTの受入、実課金、販売開始を完了扱いしない。
+親ToDo2174が正式原本と本番POSTを受け入れるまで、導線のPRは下書きで保持する。
