@@ -78,6 +78,12 @@ dispatch で `pnpm build:web` → `web/dist` を GitHub Pages へ公開する
 (`configure-pages` + `upload-pages-artifact` + `deploy-pages`)。
 basePath はリポジトリ名 `/GoDD-Matrix` (資産参照は相対パス)。
 
+公開先はこの既存 Pages の **Prd のみ**。手動実行もこのリポジトリの `main` に限り、
+他のブランチ・タグ・fork は静的ビルドと配備の両方をスキップする。
+`github-pages` はこの Prd を供する GitHub 環境名として保持する。
+旧 Vercel 用のコードは保持するが、`vercel.json` の Git 自動配備を無効にする。
+配備範囲と機能の確認手順は [Prd の配備](documents/deployment/PRD.md) を参照。
+
 ## 必要環境
 
 - Node.js >= 20
