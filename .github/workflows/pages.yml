@@ -32,6 +32,8 @@ concurrency:
 jobs:
   build:
     name: 静的ビルド (web/dist)
+    # 手動実行でも既存Prdのmain以外を公開しない。forkでは配備しない。
+    if: github.repository == 'AutoDevJapan/GoDD-Matrix' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -70,6 +72,7 @@ jobs:
 
   deploy:
     name: Pages へデプロイ
+    if: github.repository == 'AutoDevJapan/GoDD-Matrix' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
