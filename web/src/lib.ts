@@ -170,6 +170,11 @@ export function jsicName(code: string): string {
   return jsicNameByCode.get(code) ?? code;
 }
 
+/** Preserve the fine-class identity without inventing an English translation. */
+export function industryForDesign(code: string, locale: Locale): string {
+  return locale === "en" ? `JSIC ${code}` : jsicName(code);
+}
+
 /**
  * カラー slug → 表示ラベル。
  * - `ja`: taxonomy `name_ja` → Japanese bundled → slug
