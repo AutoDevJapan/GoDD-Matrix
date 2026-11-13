@@ -141,6 +141,13 @@ test("keeps incomplete color text and its caret while the body arrives", async (
     [3, 3],
   );
   await expect(page.locator("#detail-code-block")).toContainText("#FAFAFA");
+  await page.locator("#locale-select").selectOption("en");
+  await expect(page.locator("#detail-code-block")).toContainText("Output language: English");
+  await expect(input).toHaveValue("#123");
+  await page.locator("#btn-copy").click();
+  const draftCopy = await page.evaluate(() => navigator.clipboard.readText());
+  expect(draftCopy).toContain("#FAFAFA");
+  expect(draftCopy).not.toContain("#123");
   await input.fill("#123456");
   await expect(page.locator("#detail-code-block")).toContainText("#123456");
 });

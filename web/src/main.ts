@@ -1055,7 +1055,20 @@ async function openDetail(
     detailColorOverrides,
     opts.preserveColors,
   );
+  const draftInputs = opts.preserveColors
+    ? Array.from(
+        byId("detail-color-editor").querySelectorAll<HTMLInputElement>(".color-editor-input"),
+      ).map((input) => input.value)
+    : [];
   renderColorEditor(entry);
+  if (opts.preserveColors) {
+    byId("detail-color-editor")
+      .querySelectorAll<HTMLInputElement>(".color-editor-input")
+      .forEach((input, index) => {
+        const draft = draftInputs[index];
+        if (draft !== undefined && !normalizeHex(draft)) input.value = draft;
+      });
+  }
 
   // Draw metadata badges
   const badgeBox = byId("detail-badges");
