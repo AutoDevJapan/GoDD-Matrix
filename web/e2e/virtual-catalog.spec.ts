@@ -78,6 +78,18 @@ test("keeps the materialized cell path fetchable by id", async ({ page }) => {
   await expect(page.locator("#detail-code-block")).toContainText("Materialized browser fixture.");
 });
 
+test("keeps materialized content while copying its English fine-class request", async ({
+  page,
+}) => {
+  await page.goto(`/?cell=${materializedId}`);
+  await page.locator("#locale-select").selectOption("en");
+  await expect(page.locator("#detail-code-block")).toContainText("Materialized browser fixture.");
+  await page.locator("#btn-copy").click();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied.replace(/\r\n/g, "\n")).toContain(materializedBody.trim());
+  expect(copied).toContain("- Industry: JSIC 6061");
+});
+
 test("copies a virtual prompt with consistent fine-class industry identity", async ({ page }) => {
   await page.goto("/?cell=virtual_0100_h2v-vv_minimal_clp_sminimal_v0");
   await page.locator("#locale-select").selectOption("ja");
