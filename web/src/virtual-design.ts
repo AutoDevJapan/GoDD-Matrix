@@ -131,7 +131,9 @@ export function buildVirtualDesign(
     "",
     "## Context",
     "",
-    `- Industry: ${labels.industry} (JSIC ${entry.jsic})`,
+    labels.industry === `JSIC ${entry.jsic}`
+      ? `- Industry: ${labels.industry}`
+      : `- Industry: ${labels.industry} (JSIC ${entry.jsic})`,
     `- Color: ${labels.color} (${entry.color})`,
     `- Mood: ${labels.mood} (${entry.mood})`,
     `- Tags: ${tags}`,

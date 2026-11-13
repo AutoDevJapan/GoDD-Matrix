@@ -39,6 +39,7 @@ import {
   searchCells,
   toggleFacet,
 } from "./lib.js";
+import { buildVirtualDesign } from "./virtual-design.js";
 
 /** 公開 index のミラー (材化済み 2 セル)。 */
 const consulting: DesignIndexEntry = {
@@ -734,5 +735,53 @@ describe("contextFromEntry / composePromptForCell", () => {
     });
     expect(prompt.notices.some((n) => n.includes("カラー軸"))).toBe(true);
     expect(prompt.notices.some((n) => n.includes("ムード軸"))).toBe(true);
+  });
+});
+import { industryForDesign } from "./lib.js";
+
+describe("industryForDesign", () => {
+  it.each(["ja", "en"] as const)("keeps generated context and request aligned in %s", (locale) => {
+    const cell: DesignIndexEntry = {
+      id: "virtual_0100",
+      path: "design-md/0100/h2v-vv/minimal/DESIGN.md",
+      jsic: "0100",
+      color: "h2v-vv",
+      mood: "minimal",
+      hash: "",
+      tags: ["lp"],
+    };
+    const industry = industryForDesign(cell.jsic, locale);
+    const markdown = buildVirtualDesign(cell, locale, {
+      title: "Design",
+      industry,
+      color: "Red",
+      mood: "Minimal",
+      swatches: ["#d51a1a"],
+    });
+    const prompt = composePromptForCell({
+      entry: cell,
+      markdown,
+      hashVerified: false,
+      resolutionStatus: "rendered",
+      request: { industry },
+      outputLanguage: locale === "ja" ? "日本語" : "English",
+    });
+    expect(markdown).toContain(industry);
+    if (locale === "en") {
+      expect(markdown.split("\n").filter((line) => line.startsWith("- Industry:"))).toEqual([
+        "- Industry: JSIC 0100",
+      ]);
+    }
+    expect(prompt.systemPrompt).toContain(industry);
+    expect(prompt.userPrompt).toContain(industry);
+    expect(markdown).not.toContain("農業，林業");
+  });
+  it("uses the fine-class name instead of the division for Japanese specifications", () => {
+    expect(industryForDesign("0100", "ja")).toBe("主として管理事務を行う本社等");
+    expect(industryForDesign("3911", "ja")).toBe("受託開発ソフトウェア業");
+  });
+  it("uses an explicit code when no English fine-class name is bundled", () => {
+    expect(industryForDesign("0100", "en")).toBe("JSIC 0100");
+    expect(industryForDesign("unknown", "ja")).toBe("unknown");
   });
 });

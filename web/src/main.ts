@@ -27,6 +27,7 @@ import {
   facetLabel,
   familySwatchHex,
   findEntryById,
+  industryForDesign,
   jsicMajor,
   labelForColor,
   labelForMood,
@@ -966,9 +967,7 @@ function downloadMarkdown(filename: string, content: string): void {
 }
 
 function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
-  const major = jsicMajor(entry.jsic);
-  const industry =
-    locale === "en" ? major.label_en || major.label || entry.jsic : major.label || entry.jsic;
+  const industry = industryForDesign(entry.jsic, locale);
   return buildVirtualDesign(entry, locale, {
     title: buildDirectionTitle(entry, locale, taxonomy),
     industry,
@@ -1103,8 +1102,8 @@ async function openDetail(
     markdown: renderedMarkdown,
     hashVerified,
     ...(isVirtual ? { resolutionStatus: "rendered" as const } : {}),
-    ...(currentLocale === "en"
-      ? { request: { industry: jsicMajor(entry.jsic).label_en || entry.jsic } }
+    ...(isVirtual || currentLocale === "en"
+      ? { request: { industry: industryForDesign(entry.jsic, currentLocale) } }
       : {}),
     outputLanguage: currentLocale === "ja" ? "日本語" : "English",
   });
