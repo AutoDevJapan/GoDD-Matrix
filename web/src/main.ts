@@ -269,6 +269,7 @@ const filters: Filters = {
 let currentCursor: string | null = null;
 /** Detail-view color overrides (original → custom hex). */
 let detailColorOverrides: string[] = [];
+const detailEditedColorIndexes = new Set<number>();
 let detailBaseMarkdown = "";
 let detailBaseSwatches: string[] = [];
 
@@ -508,6 +509,7 @@ function applyDetailColorAt(
 ): void {
   const normalized = normalizeHex(hex);
   if (!normalized) return;
+  detailEditedColorIndexes.add(index);
   detailColorOverrides[index] = normalized;
   targets.swatch.style.backgroundColor = normalized;
   targets.textInput.value = normalized;
@@ -984,6 +986,7 @@ async function openDetail(
 ): Promise<void> {
   const requestId = ++detailRequestId;
   selectedEntry = entry;
+  if (!opts.preserveColors) detailEditedColorIndexes.clear();
 
   // Transition views
   byId("search-view").classList.add("hidden");
@@ -1117,10 +1120,8 @@ async function openDetail(
       detailBaseSwatches,
     );
     detailBaseSwatches = tokenSwatches;
-    detailColorOverrides = resolveDetailColorOverrides(
-      tokenSwatches,
-      detailColorOverrides,
-      opts.preserveColors,
+    detailColorOverrides = tokenSwatches.map((hex, index) =>
+      detailEditedColorIndexes.has(index) ? (detailColorOverrides[index] ?? hex) : hex,
     );
     renderColorEditor(entry);
     previewBox.style.background = thumbnailBgFromHexes(detailColorOverrides);
@@ -1688,6 +1689,7 @@ async function bootstrap(): Promise<void> {
     detailBaseMarkdown = "";
     detailBaseSwatches = [];
     detailColorOverrides = [];
+    detailEditedColorIndexes.clear();
     syncBrowseUrl(null);
     byId("detail-view").classList.add("hidden");
     byId("search-view").classList.remove("hidden");

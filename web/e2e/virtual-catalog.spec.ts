@@ -78,6 +78,76 @@ test("keeps the materialized cell path fetchable by id", async ({ page }) => {
   await expect(page.locator("#detail-code-block")).toContainText("Materialized browser fixture.");
 });
 
+test("keeps color edits made while a materialized body is loading", async ({ page }) => {
+  let releaseBody!: () => void;
+  const bodyReady = new Promise<void>((resolve) => {
+    releaseBody = resolve;
+  });
+  const body =
+    "# DESIGN\n\n| Background | `--color-bg` | #FAFAFA |\n| Accent | `--color-accent` | #C72323 |\n";
+  await page.route(`**/${materializedPath}`, async (route) => {
+    await bodyReady;
+    await route.fulfill({ contentType: "text/markdown", body });
+  });
+  await page.goto(`/?cell=${materializedId}`);
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "true");
+  await page.locator("#detail-color-editor .color-editor-input").first().fill("#123456");
+  releaseBody();
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+    "#123456",
+  );
+  await expect(page.locator("#detail-code-block")).toContainText("#123456");
+  await expect(page.locator("#detail-color-editor .color-editor-input").nth(1)).toHaveValue(
+    "#c72323",
+  );
+  await page.locator("#locale-select").selectOption("en");
+  await expect(page.locator("#detail-code-block")).toContainText("Output language: English");
+  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+    "#123456",
+  );
+  await page.locator("#btn-copy").click();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain("#123456");
+  expect(copied).toContain("#C72323");
+  await page.locator("#back-btn").click();
+  await page.goto(`/?cell=${materializedId}`);
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+    "#fafafa",
+  );
+});
+
+test("ignores an old materialized response after selecting another cell", async ({ page }) => {
+  let releaseBody!: () => void;
+  let markRequested!: () => void;
+  const requested = new Promise<void>((resolve) => {
+    markRequested = resolve;
+  });
+  const ready = new Promise<void>((resolve) => {
+    releaseBody = resolve;
+  });
+  await page.route(`**/${materializedPath}`, async (route) => {
+    markRequested();
+    await ready;
+    await route.fulfill({ contentType: "text/markdown", body: materializedBody });
+  });
+  await page.goto(`/?cell=${materializedId}`);
+  await requested;
+  await page.locator("#back-btn").click();
+  await page.locator("#results .card").first().click();
+  await expect(page).toHaveURL(/cell=virtual_/);
+  await page.locator("#detail-color-editor .color-editor-input").first().fill("#654321");
+  const current = await page.locator("#detail-code-block").textContent();
+  const response = page.waitForResponse((r) => r.url().endsWith(materializedPath));
+  releaseBody();
+  await response;
+  await expect(page.locator("#detail-code-block")).toHaveText(current ?? "");
+  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+    "#654321",
+  );
+});
+
 test("keeps materialized content while copying its English fine-class request", async ({
   page,
 }) => {
