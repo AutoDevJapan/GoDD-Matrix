@@ -767,6 +767,11 @@ describe("industryForDesign", () => {
       outputLanguage: locale === "ja" ? "日本語" : "English",
     });
     expect(markdown).toContain(industry);
+    if (locale === "en") {
+      expect(markdown.split("\n").filter((line) => line.startsWith("- Industry:"))).toEqual([
+        "- Industry: JSIC 0100",
+      ]);
+    }
     expect(prompt.systemPrompt).toContain(industry);
     expect(prompt.userPrompt).toContain(industry);
     expect(markdown).not.toContain("農業，林業");
