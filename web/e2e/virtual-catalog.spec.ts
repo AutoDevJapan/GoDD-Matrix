@@ -77,3 +77,23 @@ test("keeps the materialized cell path fetchable by id", async ({ page }) => {
   await expect(page.locator("#detail-view")).toBeVisible();
   await expect(page.locator("#detail-code-block")).toContainText("Materialized browser fixture.");
 });
+
+test("copies a virtual prompt with consistent fine-class industry identity", async ({ page }) => {
+  await page.goto("/?cell=virtual_0100_h2v-vv_minimal_clp_sminimal_v0");
+  await page.locator("#locale-select").selectOption("ja");
+  await expect(page.locator("#detail-view")).toBeVisible();
+  await expect(page.locator("#detail-code-block")).toContainText(
+    "主として管理事務を行う本社等（JSIC 0100）",
+  );
+  await page.locator("#btn-copy").click();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain("主として管理事務を行う本社等（JSIC 0100）");
+  expect(copied).toContain("- 業種: 主として管理事務を行う本社等");
+  expect(copied).not.toContain("農業，林業向けに");
+  await page.locator("#locale-select").selectOption("en");
+  await expect(page.locator("#detail-code-block")).toContainText("Industry: JSIC 0100");
+  await page.locator("#btn-copy").click();
+  const english = await page.evaluate(() => navigator.clipboard.readText());
+  expect(english).toContain("- Industry: JSIC 0100");
+  expect(english).not.toContain("Agriculture and forestry");
+});
