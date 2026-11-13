@@ -611,6 +611,22 @@ function renderColorEditor(entry: DesignIndexEntry): void {
   });
 }
 
+/** Update resolved swatches without replacing a user's in-progress text field. */
+function syncResolvedColorEditor(): void {
+  const blocks = byId("detail-color-editor").querySelectorAll<HTMLElement>(".color-editor-block");
+  blocks.forEach((block, index) => {
+    const hex = detailColorOverrides[index];
+    if (!hex) return;
+    const text = block.querySelector<HTMLInputElement>(".color-editor-input");
+    // Invalid text is an unfinished draft, never a committed color override.
+    if (text && normalizeHex(text.value)) text.value = hex;
+    const swatch = block.querySelector<HTMLElement>(".color-editor-swatch");
+    if (swatch) swatch.style.backgroundColor = hex;
+    const native = block.querySelector<HTMLInputElement>(".color-editor-native");
+    if (native) native.value = hex;
+  });
+}
+
 function renderThumbnail(entry: DesignIndexEntry, container: HTMLElement): void {
   const colors = getSwatchHexes(entry);
   const primaryColor = colors[0] || "#6366f1";
@@ -1123,7 +1139,7 @@ async function openDetail(
     detailColorOverrides = tokenSwatches.map((hex, index) =>
       detailEditedColorIndexes.has(index) ? (detailColorOverrides[index] ?? hex) : hex,
     );
-    renderColorEditor(entry);
+    syncResolvedColorEditor();
     previewBox.style.background = thumbnailBgFromHexes(detailColorOverrides);
   }
 

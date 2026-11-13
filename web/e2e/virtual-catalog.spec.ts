@@ -118,6 +118,33 @@ test("keeps color edits made while a materialized body is loading", async ({ pag
   );
 });
 
+test("keeps incomplete color text and its caret while the body arrives", async ({ page }) => {
+  let releaseBody!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    releaseBody = resolve;
+  });
+  const body =
+    "# DESIGN\n\n| Background | `--color-bg` | #FAFAFA |\n| Accent | `--color-accent` | #C72323 |\n";
+  await page.route(`**/${materializedPath}`, async (route) => {
+    await ready;
+    await route.fulfill({ contentType: "text/markdown", body });
+  });
+  await page.goto(`/?cell=${materializedId}`);
+  const input = page.locator("#detail-color-editor .color-editor-input").first();
+  await input.fill("#123");
+  await input.press("ArrowLeft");
+  releaseBody();
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+  await expect(input).toHaveValue("#123");
+  await expect(input).toBeFocused();
+  expect(await input.evaluate((e: HTMLInputElement) => [e.selectionStart, e.selectionEnd])).toEqual(
+    [3, 3],
+  );
+  await expect(page.locator("#detail-code-block")).toContainText("#FAFAFA");
+  await input.fill("#123456");
+  await expect(page.locator("#detail-code-block")).toContainText("#123456");
+});
+
 test("ignores an old materialized response after selecting another cell", async ({ page }) => {
   let releaseBody!: () => void;
   let markRequested!: () => void;
