@@ -619,7 +619,24 @@ function syncResolvedColorEditor(): void {
     if (!hex) return;
     const text = block.querySelector<HTMLInputElement>(".color-editor-input");
     // Invalid text is an unfinished draft, never a committed color override.
-    if (text && normalizeHex(text.value)) text.value = hex;
+    if (text && normalizeHex(text.value) && text.value !== hex) {
+      const selection =
+        document.activeElement === text
+          ? {
+              start: text.selectionStart,
+              end: text.selectionEnd,
+              direction: text.selectionDirection,
+            }
+          : null;
+      text.value = hex;
+      if (selection && selection.start !== null && selection.end !== null) {
+        text.setSelectionRange(
+          Math.min(selection.start, hex.length),
+          Math.min(selection.end, hex.length),
+          selection.direction ?? "none",
+        );
+      }
+    }
     const swatch = block.querySelector<HTMLElement>(".color-editor-swatch");
     if (swatch) swatch.style.backgroundColor = hex;
     const native = block.querySelector<HTMLInputElement>(".color-editor-native");

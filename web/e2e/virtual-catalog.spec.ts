@@ -152,7 +152,76 @@ test("keeps incomplete color text and its caret while the body arrives", async (
   await expect(page.locator("#detail-code-block")).toContainText("#123456");
 });
 
+for (const scenario of [
+  { name: "keeps an untouched color caret when actual tokens arrive", moves: 2, extend: 0 },
+  { name: "keeps an untouched color backward selection when tokens arrive", moves: 5, extend: 4 },
+]) {
+  test(scenario.name, async ({ page }) => {
+    let releaseBody!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      releaseBody = resolve;
+    });
+    const body =
+      "# DESIGN\n\n| Background | `--color-bg` | #FAFAFA |\n| Accent | `--color-accent` | #C72323 |\n";
+    await page.route(`**/${materializedPath}`, async (route) => {
+      await ready;
+      await route.fulfill({ contentType: "text/markdown", body });
+    });
+    try {
+      await page.goto(`/?cell=${materializedId}`);
+      await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "true");
+      const input = page.locator("#detail-color-editor .color-editor-input").first();
+      await expect(input).toHaveValue("#fcfcfc");
+      await input.press("Home");
+      for (let move = 0; move < scenario.moves; move++) await input.press("ArrowRight");
+      for (let move = 0; move < scenario.extend; move++) await input.press("Shift+ArrowLeft");
+      const selection = await input.evaluate((element: HTMLInputElement) => [
+        element.selectionStart,
+        element.selectionEnd,
+        element.selectionDirection,
+      ]);
+      expect(selection.slice(0, 2)).toEqual([scenario.moves - scenario.extend, scenario.moves]);
+      releaseBody();
+      await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+      await expect(input).toHaveValue("#fafafa");
+      await expect(input).toBeFocused();
+      expect(
+        await input.evaluate((element: HTMLInputElement) => [
+          element.selectionStart,
+          element.selectionEnd,
+          element.selectionDirection,
+        ]),
+      ).toEqual(selection);
+      await expect(page.locator("#detail-code-block")).toContainText("#FAFAFA");
+    } finally {
+      releaseBody();
+    }
+  });
+}
+
 test("ignores an old materialized response after selecting another cell", async ({ page }) => {
+  await page.addInitScript((expectedBody) => {
+    let markDigested!: () => void;
+    const complete = new Promise<void>((resolve) => {
+      markDigested = resolve;
+    });
+    const barrier = { complete, matches: 0 };
+    (
+      window as Window & {
+        __matrixOldDigest: { complete: Promise<void>; matches: number };
+      }
+    ).__matrixOldDigest = barrier;
+    const originalDigest = crypto.subtle.digest.bind(crypto.subtle);
+    crypto.subtle.digest = async (algorithm, data) => {
+      const isOldBody = new TextDecoder().decode(data) === expectedBody;
+      const result = await originalDigest(algorithm, data);
+      if (isOldBody) {
+        barrier.matches++;
+        markDigested();
+      }
+      return result;
+    };
+  }, materializedBody);
   let releaseBody!: () => void;
   let markRequested!: () => void;
   const requested = new Promise<void>((resolve) => {
@@ -166,20 +235,43 @@ test("ignores an old materialized response after selecting another cell", async 
     await ready;
     await route.fulfill({ contentType: "text/markdown", body: materializedBody });
   });
-  await page.goto(`/?cell=${materializedId}`);
-  await requested;
-  await page.locator("#back-btn").click();
-  await page.locator("#results .card").first().click();
-  await expect(page).toHaveURL(/cell=virtual_/);
-  await page.locator("#detail-color-editor .color-editor-input").first().fill("#654321");
-  const current = await page.locator("#detail-code-block").textContent();
-  const response = page.waitForResponse((r) => r.url().endsWith(materializedPath));
-  releaseBody();
-  await response;
-  await expect(page.locator("#detail-code-block")).toHaveText(current ?? "");
-  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
-    "#654321",
-  );
+  try {
+    await page.goto(`/?cell=${materializedId}`);
+    await requested;
+    await page.locator("#back-btn").click();
+    await page.locator("#results .card").first().click();
+    await expect(page).toHaveURL(/cell=virtual_/);
+    await page.locator("#detail-color-editor .color-editor-input").first().fill("#654321");
+    const current = await page.locator("#detail-code-block").textContent();
+    releaseBody();
+    const oldDigests = await page.evaluate(async () => {
+      const barrier = (
+        window as Window & {
+          __matrixOldDigest: { complete: Promise<void>; matches: number };
+        }
+      ).__matrixOldDigest;
+      await barrier.complete;
+      // Digest is the old handler's final async boundary. A posted task observes
+      // the subsequent promise continuations after the microtask queue drains.
+      await new Promise<void>((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => {
+          channel.port1.close();
+          channel.port2.close();
+          resolve();
+        };
+        channel.port2.postMessage(null);
+      });
+      return barrier.matches;
+    });
+    expect(oldDigests).toBe(1);
+    await expect(page.locator("#detail-code-block")).toHaveText(current ?? "");
+    await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+      "#654321",
+    );
+  } finally {
+    releaseBody();
+  }
 });
 
 test("keeps materialized content while copying its English fine-class request", async ({
