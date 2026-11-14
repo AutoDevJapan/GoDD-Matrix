@@ -269,6 +269,7 @@ const filters: Filters = {
 let currentCursor: string | null = null;
 /** Detail-view color overrides (original → custom hex). */
 let detailColorOverrides: string[] = [];
+const detailEditedColorIndexes = new Set<number>();
 let detailBaseMarkdown = "";
 let detailBaseSwatches: string[] = [];
 
@@ -508,6 +509,7 @@ function applyDetailColorAt(
 ): void {
   const normalized = normalizeHex(hex);
   if (!normalized) return;
+  detailEditedColorIndexes.add(index);
   detailColorOverrides[index] = normalized;
   targets.swatch.style.backgroundColor = normalized;
   targets.textInput.value = normalized;
@@ -606,6 +608,39 @@ function renderColorEditor(entry: DesignIndexEntry): void {
     row.append(swatchBtn, textInput);
     block.append(row, palette);
     editor.appendChild(block);
+  });
+}
+
+/** Update resolved swatches without replacing a user's in-progress text field. */
+function syncResolvedColorEditor(): void {
+  const blocks = byId("detail-color-editor").querySelectorAll<HTMLElement>(".color-editor-block");
+  blocks.forEach((block, index) => {
+    const hex = detailColorOverrides[index];
+    if (!hex) return;
+    const text = block.querySelector<HTMLInputElement>(".color-editor-input");
+    // Invalid text is an unfinished draft, never a committed color override.
+    if (text && normalizeHex(text.value) && text.value !== hex) {
+      const selection =
+        document.activeElement === text
+          ? {
+              start: text.selectionStart,
+              end: text.selectionEnd,
+              direction: text.selectionDirection,
+            }
+          : null;
+      text.value = hex;
+      if (selection && selection.start !== null && selection.end !== null) {
+        text.setSelectionRange(
+          Math.min(selection.start, hex.length),
+          Math.min(selection.end, hex.length),
+          selection.direction ?? "none",
+        );
+      }
+    }
+    const swatch = block.querySelector<HTMLElement>(".color-editor-swatch");
+    if (swatch) swatch.style.backgroundColor = hex;
+    const native = block.querySelector<HTMLInputElement>(".color-editor-native");
+    if (native) native.value = hex;
   });
 }
 
@@ -984,6 +1019,7 @@ async function openDetail(
 ): Promise<void> {
   const requestId = ++detailRequestId;
   selectedEntry = entry;
+  if (!opts.preserveColors) detailEditedColorIndexes.clear();
 
   // Transition views
   byId("search-view").classList.add("hidden");
@@ -1036,7 +1072,20 @@ async function openDetail(
     detailColorOverrides,
     opts.preserveColors,
   );
+  const draftInputs = opts.preserveColors
+    ? Array.from(
+        byId("detail-color-editor").querySelectorAll<HTMLInputElement>(".color-editor-input"),
+      ).map((input) => input.value)
+    : [];
   renderColorEditor(entry);
+  if (opts.preserveColors) {
+    byId("detail-color-editor")
+      .querySelectorAll<HTMLInputElement>(".color-editor-input")
+      .forEach((input, index) => {
+        const draft = draftInputs[index];
+        if (draft !== undefined && !normalizeHex(draft)) input.value = draft;
+      });
+  }
 
   // Draw metadata badges
   const badgeBox = byId("detail-badges");
@@ -1117,12 +1166,10 @@ async function openDetail(
       detailBaseSwatches,
     );
     detailBaseSwatches = tokenSwatches;
-    detailColorOverrides = resolveDetailColorOverrides(
-      tokenSwatches,
-      detailColorOverrides,
-      opts.preserveColors,
+    detailColorOverrides = tokenSwatches.map((hex, index) =>
+      detailEditedColorIndexes.has(index) ? (detailColorOverrides[index] ?? hex) : hex,
     );
-    renderColorEditor(entry);
+    syncResolvedColorEditor();
     previewBox.style.background = thumbnailBgFromHexes(detailColorOverrides);
   }
 
@@ -1688,6 +1735,7 @@ async function bootstrap(): Promise<void> {
     detailBaseMarkdown = "";
     detailBaseSwatches = [];
     detailColorOverrides = [];
+    detailEditedColorIndexes.clear();
     syncBrowseUrl(null);
     byId("detail-view").classList.add("hidden");
     byId("search-view").classList.remove("hidden");

@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
+declare global {
+  interface Window {
+    __matrixOldDigest?: { complete: Promise<void>; matches: number };
+  }
+}
+
 const materializedBody = "# DESIGN\n\nMaterialized browser fixture.\n";
 const materializedId = "6061_white_minimal";
 const materializedPath = "design-md/6061/white/minimal/DESIGN.md";
@@ -76,6 +82,195 @@ test("keeps the materialized cell path fetchable by id", async ({ page }) => {
   await page.goto(`/?cell=${materializedId}`);
   await expect(page.locator("#detail-view")).toBeVisible();
   await expect(page.locator("#detail-code-block")).toContainText("Materialized browser fixture.");
+});
+
+test("keeps color edits made while a materialized body is loading", async ({ page }) => {
+  let releaseBody!: () => void;
+  const bodyReady = new Promise<void>((resolve) => {
+    releaseBody = resolve;
+  });
+  const body =
+    "# DESIGN\n\n| Background | `--color-bg` | #FAFAFA |\n| Accent | `--color-accent` | #C72323 |\n";
+  await page.route(`**/${materializedPath}`, async (route) => {
+    await bodyReady;
+    await route.fulfill({ contentType: "text/markdown", body });
+  });
+  await page.goto(`/?cell=${materializedId}`);
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "true");
+  await page.locator("#detail-color-editor .color-editor-input").first().fill("#123456");
+  releaseBody();
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+    "#123456",
+  );
+  await expect(page.locator("#detail-code-block")).toContainText("#123456");
+  await expect(page.locator("#detail-color-editor .color-editor-input").nth(1)).toHaveValue(
+    "#c72323",
+  );
+  await page.locator("#locale-select").selectOption("en");
+  await expect(page.locator("#detail-code-block")).toContainText("Output language: English");
+  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+    "#123456",
+  );
+  await page.locator("#btn-copy").click();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain("#123456");
+  expect(copied).toContain("#C72323");
+  await page.locator("#back-btn").click();
+  await page.goto(`/?cell=${materializedId}`);
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+    "#fafafa",
+  );
+});
+
+test("keeps incomplete color text and its caret while the body arrives", async ({ page }) => {
+  let releaseBody!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    releaseBody = resolve;
+  });
+  const body =
+    "# DESIGN\n\n| Background | `--color-bg` | #FAFAFA |\n| Accent | `--color-accent` | #C72323 |\n";
+  await page.route(`**/${materializedPath}`, async (route) => {
+    await ready;
+    await route.fulfill({ contentType: "text/markdown", body });
+  });
+  await page.goto(`/?cell=${materializedId}`);
+  const input = page.locator("#detail-color-editor .color-editor-input").first();
+  await input.fill("#123");
+  await input.press("ArrowLeft");
+  releaseBody();
+  await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+  await expect(input).toHaveValue("#123");
+  await expect(input).toBeFocused();
+  expect(await input.evaluate((e: HTMLInputElement) => [e.selectionStart, e.selectionEnd])).toEqual(
+    [3, 3],
+  );
+  await expect(page.locator("#detail-code-block")).toContainText("#FAFAFA");
+  await page.locator("#locale-select").selectOption("en");
+  await expect(page.locator("#detail-code-block")).toContainText("Output language: English");
+  await expect(input).toHaveValue("#123");
+  await page.locator("#btn-copy").click();
+  const draftCopy = await page.evaluate(() => navigator.clipboard.readText());
+  expect(draftCopy).toContain("#FAFAFA");
+  expect(draftCopy).not.toContain("#123");
+  await input.fill("#123456");
+  await expect(page.locator("#detail-code-block")).toContainText("#123456");
+});
+
+for (const scenario of [
+  { name: "keeps an untouched color caret when actual tokens arrive", moves: 2, extend: 0 },
+  { name: "keeps an untouched color backward selection when tokens arrive", moves: 5, extend: 4 },
+]) {
+  test(scenario.name, async ({ page }) => {
+    let releaseBody!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      releaseBody = resolve;
+    });
+    const body =
+      "# DESIGN\n\n| Background | `--color-bg` | #FAFAFA |\n| Accent | `--color-accent` | #C72323 |\n";
+    await page.route(`**/${materializedPath}`, async (route) => {
+      await ready;
+      await route.fulfill({ contentType: "text/markdown", body });
+    });
+    try {
+      await page.goto(`/?cell=${materializedId}`);
+      await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "true");
+      const input = page.locator("#detail-color-editor .color-editor-input").first();
+      await expect(input).toHaveValue("#fcfcfc");
+      await input.press("Home");
+      for (let move = 0; move < scenario.moves; move++) await input.press("ArrowRight");
+      for (let move = 0; move < scenario.extend; move++) await input.press("Shift+ArrowLeft");
+      const selection = await input.evaluate((element: HTMLInputElement) => [
+        element.selectionStart,
+        element.selectionEnd,
+        element.selectionDirection,
+      ]);
+      expect(selection.slice(0, 2)).toEqual([scenario.moves - scenario.extend, scenario.moves]);
+      releaseBody();
+      await expect(page.locator("#detail-code-block")).toHaveAttribute("aria-busy", "false");
+      await expect(input).toHaveValue("#fafafa");
+      await expect(input).toBeFocused();
+      expect(
+        await input.evaluate((element: HTMLInputElement) => [
+          element.selectionStart,
+          element.selectionEnd,
+          element.selectionDirection,
+        ]),
+      ).toEqual(selection);
+      await expect(page.locator("#detail-code-block")).toContainText("#FAFAFA");
+    } finally {
+      releaseBody();
+    }
+  });
+}
+
+test("ignores an old materialized response after selecting another cell", async ({ page }) => {
+  await page.addInitScript((expectedBody) => {
+    let markDigested!: () => void;
+    const complete = new Promise<void>((resolve) => {
+      markDigested = resolve;
+    });
+    const barrier = { complete, matches: 0 };
+    window.__matrixOldDigest = barrier;
+    const originalDigest = crypto.subtle.digest.bind(crypto.subtle);
+    crypto.subtle.digest = async (algorithm, data) => {
+      const isOldBody = new TextDecoder().decode(data) === expectedBody;
+      const result = await originalDigest(algorithm, data);
+      if (isOldBody) {
+        barrier.matches++;
+        markDigested();
+      }
+      return result;
+    };
+  }, materializedBody);
+  let releaseBody!: () => void;
+  let markRequested!: () => void;
+  const requested = new Promise<void>((resolve) => {
+    markRequested = resolve;
+  });
+  const ready = new Promise<void>((resolve) => {
+    releaseBody = resolve;
+  });
+  await page.route(`**/${materializedPath}`, async (route) => {
+    markRequested();
+    await ready;
+    await route.fulfill({ contentType: "text/markdown", body: materializedBody });
+  });
+  try {
+    await page.goto(`/?cell=${materializedId}`);
+    await requested;
+    await page.locator("#back-btn").click();
+    await page.locator("#results .card").first().click();
+    await expect(page).toHaveURL(/cell=virtual_/);
+    await page.locator("#detail-color-editor .color-editor-input").first().fill("#654321");
+    const current = await page.locator("#detail-code-block").textContent();
+    releaseBody();
+    const oldDigests = await page.evaluate(async () => {
+      const barrier = window.__matrixOldDigest;
+      if (!barrier) throw new Error("Old-body digest barrier was not installed");
+      await barrier.complete;
+      // Digest is the old handler's final async boundary. A posted task observes
+      // the subsequent promise continuations after the microtask queue drains.
+      await new Promise<void>((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => {
+          channel.port1.close();
+          channel.port2.close();
+          resolve();
+        };
+        channel.port2.postMessage(null);
+      });
+      return barrier.matches;
+    });
+    expect(oldDigests).toBe(1);
+    await expect(page.locator("#detail-code-block")).toHaveText(current ?? "");
+    await expect(page.locator("#detail-color-editor .color-editor-input").first()).toHaveValue(
+      "#654321",
+    );
+  } finally {
+    releaseBody();
+  }
 });
 
 test("keeps materialized content while copying its English fine-class request", async ({
