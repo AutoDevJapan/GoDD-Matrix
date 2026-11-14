@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
+declare global {
+  interface Window {
+    __matrixOldDigest?: { complete: Promise<void>; matches: number };
+  }
+}
+
 const materializedBody = "# DESIGN\n\nMaterialized browser fixture.\n";
 const materializedId = "6061_white_minimal";
 const materializedPath = "design-md/6061/white/minimal/DESIGN.md";
@@ -206,11 +212,7 @@ test("ignores an old materialized response after selecting another cell", async 
       markDigested = resolve;
     });
     const barrier = { complete, matches: 0 };
-    (
-      window as Window & {
-        __matrixOldDigest: { complete: Promise<void>; matches: number };
-      }
-    ).__matrixOldDigest = barrier;
+    window.__matrixOldDigest = barrier;
     const originalDigest = crypto.subtle.digest.bind(crypto.subtle);
     crypto.subtle.digest = async (algorithm, data) => {
       const isOldBody = new TextDecoder().decode(data) === expectedBody;
@@ -245,11 +247,8 @@ test("ignores an old materialized response after selecting another cell", async 
     const current = await page.locator("#detail-code-block").textContent();
     releaseBody();
     const oldDigests = await page.evaluate(async () => {
-      const barrier = (
-        window as Window & {
-          __matrixOldDigest: { complete: Promise<void>; matches: number };
-        }
-      ).__matrixOldDigest;
+      const barrier = window.__matrixOldDigest;
+      if (!barrier) throw new Error("Old-body digest barrier was not installed");
       await barrier.complete;
       // Digest is the old handler's final async boundary. A posted task observes
       // the subsequent promise continuations after the microtask queue drains.
