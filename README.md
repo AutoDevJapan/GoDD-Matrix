@@ -56,7 +56,8 @@ GoDD SSOT における **item3 (選定/合成ツール)**。データフロー�
   `?cell=<id>` として URL に反映する。遠いページ番号へのジャンプも同じカーソル契約で
   復元できる。「共有リンク」は現在の閲覧状態を含む URL をコピーする。
 - **秘密は一切扱わない** (全て公開データ・クライアントサイド)。
-- **Browser E2E**: `pnpm test:e2e` は全suiteのローカル実行。CI は関連する入力変更時に限り、
+- **Browser E2E**: `pnpm test:e2e` は全suiteのローカル実行。CI は同一リポジトリから `main` 向けのPRで、
+  対象入力に変更がある場合に限り、
   `virtual-catalog.spec.ts` の全18ケースを固定buildに対して1回実行し、配信response上で修復を除く負例4種
   (色入力のselectionとstale、待機中deep linkのURL追跡、到着時のcolor editor保持)を既存quality job内で確認し、固定buildと証跡を1日保存する。
   合成fixtureを使うCIの確認と、本人ChromeでのPrd受入は区別する。
@@ -64,7 +65,8 @@ GoDD SSOT における **item3 (選定/合成ツール)**。データフロー�
   package/lockを捕捉する。CIは開始時にもtracked入力をHEADと照合し、同じdistのままsourceが変わっても拒否する。
   `web/src`と`src`の変更・未追跡ファイルも確認し、解決先になり得る新しいimportの追加を見落とさない。
   任意の生成catalogは内容を捕捉し、trackedである場合はHEADとも照合する。
-  同じquality jobの実data検査は固定版の全51729件をSHA/bytes/Git blobで照合してproduction consumerへ渡す。
+  同条件のPRでは、同じquality jobの実data検査が固定版の全51729件をSHA/bytes/Git blobで
+  照合してproduction consumerへ渡す。これらのbrowser／実data検査は `main` pushやfork PRでは実行しない。
   合成51729件の対照と実dataの結果を分け、実data検査の未実行・skip・失敗では通常artifactを発行しない。
 
 ### ローカルで動かす

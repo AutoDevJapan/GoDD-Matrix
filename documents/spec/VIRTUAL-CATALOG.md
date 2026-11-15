@@ -58,4 +58,16 @@ the detail view fetches the real DESIGN.md while keeping the virtual id.
 ## Verification
 
 - Unit: `web/src/virtual-catalog.test.ts`, `web/src/catalog-url-state.test.ts`
-- E2E (local only): `pnpm test:e2e` — **not** run in GitHub Actions
+- Local browser suite: `pnpm test:e2e` runs all browser specs.
+- GitHub Actions: for same-repository pull requests targeting `main`, when scoped
+  inputs change, the existing quality job runs the 18 cases in
+  `virtual-catalog.spec.ts` once against a fixed build, plus seven intended
+  failures across four compiled-response mutation groups (selection, stale
+  response, pending deep link, and color editor retention). The job retains
+  the verified fixed build and evidence for one day.
+- Under the same scope, the job verifies the pinned 51,729-row materialized index
+  with the production consumer. This dataset check and the synthetic browser
+  scenarios have separate evidence; neither exhaustively runs every virtual cell.
+  These browser and dataset checks do not run for `main` pushes or fork PRs.
+- Production acceptance in the owner Chrome browser is recorded separately from
+  CI. See [Prd acceptance](../deployment/PRD.md#受入確認).

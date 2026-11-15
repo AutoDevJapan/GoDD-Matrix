@@ -13,7 +13,9 @@ GitHub 環境 `github-pages` は既存 Prd の配信に必要なため保持す�
 - Pages の push は `main` のみ。手動実行も build / deploy の両ジョブで
   リポジトリ名と `refs/heads/main` を確認する。他ブランチ・タグ・fork はスキップする。
 - GitHub 環境の配備許可も `main` の branch ポリシーだけに限定する。
-- CI の pull_request は lint、型検査、単体テスト、ビルドのみで、配備しない。
+- CI の `main` 向けPRでは lint、型検査、単体テスト、ビルドを行う。
+  同一リポジトリから `main` 向けのPRで対象入力が変更された場合は、browser検査と固定実index検査も行う。
+  いずれのPR検査も配備しない。追加のbrowser／実index検査は `main` pushやfork PRでは実行しない。
 - 旧 Vercel の deploy ワークフローは存在しない。HTTP MCP のコード・アダプターは
   成果物として保持するが、`vercel.json` の `git.deploymentEnabled: false` で
   Git からの自動配備を無効にする。手動で新しいホストを作る許可ではない。
