@@ -5,8 +5,10 @@ import { parseDesignIndex } from "../src/ds/validate.js";
 import { parseCanonicalCellId } from "../web/src/catalog-coordinates.js";
 import { colorFamily, isColorFamilyKey } from "../web/src/lib.js";
 import { sortDesignEntries } from "../web/src/result-sorting.js";
+import { findStyleValue } from "../web/src/search-parser.js";
 import {
   CANONICAL_COLORS,
+  CANONICAL_STYLES,
   canonicalVirtualTotal,
   pageCatalog,
   restoreCanonicalVirtualEntry,
@@ -20,6 +22,15 @@ function entryClasses(entry: DesignIndexEntry): string[] {
     ...(coords ? [`category:${coords.category}`, `style:${coords.style}`] : []),
     entry.canonicalCellId ? "canonical" : "legacy",
   ];
+}
+
+function publishedStyleQuery(rawStyle: string): string {
+  const style = findStyleValue(rawStyle);
+  assert.ok(
+    style && CANONICAL_STYLES.includes(style),
+    `No UI style for published style ${rawStyle}`,
+  );
+  return style;
 }
 
 /** Verify the fixed published index through the production catalog consumer. */
@@ -116,7 +127,9 @@ export function assertFixedRealDataset(bytes: Uint8Array) {
       colors: [entry.color],
       industryTerms: [entry.jsic],
       sort: "popular" as const,
-      ...(coords ? { categories: [coords.category], styles: [coords.style] } : {}),
+      ...(coords
+        ? { categories: [coords.category], styles: [publishedStyleQuery(coords.style)] }
+        : {}),
     };
     let found = false;
     for (let startRank = 0; startRank < entries.length; startRank += 128) {

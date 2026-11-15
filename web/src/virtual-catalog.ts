@@ -508,6 +508,12 @@ export function catalogStyle(entry: DesignIndexEntry): string {
   });
 }
 
+/** Published style aliases affect filtering only; keep raw coordinates and public labels intact. */
+function styleForFilter(entry: DesignIndexEntry): string {
+  const style = catalogStyle(entry);
+  return style === "neu" || style === "neumorphism" ? "soft" : style;
+}
+
 interface CatalogView {
   readonly entries: readonly DesignIndexEntry[];
   readonly filtered: FilteredVirtualAxes;
@@ -568,7 +574,7 @@ function catalogView(query: VirtualCatalogQuery, source: MaterializedCatalog): C
     source.entries.filter(
       (entry) =>
         (!query.categories?.length || categories.has(catalogCategory(entry))) &&
-        (!query.styles?.length || styles.has(catalogStyle(entry))) &&
+        (!query.styles?.length || styles.has(styleForFilter(entry))) &&
         (!restrictJsic || jsic.has(entry.jsic)) &&
         matchesColorSelection(entry.color, query.colors),
     ),

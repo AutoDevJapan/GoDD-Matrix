@@ -7,6 +7,7 @@ import {
   CANONICAL_STYLES,
   VIRTUAL_SPACE_VERSION,
   VIRTUAL_VARIANT_COUNT,
+  type VirtualCatalogQuery,
   canonicalVirtualTotal,
   catalogCategory,
   catalogStyle,
@@ -262,6 +263,46 @@ function publishedEntry(jsic = "6061", color = "dp-h21", mood = "cool", variant 
     canonicalCellId: `v1:virtual_${jsic}_${color}_${mood}_clp_sminimal_v${variant}`,
   };
 }
+
+describe("published style aliases", () => {
+  const query: VirtualCatalogQuery = {
+    categories: ["mobile"],
+    styles: ["soft"],
+    colors: ["b-h03"],
+    industryTerms: ["0100"],
+    sort: "popular",
+  };
+
+  for (const rawStyle of ["neu", "neumorphism"]) {
+    it(`reaches published ${rawStyle} rows through the existing soft style filter`, () => {
+      const entry: CatalogEntry = {
+        ...publishedEntry("0100", "b-h03", "warm"),
+        canonicalCellId: `v1:virtual_0100_b-h03_warm_cmobile_s${rawStyle}_v0`,
+      };
+      const before = JSON.stringify(entry);
+      const page = pageCatalog(query, [entry], { pageSize: 4 });
+      expect(page.items).toEqual([entry]);
+      expect(page.total).toBe(1);
+      expect(catalogStyle(entry)).toBe(rawStyle);
+      expect(JSON.stringify(entry)).toBe(before);
+      expect(
+        pageCatalog({ ...query, styles: ["minimal"] }, [entry], { pageSize: 4 }).items,
+      ).toEqual([]);
+      expect(
+        pageCatalog({ ...query, categories: ["admin"] }, [entry], { pageSize: 4 }).items,
+      ).toEqual([]);
+    });
+  }
+
+  it("does not treat an unknown style prefix as the soft alias", () => {
+    const entry: CatalogEntry = {
+      ...publishedEntry("0100", "b-h03", "warm"),
+      canonicalCellId: "v1:virtual_0100_b-h03_warm_cmobile_ssof_v0",
+    };
+    expect(pageCatalog(query, [entry], { pageSize: 4 }).items).toEqual([]);
+    expect(catalogStyle(entry)).toBe("sof");
+  });
+});
 
 describe("materialized and virtual catalog union", () => {
   it("preserves the original virtual space and invalidates old virtual-only cursors", () => {
