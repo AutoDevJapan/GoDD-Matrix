@@ -193,13 +193,14 @@ describe("addressability and materialized overlay", () => {
       style: "minimal",
       variant: 0,
     });
-    const materialized = [
+    const materialized: readonly CatalogEntry[] = [
       {
         id: "6061_white_minimal",
         path: "design-md/6061/white/minimal/DESIGN.md",
         jsic: "6061",
         color: "white",
         mood: "minimal",
+        title: "Materialized overlay fixture",
         hash: "sha256:abc",
         createdAt: "2026-07-21T00:00:00Z",
       },
@@ -227,13 +228,14 @@ describe("addressability and materialized overlay", () => {
       style: "minimal",
       variant: 0,
     });
-    const materialized = [
+    const materialized: readonly CatalogEntry[] = [
       {
         id: "6061_white_minimal",
         path: "design-md/6061/white/minimal/DESIGN.md",
         jsic: "6061",
         color: "white",
         mood: "minimal",
+        title: "Materialized overlay fixture",
         hash: "sha256:abc",
         createdAt: "2026-07-21T00:00:00Z",
         canonicalCellId: "v1:virtual_6061_white_minimal_cadmin_sminimal_v0",
