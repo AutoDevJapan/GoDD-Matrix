@@ -193,3 +193,83 @@ describe("loadCatalogBootstrap", () => {
     expect(resolved.entries).toHaveLength(2);
   });
 });
+
+describe("complete fallback through the catalog consumer", () => {
+  const complete = Array.from({ length: 1001 }, (_, i) => ({
+    ...ENTRY_A,
+    id: `${ENTRY_A.id}_v${i + 1}`,
+    variant: i + 1,
+    path: `design-md/6061/white/minimal/v${i + 1}/DESIGN.md`,
+  }));
+  const summary = { ...SUMMARY, entryCount: complete.length, pageCount: 2 };
+  for (const failedPage of [0, 1]) {
+    for (const failure of ["http", "network", "json", "schema"] as const) {
+      it(`falls back completely after ${failure} on page ${failedPage}`, async () => {
+        const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+          const url = String(input);
+          if (url === "summary") return jsonResponse(summary);
+          if (url === "full") return jsonResponse({ version: 1, entries: complete });
+          const page = Number(url.replace("page-", ""));
+          if (page === failedPage) {
+            if (failure === "http") return new Response(null, { status: 503 });
+            if (failure === "network") throw new TypeError("network unavailable");
+            if (failure === "json") return new Response("{broken-json");
+            return jsonResponse({ page, entries: [{ id: "invalid-row" }] });
+          }
+          return jsonResponse({ page, entries: complete.slice(page * 1000, (page + 1) * 1000) });
+        });
+        const warn = vi.fn();
+        const pending = await loadCatalogBootstrap({
+          fetcher,
+          warn,
+          tryLocalWebIndex: false,
+          summaryUrl: "summary",
+          indexUrl: "full",
+          pageUrl: (page) => `page-${page}`,
+        });
+        const result = await pending.entriesPromise;
+        expect(result.entriesSource).toBe("index-fallback");
+        expect(result.entries.map((entry) => entry.id)).toEqual(complete.map((entry) => entry.id));
+        expect(warn).toHaveBeenCalledWith(INDEX_FULL_FETCH_DEPRECATED);
+      });
+    }
+  }
+  it("loads every normal shard without requesting the full index", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "summary") return jsonResponse(summary);
+      if (url === "full") throw new Error("unexpected fallback");
+      const page = Number(url.replace("page-", ""));
+      return jsonResponse({ page, entries: complete.slice(page * 1000, (page + 1) * 1000) });
+    });
+    const warn = vi.fn();
+    const result = await loadCatalogIndex({
+      fetcher,
+      warn,
+      tryLocalWebIndex: false,
+      summaryUrl: "summary",
+      indexUrl: "full",
+      pageUrl: (page) => `page-${page}`,
+    });
+    expect(result.entriesSource).toBe("shards");
+    expect(result.entries.map((entry) => entry.id)).toEqual(complete.map((entry) => entry.id));
+    expect(warn).not.toHaveBeenCalled();
+  });
+  it("rejects explicitly when the raw fallback also fails", async () => {
+    const rawFailure = new Error("raw index unavailable");
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "summary") return jsonResponse(summary);
+      if (String(input) === "full") throw rawFailure;
+      throw new TypeError("shard unavailable");
+    });
+    const pending = await loadCatalogBootstrap({
+      fetcher,
+      warn: vi.fn(),
+      tryLocalWebIndex: false,
+      summaryUrl: "summary",
+      indexUrl: "full",
+      pageUrl: (page) => `page-${page}`,
+    });
+    await expect(pending.entriesPromise).rejects.toBe(rawFailure);
+  });
+});

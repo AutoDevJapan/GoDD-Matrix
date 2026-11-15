@@ -1,5 +1,11 @@
 import type { DesignIndexEntry } from "../../src/ds/types.js";
-import { categoryFromEntry, styleFromEntry } from "./catalog-coordinates.js";
+import {
+  type ColorEditorMarker,
+  type PendingDeepLink,
+  colorEditorReusable,
+  createPendingDeepLink,
+  writeColorEditorMarker,
+} from "./catalog-arrival.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
 import { buildDesignPreviewSpec, previewTextColor } from "./design-preview.js";
 import { editableSwatchesFromTokens, resolveDetailColorOverrides } from "./detail-color-state.js";
@@ -50,7 +56,9 @@ import { localizePromptPreview } from "./ui-localization.js";
 import {
   decodeCatalogCursor,
   enrichWithMaterialized,
-  pageVirtualCatalog,
+  catalogCategory as getEntryCategory,
+  catalogStyle as getEntryStyle,
+  pageCatalog,
   restoreCanonicalVirtualEntry,
 } from "./virtual-catalog.js";
 import { buildVirtualDesign } from "./virtual-design.js";
@@ -237,7 +245,7 @@ let indexSummary: IndexSummary | null = null;
  * Catalog boot phase for the matches-count display (issue #94).
  * `booting` / `pending` must not render a literal `0` match count.
  */
-let catalogEntriesSource: "booting" | "pending" | "ready" = "booting";
+let catalogEntriesSource: "booting" | "pending" | "ready" | "failed" = "booting";
 let matchesCountReady = false;
 let lastMatchesTotal = 0;
 let currentLocale: Locale = "ja";
@@ -248,6 +256,8 @@ let currentPage = 1;
 let selectedEntry: DesignIndexEntry | null = null;
 let detailReturnFocus: HTMLElement | null = null;
 let detailRequestId = 0;
+/** A ?cell= link that waited for the full index; see catalog-arrival.ts. */
+let pendingDeepLink: PendingDeepLink | null = null;
 let pageSize: PageSizeOption = 25;
 
 interface Filters {
@@ -273,31 +283,6 @@ const detailEditedColorIndexes = new Set<number>();
 let detailBaseMarkdown = "";
 let detailBaseSwatches: string[] = [];
 
-// Deterministic property mapping from index entries to reference facets.
-// Prefer published `canonicalCellId` (#272); keep legacy heuristics for older index rows.
-function getEntryCategory(entry: DesignIndexEntry): string {
-  return categoryFromEntry(entry, () => {
-    const hash = (entry.id || "").charCodeAt(0) % CATEGORIES.length;
-    return CATEGORIES[hash]?.v || "";
-  });
-}
-
-function getEntryStyle(entry: DesignIndexEntry): string {
-  return styleFromEntry(entry, () => {
-    const mood = entry.mood;
-    if (mood === "minimal") return "minimal";
-    if (mood === "elegant") return "glass";
-    if (mood === "bold") return "brutalist";
-    if (mood === "brutalist") return "brutalist";
-    if (mood === "tech") return "tech";
-    if (mood === "organic") return "organic";
-    if (mood === "warm") return "warm";
-    if (mood === "vintage") return "retro";
-    if (mood === "corporate") return "corporate";
-    return "minimal";
-  });
-}
-
 function getEntryMajor(entry: DesignIndexEntry): string {
   return jsicMajor(entry.jsic).code;
 }
@@ -319,7 +304,9 @@ function syncBrowseUrl(cellId: string | null = selectedEntry?.id ?? null): void 
     cursor: currentCursor,
     cell: cellId,
   });
+  const before = window.location.href;
   window.history.replaceState(null, "", url);
+  pendingDeepLink?.noteUrlWrite(before, window.location.href);
 }
 
 function addUnique(list: string[], value: string): string[] {
@@ -517,9 +504,15 @@ function applyDetailColorAt(
   refreshDetailColors();
 }
 
+/** What the live color editor is built for (see catalog-arrival.ts). */
+function colorEditorMarkerFor(entry: DesignIndexEntry): ColorEditorMarker {
+  return { cellId: entry.id, locale: currentLocale, count: detailColorOverrides.length };
+}
+
 function renderColorEditor(entry: DesignIndexEntry): void {
   const editor = byId("detail-color-editor");
   editor.replaceChildren();
+  writeColorEditorMarker(editor, null);
   const labels = currentLocale === "ja" ? ["プライマリ", "アクセント"] : ["Primary", "Accent"];
   const customLabel = currentLocale === "ja" ? "カスタム…" : "Custom…";
   const openLabel = currentLocale === "ja" ? "カラーパレットを開く" : "Open color palette";
@@ -609,6 +602,7 @@ function renderColorEditor(entry: DesignIndexEntry): void {
     block.append(row, palette);
     editor.appendChild(block);
   });
+  writeColorEditorMarker(editor, colorEditorMarkerFor(entry));
 }
 
 /** Update resolved swatches without replacing a user's in-progress text field. */
@@ -800,6 +794,7 @@ interface TranslationKeys {
   sampleCount: (shown: number, total: number) => string;
   detailLoading: string;
   detailLoadError: string;
+  catalogLoadError: string;
 }
 
 const TRANSLATIONS: Record<Locale, TranslationKeys> = {
@@ -849,6 +844,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     sampleCount: (shown, total) => `${total.toLocaleString("ja-JP")}件中 ${shown}件を表示中`,
     detailLoading: "DESIGN.md を読み込んでいます...",
     detailLoadError: "DESIGN.md の読み込みに失敗しました。時間をおいて再度お試しください。",
+    catalogLoadError: "カタログの取得に失敗しました。時間をおいて再度お試しください。",
   },
   en: {
     siteTitle: "DESIGN.md Library",
@@ -896,6 +892,7 @@ const TRANSLATIONS: Record<Locale, TranslationKeys> = {
     sampleCount: (shown, total) => `Showing ${shown} of ${total.toLocaleString("en-US")} results`,
     detailLoading: "Loading DESIGN.md...",
     detailLoadError: "Failed to load DESIGN.md. Please try again later.",
+    catalogLoadError: "Failed to load the catalog. Please try again later.",
   },
 };
 
@@ -1015,7 +1012,13 @@ function renderVirtualDesign(entry: DesignIndexEntry, locale: Locale): string {
 // Render the detailed view of a resolved specification
 async function openDetail(
   entry: DesignIndexEntry,
-  opts: { scroll?: boolean; focus?: boolean; preserveColors?: boolean } = {},
+  opts: {
+    scroll?: boolean;
+    focus?: boolean;
+    preserveColors?: boolean;
+    /** Catalog arrival re-opens the same cell: keep a matching live color editor. */
+    keepColorEditor?: boolean;
+  } = {},
 ): Promise<void> {
   const requestId = ++detailRequestId;
   selectedEntry = entry;
@@ -1072,19 +1075,31 @@ async function openDetail(
     detailColorOverrides,
     opts.preserveColors,
   );
-  const draftInputs = opts.preserveColors
-    ? Array.from(
-        byId("detail-color-editor").querySelectorAll<HTMLInputElement>(".color-editor-input"),
-      ).map((input) => input.value)
-    : [];
-  renderColorEditor(entry);
-  if (opts.preserveColors) {
-    byId("detail-color-editor")
-      .querySelectorAll<HTMLInputElement>(".color-editor-input")
-      .forEach((input, index) => {
-        const draft = draftInputs[index];
-        if (draft !== undefined && !normalizeHex(draft)) input.value = draft;
-      });
+  // Catalog arrival re-opens the cell the user is already editing: keep its live editor.
+  const colorEditor = byId("detail-color-editor");
+  const keepColorEditor =
+    opts.keepColorEditor === true &&
+    opts.preserveColors === true &&
+    colorEditorReusable(
+      colorEditor,
+      colorEditorMarkerFor(entry),
+      colorEditor.querySelectorAll(".color-editor-block").length,
+    );
+  if (!keepColorEditor) {
+    const draftInputs = opts.preserveColors
+      ? Array.from(
+          byId("detail-color-editor").querySelectorAll<HTMLInputElement>(".color-editor-input"),
+        ).map((input) => input.value)
+      : [];
+    renderColorEditor(entry);
+    if (opts.preserveColors) {
+      byId("detail-color-editor")
+        .querySelectorAll<HTMLInputElement>(".color-editor-input")
+        .forEach((input, index) => {
+          const draft = draftInputs[index];
+          if (draft !== undefined && !normalizeHex(draft)) input.value = draft;
+        });
+    }
   }
 
   // Draw metadata badges
@@ -1344,7 +1359,14 @@ function findCategoryValue(term: string): string | null {
 /** Matches count: loading while catalog boot is pending; exact total once ready (issue #94). */
 function renderMatchesCountDisplay(): void {
   const t = TRANSLATIONS[currentLocale];
-  const showLoading = !matchesCountReady || catalogEntriesSource === "booting";
+  if (catalogEntriesSource === "failed") {
+    const container = byId("matches-count-display");
+    renderMatchesCount(container, document, { status: "loading", label: t.catalogLoadError });
+    container.removeAttribute("aria-busy");
+    return;
+  }
+  const showLoading =
+    !matchesCountReady || catalogEntriesSource === "booting" || catalogEntriesSource === "pending";
   if (showLoading) {
     renderMatchesCount(byId("matches-count-display"), document, {
       status: "loading",
@@ -1360,11 +1382,18 @@ function renderMatchesCountDisplay(): void {
   });
 }
 
+function reportCatalogFailure(error: unknown): void {
+  console.error("Failed to load catalog:", error);
+  catalogEntriesSource = "failed";
+  document.documentElement.dataset.dsIndexSource = "failed";
+  renderMatchesCountDisplay();
+}
+
 // Apply states, filter lists, and render UI
 function applyState(): void {
   renderFilters();
 
-  const catalogPage = pageVirtualCatalog(buildCatalogQuery(), {
+  const catalogPage = pageCatalog(buildCatalogQuery(), allEntries, {
     pageSize,
     page: currentPage,
   });
@@ -1761,14 +1790,21 @@ async function bootstrap(): Promise<void> {
   byId("sort-btn-popular").setAttribute("aria-pressed", String(sortOrder === "popular"));
   byId("sort-btn-newest").setAttribute("aria-pressed", String(sortOrder === "newest"));
 
-  if (urlState.cursor) {
-    const probe = pageVirtualCatalog(buildCatalogQuery(), { pageSize, page: 1 });
+  const restoreBrowseCursor = (): void => {
+    if (!urlState.cursor) return;
+    const probe = pageCatalog(buildCatalogQuery(), allEntries, { pageSize, page: 1 });
     const startRank = decodeCatalogCursor(urlState.cursor, probe.queryFingerprint);
     if (startRank !== undefined) {
       currentPage = Math.floor(startRank / pageSize) + 1;
       currentCursor = urlState.cursor;
+    } else {
+      // Opaque positions belong to their exact view. Normalize old virtual-only links to page one;
+      // q, facets, sort and cell stay intact, and later user navigation is protected below.
+      currentPage = 1;
+      currentCursor = null;
     }
-  }
+  };
+  if (catalogBoot.entriesSource !== "pending") restoreBrowseCursor();
 
   applyState();
 
@@ -1783,26 +1819,37 @@ async function bootstrap(): Promise<void> {
     openCellFromUrl(urlState.cell);
   }
 
+  // Restore the original cursor only if the user has not changed browse or selection while waiting.
+  const pendingBrowseSearch = window.location.search;
   // summary 先読み後に明細が届いたら enrichment / 材化セル復元をやり直す。
   if (catalogBoot.entriesSource === "pending") {
-    void catalogBoot.entriesPromise.then((ready) => {
-      allEntries = ready.entries;
-      indexSummary = ready.summary;
-      catalogEntriesSource = "ready";
-      document.documentElement.dataset.dsEntryCount = String(indexSummary.entryCount);
-      document.documentElement.dataset.dsIndexSource = ready.entriesSource;
-      applyState();
-      if (urlState.cell && !selectedEntry) {
-        openCellFromUrl(urlState.cell);
-      } else if (selectedEntry) {
-        void openDetail(enrichWithMaterialized(selectedEntry, allEntries), {
-          scroll: false,
-          focus: false,
-          preserveColors: true,
-        });
-      }
-    });
+    // A link that waited for the index opens only if the user left the URL alone until then.
+    if (urlState.cell) pendingDeepLink = createPendingDeepLink(urlState.cell, window.location.href);
+    void catalogBoot.entriesPromise
+      .then((ready) => {
+        // Claim first: the handlers below rewrite the URL.
+        const pendingCell = pendingDeepLink?.claim(window.location.href) ?? null;
+        pendingDeepLink = null;
+        allEntries = ready.entries;
+        indexSummary = ready.summary;
+        catalogEntriesSource = "ready";
+        document.documentElement.dataset.dsEntryCount = String(indexSummary.entryCount);
+        document.documentElement.dataset.dsIndexSource = ready.entriesSource;
+        if (window.location.search === pendingBrowseSearch) restoreBrowseCursor();
+        applyState();
+        if (pendingCell && !selectedEntry) {
+          openCellFromUrl(pendingCell);
+        } else if (selectedEntry) {
+          void openDetail(enrichWithMaterialized(selectedEntry, allEntries), {
+            scroll: false,
+            focus: false,
+            preserveColors: true,
+            keepColorEditor: true,
+          });
+        }
+      })
+      .catch(reportCatalogFailure);
   }
 }
 
-void bootstrap();
+void bootstrap().catch(reportCatalogFailure);
