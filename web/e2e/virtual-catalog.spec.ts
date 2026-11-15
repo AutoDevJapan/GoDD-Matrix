@@ -4,6 +4,7 @@ import { parseDesignIndex } from "../../src/ds/validate.js";
 import {
   type VirtualCatalogQuery,
   decodeCatalogCursor,
+  enrichWithMaterialized,
   pageCatalog,
 } from "../src/virtual-catalog.js";
 import { compiledMutation } from "./compiled-mutations.js";
@@ -35,6 +36,37 @@ const index = {
 
 // Match the loader's normalization (including variant) before deriving corpus-bound cursors.
 const readyEntries = parseDesignIndex(JSON.stringify(index)).entries;
+
+// Fixture callers declare their query and ready or pending corpus on page 1;
+// materialized rows can lead the grid, so choose an unmaterialized virtual identity explicitly.
+async function openFixtureVirtualCell(
+  page: Page,
+  entries: Parameters<typeof pageCatalog>[1],
+  query: VirtualCatalogQuery,
+  excludedId: string,
+): Promise<string> {
+  await expect(page.locator("#page-size-select")).toHaveValue("25");
+  await expect(page.locator("#pager-top .pager-jump")).toHaveValue("1");
+  const catalogPage = pageCatalog(query, entries, { pageSize: 25, page: 1 });
+  expect(new URL(page.url()).searchParams.get("cursor")).toBe(catalogPage.cursor);
+  const rows = catalogPage.items.map((entry) => enrichWithMaterialized(entry, entries));
+  expect(new Set(rows.map((entry) => entry.id)).size).toBe(rows.length);
+  const position = rows.findIndex(
+    (entry) => entry.id.startsWith("virtual_") && !entry.hash && entry.id !== excludedId,
+  );
+  expect(position).toBeGreaterThanOrEqual(0);
+  const selected = rows[position];
+  if (!selected) throw new Error("Fixture has no different unmaterialized virtual cell");
+  expect(selected.hash).toBe("");
+  expect(selected.id).not.toBe(excludedId);
+  const card = page.locator("#results .card").nth(position);
+  await expect(card).toBeVisible();
+  await card.click();
+  await expect(page).toHaveURL(/cell=virtual_/);
+  expect(new URL(page.url()).searchParams.get("cell")).toBe(selected.id);
+  await expect(page.locator("#detail-filename")).toHaveText(`${selected.id}.design.md`);
+  return selected.id;
+}
 
 test.beforeEach(async ({ context, page }, testInfo) => {
   const requested = process.env.MATRIX_TEST_MUTATION;
@@ -101,7 +133,12 @@ test("browses the virtual catalog, preserves URL state, and jumps by ordinal", a
 
 test("opens a virtual cell permalink and reloads the same addressable cell", async ({ page }) => {
   await page.goto("/?q=dashboard+minimal&sort=newest");
-  await page.locator("#results .card").first().click();
+  await openFixtureVirtualCell(
+    page,
+    readyEntries,
+    { categories: ["dashboard"], styles: ["minimal"], sort: "newest" },
+    materializedId,
+  );
   await expect(page.locator("#detail-view")).toBeVisible();
   await expect(page).toHaveURL(/cell=virtual_/);
 
@@ -278,7 +315,7 @@ test("ignores an old materialized response after selecting another cell", async 
     await page.goto(`/?cell=${materializedId}`);
     await requested;
     await page.locator("#back-btn").click();
-    await page.locator("#results .card").first().click();
+    await openFixtureVirtualCell(page, readyEntries, { sort: "popular" }, materializedId);
     await expect(page).toHaveURL(/cell=virtual_/);
     await page.locator("#detail-color-editor .color-editor-input").first().fill("#654321");
     const current = await page.locator("#detail-code-block").textContent();
@@ -508,7 +545,7 @@ test("does not reopen a waiting link after another cell was closed", async ({ pa
   const release = await holdIndexPage(page);
   try {
     await page.goto(`/?cell=${materializedId}`);
-    await page.locator("#results .card").first().click();
+    await openFixtureVirtualCell(page, [], { sort: "popular" }, materializedId);
     await expect(page).toHaveURL(/cell=virtual_/);
     await page.locator("#back-btn").click();
     await expect(page.locator("#search-view")).toBeVisible();
@@ -576,20 +613,12 @@ test("builds a fresh editor for the cell opened after the first one", async ({ p
       element.dataset.arrivalProbe = "first-cell";
     });
     await page.locator("#back-btn").click();
-    const pendingPage = pageCatalog({ sort: "popular" }, [], { pageSize: 25, page: 1 });
-    const otherIndex = pendingPage.items.findIndex((entry) => entry.id !== openedCell);
-    expect(otherIndex).toBeGreaterThanOrEqual(0);
-    const otherEntry = pendingPage.items[otherIndex];
-    if (!otherEntry) throw new Error("Pending fixture has no different cell");
-    expect(otherEntry.id).not.toBe(openedCell);
-    const otherCard = page.locator("#results .card").nth(otherIndex);
-    await expect(otherCard).toBeVisible();
-    await otherCard.click();
+    const chosenCell = await openFixtureVirtualCell(page, [], { sort: "popular" }, openedCell);
     await expect(page.locator("#detail-view")).toBeVisible();
     const secondCell = new URL(page.url()).searchParams.get("cell");
-    expect(secondCell).toBe(otherEntry.id);
+    expect(secondCell).toBe(chosenCell);
     expect(secondCell).not.toBe(openedCell);
-    await expect(page.locator("#detail-filename")).toHaveText(`${otherEntry.id}.design.md`);
+    await expect(page.locator("#detail-filename")).toHaveText(`${chosenCell}.design.md`);
     const input = page.locator("#detail-color-editor .color-editor-input").first();
     const ownValue = await input.inputValue();
     expect(ownValue).not.toBe("#12");
