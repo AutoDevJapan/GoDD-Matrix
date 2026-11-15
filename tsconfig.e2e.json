@@ -8,5 +8,12 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["playwright.config.ts", "web/e2e/**/*.ts"]
+  "include": [
+    "playwright.config.ts",
+    "web/e2e/**/*.ts",
+    "verification/**/*.ts",
+    "web/src/catalog-arrival.test.ts",
+    "web/src/index-loader.test.ts",
+    "web/src/virtual-catalog.test.ts"
+  ]
 }

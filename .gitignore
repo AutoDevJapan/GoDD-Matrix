@@ -11,3 +11,4 @@ test-results/
 
 # Vercel CLI (プロジェクト連携 / ローカル env)
 .vercel
+web/build-inputs.json

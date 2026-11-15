@@ -245,7 +245,9 @@ async function resolveEntries(
   summary: IndexSummary,
   options: Required<Pick<LoadCatalogOptions, "fetcher" | "warn" | "indexUrl" | "pageUrl">>,
 ): Promise<{ entries: readonly DesignIndexEntry[]; entriesSource: IndexEntriesSource }> {
-  const fromShards = await loadEntriesFromShards(options.fetcher, summary, options.pageUrl);
+  const fromShards = await loadEntriesFromShards(options.fetcher, summary, options.pageUrl).catch(
+    () => undefined,
+  );
   if (fromShards) {
     return { entries: fromShards, entriesSource: "shards" };
   }

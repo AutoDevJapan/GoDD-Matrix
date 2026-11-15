@@ -18,9 +18,31 @@ jobs:
   quality:
     name: 品質ゲート (lint / typecheck / test / build)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Scope browser acceptance
+        id: browser_scope
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if git diff --quiet "$BASE_SHA" HEAD -- web/ src/ scripts/build-web.mjs scripts/web-build-inputs.mjs scripts/prepare-real-index.mjs verification/ scripts/serve-web.mjs scripts/check-browser-report.mjs scripts/record-browser-build.mjs scripts/browser-log-capture.sh package.json pnpm-lock.yaml pnpm-workspace.yaml .pnpmfile.cjs .npmrc .gitattributes playwright.config.ts ':(glob)tsconfig*.json' .github/workflows/ci.yml; then
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            [[ "$status" -eq 1 ]] || exit "$status"
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          fi
+
 
       # package.json の packageManager (pnpm@x) からバージョンを解決する
       - name: Setup pnpm
@@ -56,7 +78,163 @@ jobs:
       - name: Build static web
         run: pnpm build:web
 
-      # Browser E2E (Playwright) はローカル専用。Actions では実行しない (issue #71 / コスト抑制)。
+      - name: Snapshot fixed compiled build
+        id: initial_proof
+        if: steps.browser_scope.outputs.enabled == 'true'
+        run: node scripts/record-browser-build.mjs before
+
+      - name: Prepare fixed full-index input
+        id: real_input
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 3
+        run: node scripts/prepare-real-index.mjs
+
+      - name: Check production catalog against the complete fixed index
+        id: real_catalog
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 3
+        run: |
+          source scripts/browser-log-capture.sh
+          if capture_browser_command web/browser-evidence/real-catalog.stdout.txt web/browser-evidence/real-catalog.stderr.txt pnpm exec vitest run --config verification/vitest.matrix-real.config.ts --reporter=json --outputFile=web/browser-evidence/real-catalog.vitest.json; then
+            echo 'Real catalog stream capture complete.'
+          else
+            echo 'Real catalog stream capture incomplete; available logs are diagnostic only.' >&2
+            exit 1
+          fi
+          printf '%s\n' "$CAPTURE_COMMAND_STATUS" > web/browser-evidence/real-catalog.exit.txt
+          [[ "$CAPTURE_COMMAND_STATUS" -eq 0 ]]
+
+      - name: Check artifact outcome controls
+        if: steps.browser_scope.outputs.enabled == 'true'
+        run: node scripts/record-browser-build.mjs --self-test
+
+      - name: Check stream capture controls
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 2
+        run: |
+          [[ ":$SHELLOPTS:" == *:pipefail:* ]]
+          bash scripts/browser-log-capture.sh --self-test | tee web/browser-evidence/stream-controls.txt
+
+      - name: Install Chromium for scoped browser checks
+        if: steps.browser_scope.outputs.enabled == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Native browser selection control
+        id: browser_selection
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 2
+        env:
+          MATRIX_TEST_MUTATION: 'selection'
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/web/browser-evidence/selection.json
+        run: |
+          source scripts/browser-log-capture.sh
+          if capture_browser_command web/browser-evidence/selection.stdout.txt web/browser-evidence/selection.stderr.txt pnpm exec playwright test web/e2e/virtual-catalog.spec.ts --grep 'keeps an untouched color' --workers=1 --retries=0 --global-timeout=90000 --reporter=json --output=web/browser-evidence/selection-files; then
+            node scripts/check-browser-report.mjs selection "$CAPTURE_COMMAND_STATUS" "$CAPTURE_STDOUT_STATUS" "$CAPTURE_STDERR_STATUS" "$CAPTURE_STDOUT_PID" "$CAPTURE_STDERR_PID"
+          else
+            echo 'Stream capture incomplete; available logs are diagnostic only.' >&2
+            exit 1
+          fi
+      - name: Native browser stale control
+        id: browser_stale
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 2
+        env:
+          MATRIX_TEST_MUTATION: 'stale'
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/web/browser-evidence/stale.json
+        run: |
+          source scripts/browser-log-capture.sh
+          if capture_browser_command web/browser-evidence/stale.stdout.txt web/browser-evidence/stale.stderr.txt pnpm exec playwright test web/e2e/virtual-catalog.spec.ts --grep 'ignores an old materialized response after selecting another cell' --workers=1 --retries=0 --global-timeout=90000 --reporter=json --output=web/browser-evidence/stale-files; then
+            node scripts/check-browser-report.mjs stale "$CAPTURE_COMMAND_STATUS" "$CAPTURE_STDOUT_STATUS" "$CAPTURE_STDERR_STATUS" "$CAPTURE_STDOUT_PID" "$CAPTURE_STDERR_PID"
+          else
+            echo 'Stream capture incomplete; available logs are diagnostic only.' >&2
+            exit 1
+          fi
+      - name: Native browser link control
+        id: browser_link
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 2
+        env:
+          MATRIX_TEST_MUTATION: 'link'
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/web/browser-evidence/link.json
+        run: |
+          source scripts/browser-log-capture.sh
+          if capture_browser_command web/browser-evidence/link.stdout.txt web/browser-evidence/link.stderr.txt pnpm exec playwright test web/e2e/virtual-catalog.spec.ts --grep 'does not reopen a waiting link after another cell was closed' --workers=1 --retries=0 --global-timeout=90000 --reporter=json --output=web/browser-evidence/link-files; then
+            node scripts/check-browser-report.mjs link "$CAPTURE_COMMAND_STATUS" "$CAPTURE_STDOUT_STATUS" "$CAPTURE_STDERR_STATUS" "$CAPTURE_STDOUT_PID" "$CAPTURE_STDERR_PID"
+          else
+            echo 'Stream capture incomplete; available logs are diagnostic only.' >&2
+            exit 1
+          fi
+      - name: Native browser editor control
+        id: browser_editor
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 2
+        env:
+          MATRIX_TEST_MUTATION: 'editor'
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/web/browser-evidence/editor.json
+        run: |
+          source scripts/browser-log-capture.sh
+          if capture_browser_command web/browser-evidence/editor.stdout.txt web/browser-evidence/editor.stderr.txt pnpm exec playwright test web/e2e/virtual-catalog.spec.ts --grep 'keeps the color editor node, caret and draft on index arrival|keeps an edited color and the page text on index arrival|builds a fresh editor for the cell opened after the first one' --workers=1 --retries=0 --global-timeout=90000 --reporter=json --output=web/browser-evidence/editor-files; then
+            node scripts/check-browser-report.mjs editor "$CAPTURE_COMMAND_STATUS" "$CAPTURE_STDOUT_STATUS" "$CAPTURE_STDERR_STATUS" "$CAPTURE_STDOUT_PID" "$CAPTURE_STDERR_PID"
+          else
+            echo 'Stream capture incomplete; available logs are diagnostic only.' >&2
+            exit 1
+          fi
+      - name: Native browser fixed control
+        id: browser_fixed
+        if: steps.browser_scope.outputs.enabled == 'true'
+        timeout-minutes: 6
+        env:
+          MATRIX_TEST_MUTATION: ''
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/web/browser-evidence/fixed.json
+        run: |
+          source scripts/browser-log-capture.sh
+          if capture_browser_command web/browser-evidence/fixed.stdout.txt web/browser-evidence/fixed.stderr.txt pnpm exec playwright test web/e2e/virtual-catalog.spec.ts --workers=1 --retries=0 --global-timeout=300000 --reporter=json --output=web/browser-evidence/fixed-files; then
+            node scripts/check-browser-report.mjs fixed "$CAPTURE_COMMAND_STATUS" "$CAPTURE_STDOUT_STATUS" "$CAPTURE_STDERR_STATUS" "$CAPTURE_STDOUT_PID" "$CAPTURE_STDERR_PID"
+          else
+            echo 'Stream capture incomplete; available logs are diagnostic only.' >&2
+            exit 1
+          fi
+      - name: Verify unchanged build and record browser evidence
+        id: provenance
+        if: always() && steps.initial_proof.outcome == 'success'
+        env:
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+          SELECTION_OUTCOME: ${{ steps.browser_selection.outcome }}
+          STALE_OUTCOME: ${{ steps.browser_stale.outcome }}
+          LINK_OUTCOME: ${{ steps.browser_link.outcome }}
+          EDITOR_OUTCOME: ${{ steps.browser_editor.outcome }}
+          FIXED_OUTCOME: ${{ steps.browser_fixed.outcome }}
+          REAL_INPUT_OUTCOME: ${{ steps.real_input.outcome }}
+          REAL_CATALOG_OUTCOME: ${{ steps.real_catalog.outcome }}
+        run: node scripts/record-browser-build.mjs after
+
+      - name: Retain static web and browser evidence
+        if: always() && steps.provenance.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: matrix-web-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: |
+            web/dist/
+            web/build-proof.json
+            web/build-inputs.json
+            web/browser-evidence/
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: true
+
+      - name: Retain partial browser diagnostics
+        if: always() && steps.provenance.outputs.evidence_validated == 'true' && steps.provenance.outcome != 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: matrix-browser-diagnostic-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: web/browser-evidence/
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: true
+
+      # The whole virtual-catalog spec runs once on the fixed build; other suites remain local.
+      # The scoped CI controls never rewrite source or fixed build.
+
 
   gitleaks:
     name: シークレット走査 (gitleaks)

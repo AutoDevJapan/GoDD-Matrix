@@ -8,16 +8,18 @@
 import { JSIC_SUBCLASSES } from "../../src/axes/jsic-catalog.js";
 import { JSIC_OVERLAY } from "../../src/axes/jsic.js";
 import type { DesignIndexEntry } from "../../src/ds/types.js";
-import { parseCanonicalCellId } from "./catalog-coordinates.js";
+import { categoryFromEntry, parseCanonicalCellId, styleFromEntry } from "./catalog-coordinates.js";
 import { FILTER_CATEGORIES, INDUSTRY_VERTICALS } from "./filter-taxonomy.js";
 import {
   type Locale,
   VIRTUAL_COLOR_CATALOG,
+  colorFamily,
   expandColorFilter,
+  isColorFamilyKey,
   jsicMajor,
   jsicName,
 } from "./lib.js";
-import { type ResultSortOrder, virtualIndexAtRank } from "./result-sorting.js";
+import { type ResultSortOrder, sortDesignEntries, virtualIndexAtRank } from "./result-sorting.js";
 import { SEARCH_STYLES, resolveMoodSlug } from "./search-parser.js";
 import {
   MAX_VIRTUAL_VARIANT,
@@ -316,6 +318,7 @@ export function enrichWithMaterialized(
   entry: DesignIndexEntry,
   materialized: readonly DesignIndexEntry[],
 ): DesignIndexEntry {
+  if (entry.hash) return entry;
   // Published canonicalCellId pins the exact virtual slot (category/style inclusive).
   const byCanonical = materialized.find((item) => {
     if (!item.hash || !item.canonicalCellId) return false;
@@ -478,4 +481,215 @@ export function describeVirtualSpace(locale: Locale = "en"): string {
   return locale === "ja"
     ? `仮想空間 v${VIRTUAL_SPACE_VERSION}: ${total.toLocaleString("ja-JP")} セル`
     : `Virtual space v${VIRTUAL_SPACE_VERSION}: ${total.toLocaleString("en-US")} cells`;
+}
+
+/** Same legacy coordinates used by result cards, with published coordinates taking precedence. */
+export function catalogCategory(entry: DesignIndexEntry): string {
+  return categoryFromEntry(entry, () => {
+    const index = (entry.id || "").charCodeAt(0) % FILTER_CATEGORIES.length;
+    return FILTER_CATEGORIES[index]?.v || "";
+  });
+}
+
+export function catalogStyle(entry: DesignIndexEntry): string {
+  return styleFromEntry(entry, () => {
+    const styles: Readonly<Record<string, string>> = {
+      minimal: "minimal",
+      elegant: "glass",
+      bold: "brutalist",
+      brutalist: "brutalist",
+      tech: "tech",
+      organic: "organic",
+      warm: "warm",
+      vintage: "retro",
+      corporate: "corporate",
+    };
+    return styles[entry.mood] ?? "minimal";
+  });
+}
+
+/** Published style aliases affect filtering only; keep raw coordinates and public labels intact. */
+function styleForFilter(entry: DesignIndexEntry): string {
+  const style = catalogStyle(entry);
+  return style === "neu" || style === "neumorphism" ? "soft" : style;
+}
+
+interface CatalogView {
+  readonly entries: readonly DesignIndexEntry[];
+  readonly filtered: FilteredVirtualAxes;
+  readonly virtualTotal: number;
+  readonly excludedRanks: readonly number[];
+  readonly total: number;
+  readonly fingerprint: string;
+}
+interface MaterializedCatalog {
+  readonly entries: readonly DesignIndexEntry[];
+  readonly fingerprint: string;
+  readonly views: Map<string, CatalogView>;
+}
+// Callers replace this readonly array when a new index arrives; views never mutate index rows.
+const materializedCatalogs = new WeakMap<readonly DesignIndexEntry[], MaterializedCatalog>();
+
+function materializedCatalog(entries: readonly DesignIndexEntry[]): MaterializedCatalog {
+  const cached = materializedCatalogs.get(entries);
+  if (cached) return cached;
+  const unique = new Map<string, DesignIndexEntry>();
+  for (const entry of entries) {
+    if (entry.hash && !unique.has(entry.id)) unique.set(entry.id, entry);
+  }
+  const result = {
+    entries: [...unique.values()],
+    fingerprint: fnv1aHex(JSON.stringify(entries)),
+    views: new Map<string, CatalogView>(),
+  };
+  materializedCatalogs.set(entries, result);
+  return result;
+}
+
+function matchesColorSelection(color: string, selected: readonly string[] | undefined): boolean {
+  return (
+    !selected?.length ||
+    selected.some(
+      (value) => value === color || (isColorFamilyKey(value) && colorFamily(color).key === value),
+    )
+  );
+}
+
+function catalogView(query: VirtualCatalogQuery, source: MaterializedCatalog): CatalogView {
+  const key = JSON.stringify(query);
+  const cached = source.views.get(key);
+  if (cached) return cached;
+  const filtered: FilteredVirtualAxes = {
+    ...resolveFilteredAxes(query),
+    // A concrete materialized color outside the fixed virtual axis has no virtual counterpart.
+    colors: CANONICAL_COLORS.filter((color) => matchesColorSelection(color, query.colors)),
+  };
+  const categories = new Set(pickKnown(query.categories, CANONICAL_CATEGORIES));
+  const styles = new Set(pickKnown(query.styles, CANONICAL_STYLES));
+  const jsic = new Set(filtered.jsicCodes);
+  const restrictJsic = Boolean(
+    query.industries?.length || query.verticals?.length || query.industryTerms?.length,
+  );
+  const entries = sortDesignEntries(
+    source.entries.filter(
+      (entry) =>
+        (!query.categories?.length || categories.has(catalogCategory(entry))) &&
+        (!query.styles?.length || styles.has(styleForFilter(entry))) &&
+        (!restrictJsic || jsic.has(entry.jsic)) &&
+        matchesColorSelection(entry.color, query.colors),
+    ),
+    query.sort,
+  );
+  const virtualTotal = assertSafeProduct([
+    filtered.categories.length,
+    filtered.styles.length,
+    filtered.jsicCodes.length,
+    filtered.colors.length,
+    filtered.variantCount,
+  ]);
+  const excluded = new Set<number>();
+  for (const entry of entries) {
+    const coords = entry.canonicalCellId
+      ? parseCanonicalCellId(entry.canonicalCellId)
+      : parseVirtualPermalinkId(entry.id);
+    // Rank ignores mood: only an identical emitted permalink can replace a virtual cell.
+    if (
+      !coords ||
+      coords.jsic !== entry.jsic ||
+      coords.color !== entry.color ||
+      coords.mood !== entry.mood ||
+      coords.variant !== (entry.variant ?? 0) ||
+      coords.mood !== resolveMoodSlug(coords.style)
+    )
+      continue;
+    const rank = rankInFilteredView(coords, filtered);
+    if (rank !== undefined) excluded.add(virtualIndexAtRank(rank, virtualTotal, query.sort));
+  }
+  const excludedRanks = [...excluded].sort((a, b) => a - b);
+  const total = entries.length + virtualTotal - excludedRanks.length;
+  if (!Number.isSafeInteger(total)) throw new RangeError("catalog exceeds safe integer range");
+  const result: CatalogView = {
+    entries,
+    filtered,
+    virtualTotal,
+    excludedRanks,
+    total,
+    fingerprint: fnv1aHex(`materialized-v1:${queryFingerprint(query)}:${source.fingerprint}`),
+  };
+  // Bound retained filter views while keeping distant page reads O(page size * log(materialized)).
+  if (source.views.size >= 32) {
+    const oldest = source.views.keys().next().value;
+    if (oldest !== undefined) source.views.delete(oldest);
+  }
+  source.views.set(key, result);
+  return result;
+}
+
+function excludedThrough(ranks: readonly number[], rank: number): number {
+  let low = 0;
+  let high = ranks.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((ranks[middle] ?? Number.POSITIVE_INFINITY) <= rank) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function remainingVirtualRank(rank: number, excluded: readonly number[]): number {
+  let low = rank;
+  let high = rank + excluded.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (middle + 1 - excludedThrough(excluded, middle) > rank) high = middle;
+    else low = middle + 1;
+  }
+  return low;
+}
+
+/**
+ * Materialized rows first, followed by the unchanged virtual space minus exact duplicate cells.
+ * This is a union, not a larger color-axis Cartesian product.
+ * Each input row keeps its ID/path/hash.
+ */
+export function pageCatalog(
+  query: VirtualCatalogQuery,
+  materialized: readonly DesignIndexEntry[],
+  options: { readonly pageSize: number; readonly page?: number; readonly startRank?: number },
+): VirtualCatalogPage {
+  const view = catalogView(query, materializedCatalog(materialized));
+  const pageSize = Math.max(1, Math.floor(options.pageSize));
+  if (!Number.isSafeInteger(pageSize)) throw new RangeError("invalid catalog page size");
+  const pageCount = Math.max(1, Math.ceil(view.total / pageSize));
+  const requested =
+    options.startRank === undefined
+      ? (Math.min(Math.max(1, Math.floor(options.page ?? 1)), pageCount) - 1) * pageSize
+      : Math.floor(options.startRank);
+  if (!Number.isSafeInteger(requested)) throw new RangeError("invalid catalog rank");
+  const startRank = Math.min(Math.max(0, requested), Math.max(0, view.total - 1));
+  const items: DesignIndexEntry[] = [];
+  for (let rank = startRank; rank < Math.min(startRank + pageSize, view.total); rank++) {
+    if (rank < view.entries.length) {
+      const entry = view.entries[rank];
+      if (entry) items.push(entry);
+      continue;
+    }
+    const displayRank = remainingVirtualRank(rank - view.entries.length, view.excludedRanks);
+    const axes = unrankInFilteredView(
+      virtualIndexAtRank(displayRank, view.virtualTotal, query.sort),
+      view.filtered,
+    );
+    if (!axes) throw new Error("catalog rank has no virtual cell");
+    items.push(entryFromVirtualAxes(axes));
+  }
+  return {
+    items,
+    total: view.total,
+    page: view.total ? Math.floor(startRank / pageSize) + 1 : 1,
+    pageCount,
+    pageSize,
+    startRank,
+    cursor: encodeCatalogCursor(view.fingerprint, startRank),
+    queryFingerprint: view.fingerprint,
+  };
 }
