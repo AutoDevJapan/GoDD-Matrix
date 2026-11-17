@@ -22,7 +22,9 @@ export interface AxisContext {
 }
 
 export { normalizeKey } from "./normalize.js";
+export { type ResolveOptions, pickBest } from "./best.js";
 export {
+  buildJsicCatalog,
   JSIC_CATALOG,
   JSIC_OVERLAY,
   type JsicCandidate,

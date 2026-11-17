@@ -1,0 +1,109 @@
+name: MCP artifact
+
+# stdio MCP の正式配布物 (main.js + DS 固定 snapshot の index / taxonomy / jsic) を生成する。
+# 生成時に pin の commit の全本文を照合し、完全でなければ成果物を作らない。
+# 出来上がった zip そのものにビルド来歴 (attestation) を付けて保持する。
+# 手動実行と、生成物に関わる変更の PR で動く (配備ではなく、配布物の生成のみ)。
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/**
+      - scripts/package-mcp.mjs
+      - ds-snapshot.pin.json
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig*.json
+      - LICENSE
+      - .github/workflows/mcp-artifact.yml
+
+# 同じ ref の古い実行はキャンセルして無駄な実行を避ける
+concurrency:
+  group: mcp-artifact-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: 正式配布物の生成と来歴
+    # fork からの PR には id-token / attestations を渡せないため、同一リポジトリの PR だけ実行する。
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # package.json の packageManager (pnpm@x) からバージョンを解決する
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (tsc)
+        run: pnpm build
+
+      # index / taxonomy / jsic を pin に照合し、pin の commit の全本文 (DESIGN.md) を
+      # 生バイトの sha256 で照合する。1 件でも欠落・不一致・重複があれば失敗し、成果物は作らない。
+      - name: Package MCP (pin に束縛し、全本文を照合)
+        run: node scripts/package-mcp.mjs --out "$RUNNER_TEMP/mcp/godd-matrix-mcp"
+
+      - name: Create archive
+        id: archive
+        run: |
+          set -euo pipefail
+          name="godd-matrix-mcp-${GITHUB_SHA}.zip"
+          cd "$RUNNER_TEMP/mcp"
+          find godd-matrix-mcp -type f -exec touch -d '2000-01-01T00:00:00Z' {} +
+          find godd-matrix-mcp -type f | LC_ALL=C sort | zip -X -9 -q -@ "$RUNNER_TEMP/$name"
+          # 配る zip そのものを展開し、SHA256SUMS に照合する
+          mkdir "$RUNNER_TEMP/unpacked"
+          (cd "$RUNNER_TEMP/unpacked" && unzip -q "$RUNNER_TEMP/$name" && cd godd-matrix-mcp && sha256sum --check --strict SHA256SUMS)
+          echo "path=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
+          {
+            echo "### MCP 配布物"
+            echo
+            echo "- archive: \`$name\`"
+            echo "- archive sha256: \`$(sha256sum "$RUNNER_TEMP/$name" | cut -d' ' -f1)\`"
+            echo "- main.js sha256: \`$(sha256sum "$RUNNER_TEMP/mcp/godd-matrix-mcp/main.js" | cut -d' ' -f1)\`"
+            echo "- catalog-verification.json:"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/mcp/godd-matrix-mcp/catalog-verification.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.archive.outputs.path }}
+
+      # zip そのものを保持する (再圧縮しない)。名前は zip のファイル名になる。
+      - name: Retain archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ steps.archive.outputs.path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+

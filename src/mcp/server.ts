@@ -20,8 +20,18 @@ import { type MatrixRuntime, runCompose, runDecideAxes, runSelectCells } from ".
 /** 要望入力の zod スキーマ (全ツール共通)。 */
 const briefShape = {
   industry: z.string().min(1).describe("業種名 / キーワード / JSIC 細分類コード (必須)"),
-  color: z.string().optional().describe("希望カラー (色名 / slug)。任意"),
-  mood: z.string().optional().describe("希望ムード。任意"),
+  color: z
+    .string()
+    .optional()
+    .describe(
+      "希望カラー。Design-Systems の色 slug (例: lt-h17) または日英の色名。同じ名称の色が複数ある曖昧な入力は確定せず候補を返すので、候補の slug で再実行する。任意",
+    ),
+  mood: z
+    .string()
+    .optional()
+    .describe(
+      "希望ムード。Design-Systems のムード slug (例: trustworthy) または日英のムード名。曖昧な入力は確定せず候補を返す。任意",
+    ),
   tags: z.array(z.string()).optional().describe("追加タグ (タイポ / レイアウト等)。任意"),
 } as const;
 
@@ -33,6 +43,18 @@ function toolResult(payload: object, isError = false): CallToolResult {
     isError,
   };
 }
+
+/**
+ * 3 ツール共通の注釈。いずれも環境 (ファイル・外部サービスの状態) を変更しない参照系で、
+ * 同じ入力には同じ結果を返す。ホストはこの注釈で承認の要否を決める。注釈が無いと、承認ポリシーが
+ * never の Codex (codex exec, 0.167.0 で確認) は呼び出しを
+ * 「MCP tool call requires approval, but approval policy is never」として拒否する。
+ */
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+} as const;
 
 /**
  * ランタイムを注入して MCP サーバを組み立てる。
@@ -51,6 +73,8 @@ export function createMatrixServer(runtime: MatrixRuntime): McpServer {
       description:
         "要望 (業種 / カラー / ムード) から軸を決定し、候補セルの確定 DESIGN.md を解決して Claude 用プロンプト (system / user) を合成する。未解決軸があれば候補を提示する。",
       inputSchema: briefShape,
+      // 本文 (DESIGN.md) と、設定時は Generator を外部から取得するため open world。
+      annotations: { ...READ_ONLY_ANNOTATIONS, openWorldHint: true },
     },
     async (args) => {
       const result = await runCompose(args, runtime);
@@ -65,8 +89,10 @@ export function createMatrixServer(runtime: MatrixRuntime): McpServer {
       description:
         "要望から業種 (JSIC) / カラー / ムードの各軸を解決し、確定 context と未解決軸・候補を返す (副作用なし)。",
       inputSchema: briefShape,
+      // 組込みマスタだけで解く純粋計算。外部へは出ない。
+      annotations: { ...READ_ONLY_ANNOTATIONS, openWorldHint: false },
     },
-    async (args) => toolResult(runDecideAxes(args)),
+    async (args) => toolResult(runDecideAxes(args, runtime)),
   );
 
   server.registerTool(
@@ -76,6 +102,8 @@ export function createMatrixServer(runtime: MatrixRuntime): McpServer {
       description:
         "要望から軸を決定し、Design-Systems index に一致する候補セル (材化済み DESIGN.md) を返す。",
       inputSchema: briefShape,
+      // 取込済み index だけを引く。外部へは出ない。
+      annotations: { ...READ_ONLY_ANNOTATIONS, openWorldHint: false },
     },
     async (args) => toolResult(runSelectCells(args, runtime)),
   );

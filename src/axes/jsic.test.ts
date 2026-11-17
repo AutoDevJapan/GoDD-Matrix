@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { JSIC_CATALOG, type JsicEntry, MINIMAL_JSIC, StaticJsicResolver } from "./jsic.js";
+import {
+  JSIC_CATALOG,
+  JSIC_OVERLAY,
+  type JsicEntry,
+  MINIMAL_JSIC,
+  StaticJsicResolver,
+  buildJsicCatalog,
+} from "./jsic.js";
 
 const resolver = new StaticJsicResolver();
 
@@ -100,5 +107,55 @@ describe("JSIC_CATALOG (DS jsic.json バンドル)", () => {
     expect(codes).toContain("7281");
     expect(codes).toContain("6061");
     expect(codes).not.toContain("7412");
+  });
+});
+
+describe("buildJsicCatalog (snapshot の細分類 + 既存 overlay)", () => {
+  const subclasses = [
+    { code: "7281", name: "経営コンサルタント業" },
+    { code: "0100", name: "主として管理事務を行う本社等" },
+    { code: "1000", name: "主として管理事務を行う本社等" },
+  ];
+
+  it("渡した細分類だけを母集合にし、実在コードの overlay だけを付ける", () => {
+    const catalog = buildJsicCatalog(subclasses);
+    expect(catalog.map((e) => e.code)).toEqual(["7281", "0100", "1000"]);
+    expect(catalog[0]?.keywords).toEqual(JSIC_OVERLAY["7281"]?.keywords);
+    expect(catalog[1]?.aliases).toBeUndefined();
+    expect(catalog.some((e) => e.code === "7211")).toBe(false);
+  });
+
+  it("同梱カタログは、同梱の細分類を渡した結果と一致する", () => {
+    expect(buildJsicCatalog(JSIC_CATALOG.map((e) => ({ code: e.code, name: e.name })))).toEqual(
+      JSIC_CATALOG,
+    );
+  });
+});
+
+describe("StaticJsicResolver: 同点首位の扱い", () => {
+  const entries = buildJsicCatalog([
+    { code: "0100", name: "主として管理事務を行う本社等" },
+    { code: "1000", name: "主として管理事務を行う本社等" },
+    { code: "7281", name: "経営コンサルタント業" },
+  ]);
+
+  it("既定は同点なら code 昇順の先頭を best にする (従来どおり)", () => {
+    expect(
+      new StaticJsicResolver(entries).resolve("主として管理事務を行う本社等").best?.entry.code,
+    ).toBe("0100");
+  });
+
+  it("rejectTies では同名の細分類を確定せず、候補は全て返す", () => {
+    const r = new StaticJsicResolver(entries, { rejectTies: true }).resolve(
+      "主として管理事務を行う本社等",
+    );
+    expect(r.best).toBeUndefined();
+    expect(r.candidates.map((c) => c.entry.code)).toEqual(["0100", "1000"]);
+  });
+
+  it("rejectTies でも、コードの完全一致や一意な名称は確定する", () => {
+    const resolver = new StaticJsicResolver(entries, { rejectTies: true });
+    expect(resolver.resolve("1000").best?.entry.code).toBe("1000");
+    expect(resolver.resolve("経営コンサルタント業").best?.entry.code).toBe("7281");
   });
 });

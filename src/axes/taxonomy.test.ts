@@ -80,3 +80,50 @@ describe("StaticSlugResolver 拡張", () => {
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
   });
 });
+
+describe("StaticSlugResolver: 同点首位の扱い", () => {
+  // 本物の DS taxonomy は、同じ名称を複数の slug が共有する (旧 slug と新 slug など)。
+  const shared: TaxonomyEntry<string>[] = [
+    { slug: "a-2", label: "青", aliases: ["blue"] },
+    { slug: "a-1", label: "青", aliases: ["blue"] },
+    { slug: "b-1", label: "赤", aliases: ["red"] },
+  ];
+
+  it("既定は同点なら slug 昇順の先頭を best にする (従来どおり)", () => {
+    const r = new StaticSlugResolver(shared).resolve("青");
+    expect(r.best?.entry.slug).toBe("a-1");
+    expect(r.candidates.map((c) => c.entry.slug)).toEqual(["a-1", "a-2"]);
+  });
+
+  it("rejectTies では首位が複数なら best を確定せず、候補は全て返す", () => {
+    const r = new StaticSlugResolver(shared, { rejectTies: true }).resolve("青");
+    expect(r.best).toBeUndefined();
+    expect(r.candidates.map((c) => c.entry.slug)).toEqual(["a-1", "a-2"]);
+    expect(
+      new StaticSlugResolver(shared, { rejectTies: true }).resolve("blue").best,
+    ).toBeUndefined();
+  });
+
+  it("rejectTies でも首位が 1 件なら確定する", () => {
+    const r = new StaticSlugResolver(shared, { rejectTies: true });
+    expect(r.resolve("赤").best?.entry.slug).toBe("b-1");
+    expect(r.resolve("red").best?.entry.slug).toBe("b-1");
+  });
+
+  it("rejectTies でも slug 完全一致は、同じ名称を持つ他の slug より優先して確定する", () => {
+    const r = new StaticSlugResolver(shared, { rejectTies: true }).resolve("a-2");
+    expect(r.best?.entry.slug).toBe("a-2");
+    expect(r.best?.score).toBe(1);
+  });
+
+  it("上位が同点でも、下位の同点は首位判定に影響しない", () => {
+    const entries: TaxonomyEntry<string>[] = [
+      { slug: "x-1", label: "あか", aliases: ["あか"] },
+      { slug: "x-2", label: "あかるい", aliases: ["あかるい"] },
+      { slug: "x-3", label: "あかね", aliases: ["あかね"] },
+    ];
+    // "あか" は x-1 だけが完全一致 (0.95)。x-2 / x-3 は部分一致 (0.6) で同点だが首位ではない。
+    const r = new StaticSlugResolver(entries, { rejectTies: true }).resolve("あか");
+    expect(r.best?.entry.slug).toBe("x-1");
+  });
+});

@@ -27,6 +27,7 @@
     "typecheck:web": "tsc -p web/tsconfig.json",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "build:web": "node scripts/build-web.mjs",
+    "package:mcp": "node scripts/package-mcp.mjs",
     "sync:index-pages": "node scripts/sync-index-pages.mjs",
     "test:e2e": "playwright test",
     "test": "vitest run",

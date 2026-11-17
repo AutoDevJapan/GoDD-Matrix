@@ -13,7 +13,8 @@ GoDD SSOT における **item3 (選定/合成ツール)**。データフロー�
 
 - **静的 Web アプリ (GitHub Pages)** — 現在の主提供形態。公開 URL で誰でも利用可能
   (完全クライアントサイド)。
-- **stdio MCP サーバ** — GitHub ネイティブに MCP クライアント (Claude Desktop 等) から使う。
+- **stdio MCP サーバ** — GitHub ネイティブに MCP クライアント (Codex / Claude Code / Claude Desktop 等)
+  から使う。正式配布物 (固定 snapshot に束縛した zip) は Actions で生成する。
 - **HTTP MCP トランスポート** — `src/mcp/http.ts` / `api/` にコードとして残るが、
   **現在はどこにもデプロイしていない** (旧 Vercel プロジェクトは廃止済み)。自前ホストは可能。
 
@@ -120,6 +121,7 @@ src/
   generator/   Generator レンダー API クライアント
   prompt/      Claude 用プロンプト合成
   mcp/         MCP サーバ (GitHub ネイティブ提供形態)
+  release/     正式配布物 (MCP) の生成と検査 (tar 読取 / 全本文の照合 / 成果物の自己検査)
   index.ts     公開エントリ
 ```
 
@@ -128,17 +130,59 @@ src/
 既存パイプライン (軸決定 → index → DESIGN.md 解決 → プロンプト合成) を
 [Model Context Protocol](https://modelcontextprotocol.io) の stdio サーバとして公開する。
 
+### 正式配布物 (推奨)
+
+`.github/workflows/mcp-artifact.yml` が、stdio MCP の配布物 (zip) を生成してビルド来歴 (attestation)
+を付ける (手動実行、または生成物に関わる PR)。zip の中身:
+
+| ファイル | 内容 |
+| --- | --- |
+| `main.js` | 依存を同梱した単一ファイルの stdio MCP サーバ (Node.js >= 20) |
+| `snapshot.json` | DS の固定 snapshot (commit と、下の 3 ファイルのバイト同一性・件数) |
+| `index.json` / `taxonomy.json` / `jsic.json` | 全セルの索引 (51,729 件)・色 / ムードの語彙 (299 / 69)・業種の語彙 (1,473 細分類) |
+| `catalog-verification.json` | 生成時に、全本文 (DESIGN.md) を pin の commit と照合した記録 (件数のみ) |
+| `LICENSE` / `THIRD-PARTY-LICENSES.txt` | 本体と、同梱した依存のライセンス |
+| `SHA256SUMS` | 上記すべての sha256 (`sha256sum -c SHA256SUMS` で確認できる) |
+
+束縛と検証:
+
+- **生成時**: `index.json` / `taxonomy.json` / `jsic.json` を pin (bytes / sha256 / git blob / 件数) に照合する。
+  さらに pin の commit の tarball を 1 パスで読み、index の全エントリについて本文が存在し、
+  生バイトの sha256 が `entry.hash` に一致することを確かめる。欠落・不一致・重複が 1 件でもあれば成果物を作らない。
+- **起動時**: 同梱ファイルを pin に再照合してから解釈する。不一致なら理由を出して起動しない
+  (環境変数指定の従来動作へ黙って戻らない)。
+- **実行時**: DESIGN.md 本文は取得のたびに `entry.hash` と照合し、不一致は拒否する。取得先は pin の commit に
+  固定した raw URL で、`GODD_DS_BASE` で変えても検証は外れない。
+- ツールの結果の `snapshot` に、検証済みの出所 (commit と index / taxonomy / jsic の sha256) を載せる。
+
+受け取った側の確認と登録 (どちらのホストも同じ `main.js` を指す):
+
+```bash
+unzip godd-matrix-mcp-<sha>.zip && cd godd-matrix-mcp
+sha256sum -c SHA256SUMS                                  # ファイルの改竄・欠落の検出
+gh attestation verify ../godd-matrix-mcp-<sha>.zip --repo AutoDevJapan/GoDD-Matrix   # ビルド来歴
+codex mcp add godd-matrix -- node "$PWD/main.js"         # Codex
+claude mcp add godd-matrix -- node "$PWD/main.js"        # Claude Code
+```
+
+### 開発用 (pin なし)
+
 ```bash
 pnpm build
 GODD_DS_INDEX=./path/to/index.json node dist/mcp/main.js   # bin: godd-matrix-mcp
+pnpm package:mcp --out ./out/godd-matrix-mcp                # 正式配布物を手元で生成 (要 pnpm build)
 ```
+
+pin なしの従来構成は、軸の語彙が組込みの最小表 (色 6 件 / ムード 5 件。業種は同梱の全 1,473 細分類) で、
+本文の hash 検証も強制しない。実カタログ (色 299 / ムード 69) を引けるのは正式配布物 (pin 指定) のみ。
 
 ### 環境変数
 
 | 変数 | 必須 | 説明 |
 | --- | --- | --- |
-| `GODD_DS_INDEX` | ○ | Design-Systems `index.json` の取込元 (ローカルパス / file: / http(s) URL)。 |
-| `GODD_DS_BASE` | | DESIGN.md 本文の解決 base。未指定なら `GODD_DS_INDEX` の所在から推定。 |
+| `GODD_DS_SNAPSHOT` | | `snapshot.json` (pin) の場所。未指定なら `main.js` の隣の `snapshot.json`。指定した pin が無い / 不正なら起動しない。 |
+| `GODD_DS_INDEX` | ○ (pin なし) | Design-Systems `index.json` の取込元 (ローカルパス / file: / http(s) URL)。正式配布物では同梱の `index.json` を使うため不要。 |
+| `GODD_DS_BASE` | | DESIGN.md 本文の解決 base。未指定なら (pin 指定時) pin の commit の raw URL、(pin なし) `GODD_DS_INDEX` の所在から推定。 |
 
 ### 公開ツール (tools/list)
 
@@ -150,6 +194,17 @@ GODD_DS_INDEX=./path/to/index.json node dist/mcp/main.js   # bin: godd-matrix-mc
 
 各ツールは共通入力 `{ industry: string; color?: string; mood?: string; tags?: string[] }` を受け取る。
 未解決軸がある場合、`compose` はプロンプトを合成せず候補を提示して `isError` を返す。
+
+- 3 ツールとも環境を変更しない参照系で、`readOnlyHint: true` / `destructiveHint: false` /
+  `idempotentHint: true` を宣言する (承認を要求するかどうかを決めるホストがこの注釈を読む)。
+  外部 (本文の raw URL、設定時は Generator) を読む `compose` だけ `openWorldHint: true`。
+  注釈が無いと、承認ポリシーが `never` の Codex (`codex exec`, 0.167.0 で確認) は呼び出しを
+  `MCP tool call requires approval, but approval policy is never` として拒否する。
+- カラー / ムードは、DS の slug (例: `lt-h17` / `trustworthy`) または日英の名称で指定する。
+  slug と JSIC コードは完全一致で常に 1 件に確定する。同じ名称を複数の slug / 細分類が共有する曖昧な入力
+  (例: 「ライトトーンの青」) は、任意の 1 件を選ばず未解決にして候補を返すので、候補の slug で再実行する。
+- index に無い軸の組合せ (未材化セル) は、Generator (`GENERATOR_RENDER_URL` / `GENERATOR_RENDER_API_KEY`)
+  が設定されていなければ `unavailable` として明示する (軸情報だけでプロンプトを合成し、本文は捏造しない)。
 
 ## HTTP トランスポート (issue #8, コードのみ・未デプロイ)
 

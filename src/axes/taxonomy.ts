@@ -10,6 +10,7 @@
  * - カラー (無彩色): `white` / `black` / `gray-{段階}`。
  * - ムード: 意味を表す英小文字 slug 例 `trustworthy` / `minimal`。
  */
+import { type ResolveOptions, pickBest } from "./best.js";
 import type { ColorKey, MoodKey } from "./index.js";
 import { normalizeKey } from "./normalize.js";
 
@@ -67,10 +68,12 @@ function scoreEntry<Slug extends string>(
 export class StaticSlugResolver<Slug extends string> implements SlugResolver<Slug> {
   private readonly entries: readonly TaxonomyEntry<Slug>[];
   private readonly bySlug: Map<string, TaxonomyEntry<Slug>>;
+  private readonly options: ResolveOptions;
 
-  constructor(entries: readonly TaxonomyEntry<Slug>[]) {
+  constructor(entries: readonly TaxonomyEntry<Slug>[], options: ResolveOptions = {}) {
     this.entries = entries;
     this.bySlug = new Map(entries.map((e) => [e.slug, e]));
+    this.options = options;
   }
 
   get(slug: Slug): TaxonomyEntry<Slug> | undefined {
@@ -87,7 +90,7 @@ export class StaticSlugResolver<Slug extends string> implements SlugResolver<Slu
       }
       candidates.sort((a, b) => b.score - a.score || a.entry.slug.localeCompare(b.entry.slug));
     }
-    return { query, best: candidates[0], candidates };
+    return { query, best: pickBest(candidates, this.options), candidates };
   }
 }
 
@@ -144,14 +147,20 @@ export const MINIMAL_MOODS: readonly TaxonomyEntry<MoodKey>[] = [
 
 /** カラー軸の既定決定器 (最小マスタ)。 */
 export class StaticColorResolver extends StaticSlugResolver<ColorKey> {
-  constructor(entries: readonly TaxonomyEntry<ColorKey>[] = MINIMAL_COLORS) {
-    super(entries);
+  constructor(
+    entries: readonly TaxonomyEntry<ColorKey>[] = MINIMAL_COLORS,
+    options: ResolveOptions = {},
+  ) {
+    super(entries, options);
   }
 }
 
 /** ムード軸の既定決定器 (最小マスタ)。 */
 export class StaticMoodResolver extends StaticSlugResolver<MoodKey> {
-  constructor(entries: readonly TaxonomyEntry<MoodKey>[] = MINIMAL_MOODS) {
-    super(entries);
+  constructor(
+    entries: readonly TaxonomyEntry<MoodKey>[] = MINIMAL_MOODS,
+    options: ResolveOptions = {},
+  ) {
+    super(entries, options);
   }
 }
