@@ -195,6 +195,7 @@ describe("createRuntime の snapshot 束縛", () => {
       loadOptions: { cache: false },
     });
     const old = await legacy.resolver.resolve(ctx);
+    expect(old.status).toBe("materialized");
     expect(old.status === "materialized" && old.document.hashVerified).toBe(false);
 
     const pinned = await createRuntime({
@@ -266,6 +267,8 @@ describe("createRuntime の軸 (taxonomy / jsic から作る resolver)", () => {
     expect(rt.axes).toBeDefined();
     const res = runDecideAxes({ industry: "7281", color: "lt-h18", mood: "elegant" }, rt);
     expect(res.context).toEqual({ jsic: "7281", color: "lt-h18", mood: "elegant" });
+    expect(rt.snapshot).toBeDefined();
+    expect(res.snapshot).toEqual(rt.snapshot);
   });
 
   it("snapshot なしの従来構成は軸 resolver を持たず、最小表のまま", async () => {
@@ -276,8 +279,8 @@ describe("createRuntime の軸 (taxonomy / jsic から作る resolver)", () => {
       loadOptions: { cache: false },
     });
     expect(rt.axes).toBeUndefined();
-    expect(runDecideAxes({ industry: "7281", color: "lt-h18", mood: "elegant" }, rt).resolved).toBe(
-      false,
-    );
+    const res = runDecideAxes({ industry: "7281", color: "lt-h18", mood: "elegant" }, rt);
+    expect(res.resolved).toBe(false);
+    expect("snapshot" in res).toBe(false);
   });
 });

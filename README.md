@@ -133,7 +133,8 @@ src/
 ### 正式配布物 (推奨)
 
 `.github/workflows/mcp-artifact.yml` が、stdio MCP の配布物 (zip) を生成してビルド来歴 (attestation)
-を付ける (手動実行、または生成物に関わる PR)。zip の中身:
+を付ける (手動実行、または生成物に関わる PR)。正式配布物は main からの手動実行で作ったもので、PR の実行が作る zip は
+試験ビルドです (確認手順は下の「受け取った側の確認と登録」)。zip の中身:
 
 | ファイル | 内容 |
 | --- | --- |
@@ -153,17 +154,36 @@ src/
   (環境変数指定の従来動作へ黙って戻らない)。
 - **実行時**: DESIGN.md 本文は取得のたびに `entry.hash` と照合し、不一致は拒否する。取得先は pin の commit に
   固定した raw URL で、`GODD_DS_BASE` で変えても検証は外れない。
-- ツールの結果の `snapshot` に、検証済みの出所 (commit と index / taxonomy / jsic の sha256) を載せる。
+- **対象外**: Generator (`GENERATOR_RENDER_URL` / `GENERATOR_RENDER_API_KEY`) を設定すると、index に無い組合せ
+  (未材化セル) の本文を外部から得て `provenance: "rendered"` で返す。この本文は pin の検証対象ではない
+  (検証するのは index に載る材化済みの本文だけ)。結果の `snapshot` は pin (軸と index) の出所で、rendered の本文の出所ではない。
+- 3 ツール (`compose` / `decide_axes` / `select_cells`) とも、結果の `snapshot` に検証済みの出所
+  (commit と index / taxonomy / jsic の sha256) を載せる。pin なしの従来構成では `snapshot` キー自体を付けない。
 
 受け取った側の確認と登録 (どちらのホストも同じ `main.js` を指す):
 
 ```bash
 unzip godd-matrix-mcp-<sha>.zip && cd godd-matrix-mcp
 sha256sum -c SHA256SUMS                                  # ファイルの改竄・欠落の検出
-gh attestation verify ../godd-matrix-mcp-<sha>.zip --repo AutoDevJapan/GoDD-Matrix   # ビルド来歴
+# ビルド来歴: 署名した workflow と、ビルド元の ref・コミットまで固定して確認する (正式配布物の場合)
+gh attestation verify ../godd-matrix-mcp-<sha>.zip --repo AutoDevJapan/GoDD-Matrix \
+  --signer-workflow AutoDevJapan/GoDD-Matrix/.github/workflows/mcp-artifact.yml \
+  --source-ref refs/heads/main --source-digest <sha>
 codex mcp add godd-matrix -- node "$PWD/main.js"         # Codex
 claude mcp add godd-matrix -- node "$PWD/main.js"        # Claude Code
 ```
+
+zip 名の `<sha>` は、その実行がビルドしたコミット (`GITHUB_SHA`) です。実行の種類で、確認に使う値が変わります。
+
+| 実行 | `--source-ref` | `<sha>` | 扱い |
+| --- | --- | --- | --- |
+| `main` からの手動実行 (`workflow_dispatch`) | `refs/heads/main` | main のコミット | 正式配布物 |
+| PR の実行 (生成物に関わる同一リポジトリの PR) | `refs/pull/<N>/merge` | PR の merge ref の合成コミット (PR の head でも main でもない) | 試験ビルド。配布しない |
+
+`--repo` だけの確認は、PR の試験ビルドにも成功します。試験ビルドを正式配布物と取り違えないよう、
+`--signer-workflow` / `--source-ref` / `--source-digest` で、署名した workflow とビルド元の ref・コミットまで
+固定して確認します。これらのフラグは gh のバージョンによっては無いので、`gh attestation verify --help` で
+確認してください ([gh attestation verify の手引き](https://cli.github.com/manual/gh_attestation_verify))。
 
 ### 開発用 (pin なし)
 
@@ -175,14 +195,17 @@ pnpm package:mcp --out ./out/godd-matrix-mcp                # 正式配布物を
 
 pin なしの従来構成は、軸の語彙が組込みの最小表 (色 6 件 / ムード 5 件。業種は同梱の全 1,473 細分類) で、
 本文の hash 検証も強制しない。実カタログ (色 299 / ムード 69) を引けるのは正式配布物 (pin 指定) のみ。
+正式配布物 (pin 指定) は、この最小表の別名 (例: 色の「ブルー」→ `h17b-lt`、ムードの「シンプル」→ `minimal`) を使わない。
 
 ### 環境変数
 
 | 変数 | 必須 | 説明 |
 | --- | --- | --- |
 | `GODD_DS_SNAPSHOT` | | `snapshot.json` (pin) の場所。未指定なら `main.js` の隣の `snapshot.json`。指定した pin が無い / 不正なら起動しない。 |
-| `GODD_DS_INDEX` | ○ (pin なし) | Design-Systems `index.json` の取込元 (ローカルパス / file: / http(s) URL)。正式配布物では同梱の `index.json` を使うため不要。 |
+| `GODD_DS_INDEX` | ○ (pin なし) | Design-Systems `index.json` の取込元 (ローカルパス / file: / http(s) URL)。正式配布物では同梱の `index.json` を使うため不要。配布物の `snapshot.json` が無い状態でこれを設定すると、pin の検証なしの従来動作で起動する (stderr に「pin なし」と出る)。 |
 | `GODD_DS_BASE` | | DESIGN.md 本文の解決 base。未指定なら (pin 指定時) pin の commit の raw URL、(pin なし) `GODD_DS_INDEX` の所在から推定。 |
+| `GENERATOR_RENDER_URL` | | 未材化セル (index に無い軸の組合せ) の Generator レンダー API ベース URL。**配布物でも**、設定すると、その組合せの `compose` が `POST <URL>/render` で軸の JSON (`jsic` / `color` / `mood`、あれば `tags`) を外部へ送る。返る本文は `provenance: "rendered"` で、pin の検証対象ではない。未設定なら未材化は `unavailable`。 |
+| `GENERATOR_RENDER_API_KEY` | | 同 API の認証キー (`x-api-key` ヘッダ)。`GENERATOR_RENDER_URL` と両方揃った場合のみ有効。 |
 
 ### 公開ツール (tools/list)
 
@@ -197,14 +220,19 @@ pin なしの従来構成は、軸の語彙が組込みの最小表 (色 6 件 /
 
 - 3 ツールとも環境を変更しない参照系で、`readOnlyHint: true` / `destructiveHint: false` /
   `idempotentHint: true` を宣言する (承認を要求するかどうかを決めるホストがこの注釈を読む)。
-  外部 (本文の raw URL、設定時は Generator) を読む `compose` だけ `openWorldHint: true`。
+  外部 (本文の raw URL、設定時は Generator) を読む `compose` だけ `openWorldHint: true`。Generator を設定した場合、
+  これらの注釈は「その Generator が環境を変えず、同じ入力に同じ結果を返す」前提の宣言になる。
   注釈が無いと、承認ポリシーが `never` の Codex (`codex exec`, 0.167.0 で確認) は呼び出しを
   `MCP tool call requires approval, but approval policy is never` として拒否する。
 - カラー / ムードは、DS の slug (例: `lt-h17` / `trustworthy`) または日英の名称で指定する。
   slug と JSIC コードは完全一致で常に 1 件に確定する。同じ名称を複数の slug / 細分類が共有する曖昧な入力
   (例: 「ライトトーンの青」) は、任意の 1 件を選ばず未解決にして候補を返すので、候補の slug で再実行する。
+  語彙のどの名称・slug にも一致しない日常語は、近い語を当てずに候補 0 の未解決になる
+  (現在の pin の例: 色の「ブルー」「ネイビー」、ムードの「シンプル」「上品」「クール」)。DS の slug か、語彙にある名称で指定する。
 - index に無い軸の組合せ (未材化セル) は、Generator (`GENERATOR_RENDER_URL` / `GENERATOR_RENDER_API_KEY`)
   が設定されていなければ `unavailable` として明示する (軸情報だけでプロンプトを合成し、本文は捏造しない)。
+  設定されていれば、その Generator へ軸の JSON を送り、返った本文を `provenance: "rendered"` で返す
+  (pin の検証対象外。結果の `snapshot` は pin のまま付く)。
 
 ## HTTP トランスポート (issue #8, コードのみ・未デプロイ)
 
@@ -251,3 +279,7 @@ URL でホストできるため、任意のサーバレス関数 / Node ラン�
 外部から取得する GoDD-Design-Systems のカタログ・`DESIGN.md`、配信されるフォント、
 依存パッケージには、それぞれの配布元のライセンス・出典表示が適用されます。
 本リポジトリのライセンスは、それらの利用条件や表示義務を置き換えません。
+
+業種の語彙 (`jsic.json`) は、総務省の「日本標準産業分類」(第14回改定) を出典とする公的分類です。`jsic.json` の
+`meta.source` に、出典 (総務省 / e-Stat) と、二次利用は政府標準利用規約 (CC BY 4.0 互換) に準拠する旨が記載されています。
+正式配布物はこのファイルをバイト同一で同梱するので、再配布するときは `meta` を削らずに保持してください。

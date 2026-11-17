@@ -89,7 +89,7 @@ function toBrief(input: MatrixBriefInput): DesignBrief {
 }
 
 /** runtime が検証済みの snapshot を持つときだけ、結果へ載せる断片を返す。 */
-function provenanceOf(rt: MatrixRuntime): { snapshot?: SnapshotProvenance } {
+function provenanceOf(rt: Pick<MatrixRuntime, "snapshot">): { snapshot?: SnapshotProvenance } {
   return rt.snapshot ? { snapshot: rt.snapshot } : {};
 }
 
@@ -151,6 +151,8 @@ export interface DecideAxesResult {
   unresolved: readonly AxisName[];
   /** 各軸の解決要約 (候補提示)。 */
   axes: AxesSummary;
+  /** 検証済み snapshot の出所 (正式配布のときだけ)。軸の候補はこの pin の語彙で解いたもの。 */
+  snapshot?: SnapshotProvenance;
 }
 
 /**
@@ -159,7 +161,7 @@ export interface DecideAxesResult {
  */
 export function runDecideAxes(
   input: MatrixBriefInput,
-  rt?: Pick<MatrixRuntime, "axes">,
+  rt?: Pick<MatrixRuntime, "axes" | "snapshot">,
 ): DecideAxesResult {
   const decision = decideAxes(toBrief(input), axisOptions(rt));
   return {
@@ -167,6 +169,7 @@ export function runDecideAxes(
     context: decision.context,
     unresolved: decision.unresolved,
     axes: summarizeAxes(decision.jsic, decision.color, decision.mood),
+    ...(rt ? provenanceOf(rt) : {}),
   };
 }
 

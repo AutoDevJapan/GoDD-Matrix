@@ -10,7 +10,7 @@ import { DesignBodyClient, DesignResolver } from "../ds/design.js";
 import type { DesignIndexEntry } from "../ds/types.js";
 import { MCP_TOOLS } from "./index.js";
 import { createMatrixServer } from "./server.js";
-import { type MatrixRuntime, runCompose, runSelectCells } from "./tools.js";
+import { type MatrixRuntime, runCompose, runDecideAxes, runSelectCells } from "./tools.js";
 
 const baseDir = fileURLToPath(new URL("../ds/__fixtures__", import.meta.url));
 const BODY_PATH = "design-md/7281/h17b-lt/trustworthy/DESIGN.md";
@@ -47,6 +47,16 @@ function makeRuntime(withSnapshot: boolean): MatrixRuntime {
 const resolvable = { industry: "コンサル", color: "ライトブルー", mood: "信頼" };
 const unresolvable = { industry: "存在しない業種xyz" };
 
+const TOOL_NAMES = [MCP_TOOLS.compose, MCP_TOOLS.decideAxes, MCP_TOOLS.selectCells];
+
+async function connect(runtime: MatrixRuntime): Promise<Client> {
+  const server = createMatrixServer(runtime);
+  const client = new Client({ name: "test-client", version: "0.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  return client;
+}
+
 describe("snapshot の出所 (provenance) を結果へ載せる", () => {
   it("compose は確定・未解決のどちらでも pin の同一性を返す", async () => {
     const rt = makeRuntime(true);
@@ -58,18 +68,36 @@ describe("snapshot の出所 (provenance) を結果へ載せる", () => {
     expect(runSelectCells(resolvable, makeRuntime(true)).snapshot).toEqual(snapshot);
   });
 
+  it("decide_axes も確定・未解決のどちらでも pin の同一性を返す", () => {
+    const rt = makeRuntime(true);
+    expect(runDecideAxes(resolvable, rt).snapshot).toEqual(snapshot);
+    expect(runDecideAxes(unresolvable, rt).snapshot).toEqual(snapshot);
+  });
+
   it("snapshot が無い runtime の結果には snapshot キー自体を付けない", async () => {
     const rt = makeRuntime(false);
     expect("snapshot" in (await runCompose(resolvable, rt))).toBe(false);
     expect("snapshot" in runSelectCells(resolvable, rt)).toBe(false);
+    expect("snapshot" in runDecideAxes(resolvable, rt)).toBe(false);
   });
 
-  it("MCP の tool 境界 (structuredContent) でも同じ値が返る", async () => {
-    const server = createMatrixServer(makeRuntime(true));
-    const client = new Client({ name: "test-client", version: "0.0.0" });
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-    const result = await client.callTool({ name: MCP_TOOLS.compose, arguments: resolvable });
-    expect((result.structuredContent as { snapshot?: unknown }).snapshot).toEqual(snapshot);
+  it("runtime を渡さない decide_axes (純関数としての呼び出し) にも snapshot キーを付けない", () => {
+    expect("snapshot" in runDecideAxes(resolvable)).toBe(false);
+  });
+
+  it("MCP の tool 境界 (structuredContent) でも 3 ツールとも同じ値が返る", async () => {
+    const client = await connect(makeRuntime(true));
+    for (const name of TOOL_NAMES) {
+      const result = await client.callTool({ name, arguments: resolvable });
+      expect((result.structuredContent as { snapshot?: unknown }).snapshot, name).toEqual(snapshot);
+    }
+  });
+
+  it("MCP の tool 境界でも、pin が無い runtime の結果には 3 ツールとも snapshot キーを付けない", async () => {
+    const client = await connect(makeRuntime(false));
+    for (const name of TOOL_NAMES) {
+      const result = await client.callTool({ name, arguments: resolvable });
+      expect("snapshot" in (result.structuredContent as object), name).toBe(false);
+    }
   });
 });

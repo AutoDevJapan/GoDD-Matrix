@@ -89,7 +89,7 @@ export function createMatrixServer(runtime: MatrixRuntime): McpServer {
       description:
         "要望から業種 (JSIC) / カラー / ムードの各軸を解決し、確定 context と未解決軸・候補を返す (副作用なし)。",
       inputSchema: briefShape,
-      // 組込みマスタだけで解く純粋計算。外部へは出ない。
+      // pin 指定時は pin の語彙、無ければ組込みマスタで解く純粋計算。外部へは出ない。
       annotations: { ...READ_ONLY_ANNOTATIONS, openWorldHint: false },
     },
     async (args) => toolResult(runDecideAxes(args, runtime)),
