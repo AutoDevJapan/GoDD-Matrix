@@ -114,3 +114,32 @@ describe("createMatrixServer", () => {
     expect(payload.unresolved).toContain("jsic");
   });
 });
+
+describe("MCP ツール注釈 (ホストの承認判定が読む hint)", () => {
+  // 3 ツールはいずれも環境を変更しない参照系。注釈が無いと、承認ポリシーが never の Codex
+  // (codex exec, 0.167.0 で確認) は「MCP tool call requires approval, but approval policy is never」
+  // として呼び出しを拒否する。注釈が読み取り専用を示せば、承認なしで呼べる。
+  it("3 ツールとも readOnlyHint=true / destructiveHint=false / idempotentHint=true を宣言する", async () => {
+    const client = await connectClient();
+    const { tools } = await client.listTools();
+    expect(tools).toHaveLength(3);
+    for (const tool of tools) {
+      expect(tool.annotations, tool.name).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      });
+    }
+  });
+
+  it("外部に取りに行く compose だけ openWorldHint=true、純粋計算の 2 ツールは false", async () => {
+    const client = await connectClient();
+    const { tools } = await client.listTools();
+    const open = Object.fromEntries(tools.map((t) => [t.name, t.annotations?.openWorldHint]));
+    expect(open).toEqual({
+      [MCP_TOOLS.compose]: true,
+      [MCP_TOOLS.decideAxes]: false,
+      [MCP_TOOLS.selectCells]: false,
+    });
+  });
+});

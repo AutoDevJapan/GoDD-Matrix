@@ -3,7 +3,7 @@
  * - index の {@link DesignIndexEntry.path} を base に対して解決し、本文を取得する。
  * - 取込元はローカルディレクトリ / file: / http(s) base URL。
  * - 解決済みロケーション単位で本文だけをインメモリキャッシュ。
- * - index の hash と本文 sha256 の一致を検証 (requireHash で不一致を致命化)。
+ * - index の hash と本文 sha256 の一致を、取得した生バイトで検証 (requireHash で不一致を致命化)。
  * - 未材化セル (index にエントリなし) は「未取得」として表現し、将来の
  *   Generator レンダーへフォールバックする受け口を interface で用意する
  *   (実呼び出しは issue #4)。
@@ -13,9 +13,12 @@ import path from "node:path";
 import type { AxisContext } from "../axes/index.js";
 import type { RenderRequest, RenderResult } from "../generator/index.js";
 import type { DesignIndexClient } from "./client.js";
-import { type FetchTextOptions, fetchText, isHttpUrl } from "./fetch.js";
+import { type FetchTextOptions, fetchBytes, isHttpUrl } from "./fetch.js";
 import type { DesignIndexEntry } from "./types.js";
 import { DesignIndexError } from "./validate.js";
+
+/** DESIGN.md 本文の取得上限 (4 MiB)。実データの最大は 14 KB 程度。 */
+export const MAX_DESIGN_BODY_BYTES = 4 * 1024 * 1024;
 
 /** DESIGN.md 本文の取得結果。 */
 export interface DesignDocument {
@@ -25,7 +28,7 @@ export interface DesignDocument {
   markdown: string;
   /** 解決済みの取得元 (絶対パス / URL)。 */
   source: string;
-  /** index の hash と本文 sha256 が一致したか。 */
+  /** index の hash と本文 (生バイト) の sha256 が一致したか。 */
   hashVerified: boolean;
 }
 
@@ -59,10 +62,15 @@ export function resolveDesignLocation(base: string, entryPath: string): string {
   return path.resolve(base, entryPath);
 }
 
-/** 本文の sha256 が index の hash (`sha256:{hex}`) に一致するか。 */
-export function verifyDesignHash(markdown: string, expected: string): boolean {
-  const digest = createHash("sha256").update(markdown, "utf8").digest("hex");
-  return `sha256:${digest}` === expected;
+/**
+ * 本文の sha256 が index の hash (`sha256:{hex}`) に一致するか。
+ * バイト列を渡せば取得した生バイトで照合する (文字列は UTF-8 に符号化して照合)。
+ */
+export function verifyDesignHash(content: string | Uint8Array, expected: string): boolean {
+  const hash = createHash("sha256");
+  if (typeof content === "string") hash.update(content, "utf8");
+  else hash.update(content);
+  return `sha256:${hash.digest("hex")}` === expected;
 }
 
 /**
@@ -78,7 +86,7 @@ export class DesignBodyClient {
    * outside this cache so callers that reference the same source cannot inherit one another's
    * identity or verification result.
    */
-  private readonly bodyCache = new Map<string, Promise<string>>();
+  private readonly bodyCache = new Map<string, Promise<Uint8Array>>();
 
   constructor(base: string, opts: DesignBodyOptions = {}) {
     this.base = base;
@@ -92,7 +100,7 @@ export class DesignBodyClient {
 
   /**
    * entry の DESIGN.md 本文を取得する。既定でロケーション単位にキャッシュする。
-   * @throws DesignIndexError 取得失敗、または requireHash 時の hash 不一致。
+   * @throws DesignIndexError 取得失敗・上限超過、または requireHash 時の hash 不一致。
    */
   async fetch(entry: DesignIndexEntry): Promise<DesignDocument> {
     const source = this.resolve(entry);
@@ -100,7 +108,7 @@ export class DesignBodyClient {
 
     let bodyPromise = useCache ? this.bodyCache.get(source) : undefined;
     if (!bodyPromise) {
-      bodyPromise = fetchText(source, this.opts);
+      bodyPromise = fetchBytes(source, { ...this.opts, maxBytes: MAX_DESIGN_BODY_BYTES });
       if (useCache) {
         this.bodyCache.set(source, bodyPromise);
         bodyPromise.catch(() => {
@@ -110,12 +118,12 @@ export class DesignBodyClient {
       }
     }
 
-    const markdown = await bodyPromise;
-    const hashVerified = verifyDesignHash(markdown, entry.hash);
+    const bytes = await bodyPromise;
+    const hashVerified = verifyDesignHash(bytes, entry.hash);
     if (this.opts.requireHash && !hashVerified) {
       throw new DesignIndexError(`DESIGN.md の hash 検証に失敗しました: ${entry.id} (${source})`);
     }
-    return { entry, markdown, source, hashVerified };
+    return { entry, markdown: new TextDecoder("utf-8").decode(bytes), source, hashVerified };
   }
 
   /** キャッシュを破棄する (entry 指定でその1件のみ)。 */

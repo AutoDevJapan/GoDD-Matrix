@@ -44,6 +44,12 @@ export {
 } from "./logger.js";
 export { createRuntime, DS_BASE_ENV, type RuntimeOptions } from "./runtime.js";
 export {
+  type DiscoveredSnapshot,
+  DS_SNAPSHOT_ENV,
+  discoverSnapshot,
+  SNAPSHOT_FILE_NAME,
+} from "./snapshot-source.js";
+export {
   type ComposeResult,
   type DecideAxesResult,
   type MatrixBriefInput,

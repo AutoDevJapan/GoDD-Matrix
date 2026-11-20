@@ -8,12 +8,20 @@
  *   に閉じ込め、本モジュール自体は決定論的な変換に徹する。
  * - 出力は JSON シリアライズ可能な DTO に整形し、MCP の structuredContent に載せる。
  */
-import { type AxisName, type DesignBrief, decideAxes, selectCells } from "../axes/decide.js";
+import {
+  type AxisName,
+  type AxisResolvers,
+  type DecideOptions,
+  type DesignBrief,
+  decideAxes,
+  selectCells,
+} from "../axes/decide.js";
 import type { AxisContext } from "../axes/index.js";
 import type { JsicResolution } from "../axes/jsic.js";
 import type { TaxonomyResolution } from "../axes/taxonomy.js";
 import type { DesignIndexClient } from "../ds/client.js";
 import type { DesignResolver } from "../ds/design.js";
+import type { SnapshotProvenance } from "../ds/snapshot.js";
 import type { DesignIndexEntry } from "../ds/types.js";
 import { type ComposedPrompt, synthesizePrompt } from "../prompt/synthesize.js";
 
@@ -36,6 +44,13 @@ export interface MatrixBriefInput {
 export interface MatrixRuntime {
   index: DesignIndexClient;
   resolver: DesignResolver;
+  /**
+   * 正式配布 (snapshot pin) の語彙 (taxonomy / jsic) から作った軸 resolver。
+   * pin なしの従来構成では undefined (組込みの最小表で軸を決める)。
+   */
+  axes?: AxisResolvers;
+  /** 正式配布 (snapshot pin) で検証済みの出所。pin なしの従来構成では undefined。 */
+  snapshot?: SnapshotProvenance;
 }
 
 /** JSIC 軸候補の要約 (serializable)。 */
@@ -71,6 +86,16 @@ function toBrief(input: MatrixBriefInput): DesignBrief {
     ...(input.mood !== undefined ? { mood: input.mood } : {}),
     ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
   };
+}
+
+/** runtime が検証済みの snapshot を持つときだけ、結果へ載せる断片を返す。 */
+function provenanceOf(rt: Pick<MatrixRuntime, "snapshot">): { snapshot?: SnapshotProvenance } {
+  return rt.snapshot ? { snapshot: rt.snapshot } : {};
+}
+
+/** runtime が軸 resolver を持つときだけ、軸決定へ渡す (無ければ組込みの最小表)。 */
+function axisOptions(rt: Pick<MatrixRuntime, "axes"> | undefined): DecideOptions {
+  return rt?.axes ? { resolvers: rt.axes } : {};
 }
 
 function summarizeJsic(r: JsicResolution): AxesSummary["jsic"] {
@@ -126,19 +151,25 @@ export interface DecideAxesResult {
   unresolved: readonly AxisName[];
   /** 各軸の解決要約 (候補提示)。 */
   axes: AxesSummary;
+  /** 検証済み snapshot の出所 (正式配布のときだけ)。軸の候補はこの pin の語彙で解いたもの。 */
+  snapshot?: SnapshotProvenance;
 }
 
 /**
  * 要望 → 軸決定 (#5)。副作用なし・決定論。
  * カラー / ムード未指定時の既定適用は行わず、未解決は明示する。
  */
-export function runDecideAxes(input: MatrixBriefInput): DecideAxesResult {
-  const decision = decideAxes(toBrief(input));
+export function runDecideAxes(
+  input: MatrixBriefInput,
+  rt?: Pick<MatrixRuntime, "axes" | "snapshot">,
+): DecideAxesResult {
+  const decision = decideAxes(toBrief(input), axisOptions(rt));
   return {
     resolved: decision.context !== undefined,
     context: decision.context,
     unresolved: decision.unresolved,
     axes: summarizeAxes(decision.jsic, decision.color, decision.mood),
+    ...(rt ? provenanceOf(rt) : {}),
   };
 }
 
@@ -149,16 +180,19 @@ export interface SelectCellsResult {
   unresolved: readonly AxisName[];
   /** context に一致する index の候補セル (未確定なら空)。 */
   candidates: readonly DesignIndexEntry[];
+  /** 検証済み snapshot の出所 (正式配布のときだけ)。 */
+  snapshot?: SnapshotProvenance;
 }
 
 /** 要望 → 軸決定 → index 候補セル選定 (#5 + #2)。 */
 export function runSelectCells(input: MatrixBriefInput, rt: MatrixRuntime): SelectCellsResult {
-  const selection = selectCells(toBrief(input), rt.index);
+  const selection = selectCells(toBrief(input), rt.index, axisOptions(rt));
   return {
     resolved: selection.context !== undefined,
     context: selection.context,
     unresolved: selection.decision.unresolved,
     candidates: selection.candidates,
+    ...provenanceOf(rt),
   };
 }
 
@@ -171,11 +205,14 @@ export type ComposeResult =
       candidateCount: number;
       /** Claude 用プロンプト (system / user) と出所・注意メタ。 */
       prompt: ComposedPrompt;
+      /** 検証済み snapshot の出所 (正式配布のときだけ)。 */
+      snapshot?: SnapshotProvenance;
     }
   | {
       resolved: false;
       unresolved: readonly AxisName[];
       axes: AxesSummary;
+      snapshot?: SnapshotProvenance;
     };
 
 /**
@@ -188,7 +225,7 @@ export async function runCompose(
   rt: MatrixRuntime,
 ): Promise<ComposeResult> {
   const brief = toBrief(input);
-  const selection = selectCells(brief, rt.index);
+  const selection = selectCells(brief, rt.index, axisOptions(rt));
   const ctx = selection.context;
   if (ctx === undefined) {
     const d = selection.decision;
@@ -196,6 +233,7 @@ export async function runCompose(
       resolved: false,
       unresolved: d.unresolved,
       axes: summarizeAxes(d.jsic, d.color, d.mood),
+      ...provenanceOf(rt),
     };
   }
   const resolved = await rt.resolver.resolve(ctx);
@@ -205,5 +243,6 @@ export async function runCompose(
     context: ctx,
     candidateCount: selection.candidates.length,
     prompt,
+    ...provenanceOf(rt),
   };
 }

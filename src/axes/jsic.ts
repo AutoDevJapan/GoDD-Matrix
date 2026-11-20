@@ -9,8 +9,9 @@
  * 表記ゆれや口語 (「経営コンサル」「本屋」「SaaS」等) を実在コードへ寄せる。
  * カタログは `scripts/gen-jsic-catalog.mjs` で DS から再生成できる。
  */
+import { type ResolveOptions, pickBest } from "./best.js";
 import type { JsicCode } from "./index.js";
-import { JSIC_SUBCLASSES } from "./jsic-catalog.js";
+import { JSIC_SUBCLASSES, type JsicSubclass } from "./jsic-catalog.js";
 import { normalizeKey } from "./normalize.js";
 
 /** JSIC 細分類マスタの 1 エントリ。 */
@@ -91,10 +92,12 @@ function scoreEntry(entry: JsicEntry, q: string): JsicCandidate | undefined {
 export class StaticJsicResolver implements JsicResolver {
   private readonly entries: readonly JsicEntry[];
   private readonly byCode: Map<string, JsicEntry>;
+  private readonly options: ResolveOptions;
 
-  constructor(entries: readonly JsicEntry[] = JSIC_CATALOG) {
+  constructor(entries: readonly JsicEntry[] = JSIC_CATALOG, options: ResolveOptions = {}) {
     this.entries = entries;
     this.byCode = new Map(entries.map((e) => [e.code, e]));
+    this.options = options;
   }
 
   get(code: JsicCode): JsicEntry | undefined {
@@ -111,7 +114,7 @@ export class StaticJsicResolver implements JsicResolver {
       }
       candidates.sort((a, b) => b.score - a.score || a.entry.code.localeCompare(b.entry.code));
     }
-    return { query, best: candidates[0], candidates };
+    return { query, best: pickBest(candidates, this.options), candidates };
   }
 }
 
@@ -165,9 +168,12 @@ export const JSIC_OVERLAY: Readonly<
   },
 };
 
-/** DS 細分類 + overlay をマージして {@link JsicEntry} 群を構築する。 */
-function buildCatalog(): readonly JsicEntry[] {
-  return JSIC_SUBCLASSES.map((s) => {
+/**
+ * 細分類の一覧 + overlay をマージして {@link JsicEntry} 群を構築する。
+ * overlay は渡した細分類に実在するコードにだけ付く (存在しないコードを作らない)。
+ */
+export function buildJsicCatalog(subclasses: readonly JsicSubclass[]): readonly JsicEntry[] {
+  return subclasses.map((s) => {
     const overlay = JSIC_OVERLAY[s.code];
     return {
       code: s.code,
@@ -182,7 +188,7 @@ function buildCatalog(): readonly JsicEntry[] {
  * 既定の JSIC 母集合 (DS 由来の全細分類 + overlay)。
  * `resolve` の探索対象であり、ここに存在するコードのみ返す。
  */
-export const JSIC_CATALOG: readonly JsicEntry[] = buildCatalog();
+export const JSIC_CATALOG: readonly JsicEntry[] = buildJsicCatalog(JSIC_SUBCLASSES);
 
 /**
  * 代表的な業種の curated サブセット ({@link JSIC_CATALOG} のうち overlay 付きのもの)。

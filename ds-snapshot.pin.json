@@ -1,0 +1,27 @@
+{
+  "schema": "godd-matrix-ds-snapshot-v1",
+  "repository": "AutoDevJapan/GoDD-Design-Systems",
+  "commit": "7d3ed9a3d171fee1b3f63f62ac73b71e102e8892",
+  "index": {
+    "path": "index.json",
+    "bytes": 32815467,
+    "sha256": "62eb8dbde50783aba4fc15f4578a979342cf2cb06fa40bc03c67e2412c879fe0",
+    "gitBlob": "547a15e4b588189758ab6d68ef06cc957359d846",
+    "entryCount": 51729
+  },
+  "taxonomy": {
+    "path": "taxonomy.json",
+    "bytes": 66486,
+    "sha256": "ac72de4725369093d2171fe69b9076ff03ca0a364ea5ba21d29c6637ea08a88e",
+    "gitBlob": "ac395cdc3e91336456d5451fbf489940e2b2c9a7",
+    "colorCount": 299,
+    "moodCount": 69
+  },
+  "jsic": {
+    "path": "jsic.json",
+    "bytes": 427466,
+    "sha256": "aae7d353c92cdc17d115ea11ac1a5493041222c1edc0d81722dc00753e053034",
+    "gitBlob": "17deb3e3d144e426f4bdf0718230df3f9cfc4b40",
+    "subclassCount": 1473
+  }
+}
