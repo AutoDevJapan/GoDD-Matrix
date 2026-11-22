@@ -7,6 +7,7 @@ import {
   writeColorEditorMarker,
 } from "./catalog-arrival.js";
 import { applyCatalogUrlState, parseCatalogUrlState } from "./catalog-url-state.js";
+import { copyToClipboard } from "./clipboard.js";
 import { buildDesignPreviewSpec, previewTextColor } from "./design-preview.js";
 import { editableSwatchesFromTokens, resolveDetailColorOverrides } from "./detail-color-state.js";
 import {
@@ -906,28 +907,12 @@ function showToast(msg: string): void {
   }, 2200);
 }
 
-// Copy helper
+// Copy helper: the standard clipboard write comes first, a selection-based copy is the fallback,
+// and the toast reports the outcome that actually happened.
 function copyText(text: string, toastMsg: string): void {
-  navigator.clipboard
-    .writeText(text)
-    .then(() => showToast(toastMsg))
-    .catch(() => {
-      // Fallback
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.position = "fixed";
-      ta.style.top = "-1000px";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-        showToast(toastMsg);
-      } catch {
-        showToast(TRANSLATIONS[currentLocale].toastCopyFailed);
-      }
-      document.body.removeChild(ta);
-    });
+  void copyToClipboard(text, { navigator, document }).then((copied) => {
+    showToast(copied ? toastMsg : TRANSLATIONS[currentLocale].toastCopyFailed);
+  });
 }
 
 // Dynamic UI Text Localization updates
