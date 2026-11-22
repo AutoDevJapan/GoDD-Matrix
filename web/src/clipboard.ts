@@ -20,7 +20,9 @@ export interface ClipboardEnvironment {
 
 /**
  * Selection-based copy through a temporary textarea. It is true only when `execCommand("copy")`
- * reports success, and the textarea this call attached is always taken out again.
+ * reports success. The textarea this call attached is always taken out again, wherever it is by
+ * then: the `copy` event is dispatched while the command runs, and a page listener may have moved
+ * or removed the element.
  */
 function copyBySelection(text: string, document: Document): boolean {
   let attached: HTMLTextAreaElement | undefined;
@@ -37,13 +39,9 @@ function copyBySelection(text: string, document: Document): boolean {
   } catch {
     return false;
   } finally {
-    if (attached !== undefined) {
-      try {
-        document.body.removeChild(attached);
-      } catch {
-        // The page already detached it; nothing else is touched.
-      }
-    }
+    // `remove()` takes the element out of wherever it is and does nothing when it is already
+    // detached, so only this textarea is touched.
+    attached?.remove();
   }
 }
 
@@ -52,7 +50,8 @@ function copyBySelection(text: string, document: Document): boolean {
  *
  * The standard write starts synchronously, in the turn of the click, so the browser still sees the
  * user gesture. Without the API the selection-based copy runs in the same turn; after a refusal it
- * runs once the rejection arrives. The promise never rejects.
+ * runs once the rejection arrives. Refusals and page-side failures come back as `false` and do not
+ * reject the promise.
  */
 export async function copyToClipboard(
   text: string,

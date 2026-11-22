@@ -10,9 +10,25 @@ type WriteMode = "resolves" | "rejects" | "throws" | "unusable" | "absent";
 /** What `document.execCommand("copy")` does in a scenario. */
 type CopyCommand = "copies" | "refuses" | "throws";
 /** A page operation that fails while the selection-based copy is under way. */
-type PageFault = "append" | "select" | "remove";
+type PageFault = "append" | "select";
+/** What a page listener does to the textarea while the `copy` event is dispatched. */
+type CopyListener = "moves" | "detaches";
 
-interface FakeTextarea {
+/**
+ * The part of a DOM node that the helper can reach: where it is attached, its children and its
+ * removal.
+ */
+interface FakeNode {
+  readonly name: string;
+  container: FakeNode | null;
+  readonly parentNode: FakeNode | null;
+  readonly children: FakeNode[];
+  appendChild(child: FakeNode): FakeNode;
+  removeChild(child: FakeNode): FakeNode;
+  remove(): void;
+}
+
+interface FakeTextarea extends FakeNode {
   value: string;
   selected: boolean;
   readonly style: { position: string; top: string };
@@ -25,6 +41,7 @@ interface Scenario {
   readonly write: WriteMode;
   readonly command?: CopyCommand;
   readonly fault?: PageFault;
+  readonly duringCopy?: CopyListener;
 }
 
 /** The writer is bound to its owner like the browser one: an unbound call throws. */
@@ -41,15 +58,73 @@ function clipboardWith(written: string[], behavior: "resolves" | "rejects" | "th
   };
 }
 
-/** A page whose clipboard, textarea lifecycle and body children can all be observed. */
-function fakePage({ write, command = "copies", fault }: Scenario) {
+function names(container: FakeNode): string[] {
+  return container.children.map((child) => child.name);
+}
+
+/**
+ * A page whose clipboard, node tree and `copy` event can all be observed. The tree follows the
+ * DOM rules the helper depends on: appending moves a node away from where it was, `removeChild`
+ * throws when the node is not a child of its receiver, and `remove()` does nothing for a node that
+ * is not attached.
+ */
+function fakePage({ write, command = "copies", fault, duringCopy }: Scenario) {
   const events: string[] = [];
   const written: string[] = [];
   const created: FakeTextarea[] = [];
-  const removed: unknown[] = [];
+  const removed: FakeNode[] = [];
   const atCopy: Array<{ value?: string; selected?: boolean; attached: boolean }> = [];
-  const bystander = { id: "existing-page-node" };
-  const children: unknown[] = [bystander];
+
+  const detach = (child: FakeNode): void => {
+    const from = child.container;
+    if (from === null) return;
+    from.children.splice(from.children.indexOf(child), 1);
+    child.container = null;
+  };
+  const takeOut = (child: FakeNode): void => {
+    detach(child);
+    events.push(child.name === "textarea" ? "remove" : `remove ${child.name}`);
+    removed.push(child);
+  };
+  const node = (name: string): FakeNode => {
+    const self: FakeNode = {
+      name,
+      container: null,
+      get parentNode() {
+        return self.container;
+      },
+      children: [],
+      appendChild(child) {
+        detach(child);
+        self.children.push(child);
+        child.container = self;
+        return child;
+      },
+      removeChild(child) {
+        if (child.container !== self) throw new Error("NotFoundError");
+        takeOut(child);
+        return child;
+      },
+      remove() {
+        if (self.container !== null) takeOut(self);
+      },
+    };
+    return self;
+  };
+
+  const root = node("root");
+  const body = node("body");
+  body.appendChild(node("bystander"));
+  const elsewhere = node("elsewhere");
+  elsewhere.appendChild(node("elsewhere-node"));
+  root.appendChild(body);
+  root.appendChild(elsewhere);
+  const appendToBody = body.appendChild;
+  body.appendChild = (child) => {
+    events.push("append");
+    if (fault === "append") throw new Error("the page refused the node");
+    return appendToBody(child);
+  };
 
   const navigators = {
     resolves: { clipboard: clipboardWith(written, "resolves") },
@@ -60,14 +135,15 @@ function fakePage({ write, command = "copies", fault }: Scenario) {
   };
 
   const pageDocument = {
+    body,
     createElement(tag: string): FakeTextarea {
       if (tag !== "textarea") throw new Error(`unexpected element ${tag}`);
-      const area: FakeTextarea = {
+      const area: FakeTextarea = Object.assign(node("textarea"), {
         value: "",
         selected: false,
         style: { position: "", top: "" },
         attributes: new Map<string, string>(),
-        setAttribute(name, value) {
+        setAttribute(name: string, value: string) {
           area.attributes.set(name, value);
         },
         select() {
@@ -75,25 +151,9 @@ function fakePage({ write, command = "copies", fault }: Scenario) {
           if (fault === "select") throw new Error("the selection was refused");
           area.selected = true;
         },
-      };
+      });
       created.push(area);
       return area;
-    },
-    body: {
-      appendChild(node: unknown): unknown {
-        events.push("append");
-        if (fault === "append") throw new Error("the page refused the node");
-        children.push(node);
-        return node;
-      },
-      removeChild(node: unknown): unknown {
-        const index = children.indexOf(node);
-        if (fault === "remove" || index < 0) throw new Error("NotFoundError");
-        events.push("remove");
-        removed.push(node);
-        children.splice(index, 1);
-        return node;
-      },
     },
     execCommand(name: string): boolean {
       events.push(`exec ${name}`);
@@ -101,8 +161,16 @@ function fakePage({ write, command = "copies", fault }: Scenario) {
       atCopy.push({
         value: target?.value,
         selected: target?.selected,
-        attached: target !== undefined && children.includes(target),
+        attached: target !== undefined && target.container === body,
       });
+      if (target !== undefined && duringCopy === "moves") {
+        events.push("page moves it");
+        elsewhere.appendChild(target);
+      }
+      if (target !== undefined && duringCopy === "detaches") {
+        events.push("page detaches it");
+        detach(target);
+      }
       if (command === "throws") throw new Error("the copy command failed");
       return command === "copies";
     },
@@ -112,7 +180,7 @@ function fakePage({ write, command = "copies", fault }: Scenario) {
     navigator: navigators[write],
     document: pageDocument,
   } as unknown as ClipboardEnvironment;
-  return { environment, events, written, created, removed, atCopy, bystander, children };
+  return { environment, events, written, created, removed, atCopy, root, body, elsewhere };
 }
 
 describe("copyToClipboard", () => {
@@ -124,7 +192,7 @@ describe("copyToClipboard", () => {
     expect(page.written).toEqual([PROMPT]);
     expect(page.created).toHaveLength(0);
     expect(page.events).toEqual([]);
-    expect(page.children).toEqual([page.bystander]);
+    expect(names(page.body)).toEqual(["bystander"]);
   });
 
   const unavailableWrites = [
@@ -156,7 +224,7 @@ describe("copyToClipboard", () => {
         expect(page.atCopy).toEqual([{ value: PROMPT, selected: true, attached: true }]);
         expect(page.removed).toHaveLength(1);
         expect(page.removed[0]).toBe(area);
-        expect(page.children).toEqual([page.bystander]);
+        expect(names(page.body)).toEqual(["bystander"]);
       });
     }
   }
@@ -168,7 +236,7 @@ describe("copyToClipboard", () => {
 
     expect(page.events).toEqual(["append"]);
     expect(page.removed).toHaveLength(0);
-    expect(page.children).toEqual([page.bystander]);
+    expect(names(page.body)).toEqual(["bystander"]);
   });
 
   it("takes the textarea out again when selecting it fails", async () => {
@@ -177,16 +245,44 @@ describe("copyToClipboard", () => {
     await expect(copyToClipboard(PROMPT, page.environment)).resolves.toBe(false);
 
     expect(page.events).toEqual(["append", "select", "remove"]);
-    expect(page.children).toEqual([page.bystander]);
+    expect(names(page.body)).toEqual(["bystander"]);
   });
 
-  it("keeps a confirmed copy when the page already dropped the textarea", async () => {
-    const page = fakePage({ write: "absent", command: "copies", fault: "remove" });
+  const outcomes = [
+    ["copies", true, "succeeds"],
+    ["refuses", false, "returns false"],
+  ] as const;
 
-    await expect(copyToClipboard(PROMPT, page.environment)).resolves.toBe(true);
+  for (const [command, copied, outcome] of outcomes) {
+    it(`removes only its own textarea after a copy listener moved it elsewhere and the copy command ${outcome}`, async () => {
+      const page = fakePage({ write: "absent", command, duringCopy: "moves" });
 
-    expect(page.events).toEqual(["append", "select", "exec copy"]);
-  });
+      await expect(copyToClipboard(PROMPT, page.environment)).resolves.toBe(copied);
+
+      expect(page.events).toEqual(["append", "select", "exec copy", "page moves it", "remove"]);
+      const [area] = page.created;
+      expect(area?.container).toBeNull();
+      expect(page.removed).toHaveLength(1);
+      expect(page.removed[0]).toBe(area);
+      expect(names(page.body)).toEqual(["bystander"]);
+      expect(names(page.elsewhere)).toEqual(["elsewhere-node"]);
+      expect(names(page.root)).toEqual(["body", "elsewhere"]);
+    });
+
+    it(`has nothing left to remove after a copy listener detached the textarea and the copy command ${outcome}`, async () => {
+      const page = fakePage({ write: "absent", command, duringCopy: "detaches" });
+
+      await expect(copyToClipboard(PROMPT, page.environment)).resolves.toBe(copied);
+
+      expect(page.events).toEqual(["append", "select", "exec copy", "page detaches it"]);
+      const [area] = page.created;
+      expect(area?.container).toBeNull();
+      expect(page.removed).toHaveLength(0);
+      expect(names(page.body)).toEqual(["bystander"]);
+      expect(names(page.elsewhere)).toEqual(["elsewhere-node"]);
+      expect(names(page.root)).toEqual(["body", "elsewhere"]);
+    });
+  }
 
   it("starts the standard write in the turn of the click", async () => {
     const page = fakePage({ write: "resolves" });
