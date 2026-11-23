@@ -76,7 +76,16 @@ that preserves this layout. `scripts/plan-mcp-hosts.mjs` imports
 dependencies. A fresh source checkout without that build is not ready to run the planner.
 If the matching script or compiled files are missing, stop plan generation and report the missing
 planner prerequisite through the normal source/build or distribution route; do not continue with
-an incomplete helper. No separately distributed planner is asserted to be available here.
+an incomplete helper. The existing quality workflow retains a separate
+`godd-matrix-planner-<checkout-sha>-<attempt>` artifact after its successful `Build (tsc)` step.
+That artifact keeps `scripts/plan-mcp-hosts.mjs`, its two compiled `dist/release` modules, a root
+`package.json`, the consumer module template and the license, plus `SOURCE.json` and `SHA256SUMS`.
+The root package metadata is the same fixed 18-byte module scope. Receive this helper only through
+the normal authenticated artifact operation in that host, check the server run/source tuple against
+`SOURCE.json`, then verify `SHA256SUMS` before use. These checks identify the helper; they do not
+verify a build signature or grant execution. Successful `tsc`, an artifact listing or this guide
+alone does not prove the helper was delivered. If the normal operation is unavailable, retain that
+missing prerequisite; do not substitute a build of the formal MCP server or retry a refused route.
 
 The retained nine-file MCP server artifact contains no planner. Building this separate helper in
 the source checkout is distinct from rebuilding that artifact: keep the accepted nine files
