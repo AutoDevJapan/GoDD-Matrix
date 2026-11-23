@@ -75,6 +75,44 @@ jobs:
       - name: Build (tsc)
         run: pnpm build
 
+      - name: Stage compiled MCP registration planner
+        env:
+          PLANNER_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PLANNER_SOURCE_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]
+          planner="$RUNNER_TEMP/godd-matrix-planner"
+          mkdir -- "$planner"
+          mkdir -- "$planner/scripts" "$planner/dist" "$planner/dist/release" "$planner/documents"
+          for file in scripts/plan-mcp-hosts.mjs dist/release/host-registration-cli.js dist/release/host-registration.js documents/mcp-formal-module-scope.package.json.template LICENSE; do
+            [[ -f "$file" && ! -L "$file" ]]
+            cp -- "$file" "$planner/$file"
+            cmp -- "$file" "$planner/$file"
+          done
+          printf '%s  %s\n' \
+            1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae \
+            "$planner/documents/mcp-formal-module-scope.package.json.template" | sha256sum --check --strict
+          cp -- "$planner/documents/mcp-formal-module-scope.package.json.template" "$planner/package.json"
+          cmp -- "$planner/package.json" "$planner/documents/mcp-formal-module-scope.package.json.template"
+          printf '{"schema":"godd-matrix-planner-build-v1","repository":"AutoDevJapan/GoDD-Matrix","checkout_sha":"%s","source_head":"%s","run_id":%s,"attempt":%s,"workflow":".github/workflows/ci.yml","build_step":"Build (tsc)"}\n' \
+            "$GITHUB_SHA" "$PLANNER_SOURCE_HEAD" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$planner/SOURCE.json"
+          (
+            cd "$planner"
+            sha256sum LICENSE package.json scripts/plan-mcp-hosts.mjs dist/release/host-registration-cli.js dist/release/host-registration.js documents/mcp-formal-module-scope.package.json.template SOURCE.json > SHA256SUMS
+            sha256sum --check --strict SHA256SUMS
+          )
+
+      - name: Retain compiled MCP registration planner
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: godd-matrix-planner-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/godd-matrix-planner/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build static web
         run: pnpm build:web
 
