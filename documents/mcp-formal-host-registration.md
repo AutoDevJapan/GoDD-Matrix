@@ -35,11 +35,16 @@ feeding the server through stdin would also consume the MCP protocol pipe.
 
 Use a dedicated, normally owned consumer directory whose direct child is the already accepted
 `godd-matrix-mcp` directory. The immediate parent `package.json` must contain exactly the bytes
-of [the consumer module metadata](mcp-formal-module-scope.package.json):
+of [the consumer module metadata](mcp-formal-module-scope.package.json.template):
 
 ```json
 {"type":"module"}
 ```
+
+The `.json.template` is literal UTF-8 data, not an installed package manifest. Normal setup
+places its unchanged bytes at the dedicated immediate parent as `package.json`; the CLI always
+reads that installed filename. The template suffix keeps JSON auto-formatting from changing the
+fixed data. Do not use the template filename as the installed module metadata.
 
 The file includes one final LF: 18 bytes, SHA-256
 `1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae`.

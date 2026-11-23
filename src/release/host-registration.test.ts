@@ -1,14 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { parseRegistrationArgs, runHostRegistrationCli } from "./host-registration-cli.js";
 import {
-  assertFormalModuleScope,
   FORMAL_MCP_FILES,
   FORMAL_MCP_MODULE_SCOPE,
   FORMAL_MCP_RELEASE,
+  assertFormalModuleScope,
   formatHostRegistration,
   planFormalHostRegistration,
   registrationLocations,
 } from "./host-registration.js";
-import { parseRegistrationArgs, runHostRegistrationCli } from "./host-registration-cli.js";
 
 const options = {
   platform: "posix" as const,
@@ -46,7 +47,10 @@ describe("formal host registration is a text plan, not admission", () => {
     expect(moduleScopeBytes.byteLength).toBe(18);
     expect(formatHostRegistration(options).entry).toBe(`${options.artifactDirectory}/main.js`);
     expect(() =>
-      registrationLocations({ ...options, artifactDirectory: "/work/node_modules/godd-matrix-mcp" }),
+      registrationLocations({
+        ...options,
+        artifactDirectory: "/work/node_modules/godd-matrix-mcp",
+      }),
     ).toThrow("node_modules");
     expect(() => registrationLocations({ ...options, artifactDirectory: "/" })).toThrow(
       "separate parent module scope",
@@ -147,7 +151,7 @@ describe("formal host registration is a text plan, not admission", () => {
   it.each([
     undefined,
     null,
-    "{\"type\":\"module\"}\n",
+    '{"type":"module"}\n',
     Buffer.from("{}\n"),
     Buffer.from('{"type":"commonjs"}\n'),
     Buffer.from('{"type":"module"}'),
@@ -156,6 +160,18 @@ describe("formal host registration is a text plan, not admission", () => {
     Buffer.from('{"type":"module","type":"commonjs"}\n'),
   ])("does not accept missing, alternate or ambiguous parent metadata: %j", (bytes) => {
     expect(() => assertFormalModuleScope(bytes)).toThrow("parent module metadata");
+  });
+
+  it("keeps the literal template separate from its installed package.json name", async () => {
+    const template = await readFile(
+      new URL("../../documents/mcp-formal-module-scope.package.json.template", import.meta.url),
+    );
+    expect(template).toEqual(moduleScopeBytes);
+    expect(template.byteLength).toBe(FORMAL_MCP_MODULE_SCOPE.bytes);
+    expect(() => assertFormalModuleScope(template)).not.toThrow();
+    expect(registrationLocations(options).moduleScopeFile).toBe(
+      "/work/accepted release/package.json",
+    );
   });
 
   it("keeps the fixed main source and all nine exact file pins", () => {
@@ -199,6 +215,17 @@ describe("formal host registration is a text plan, not admission", () => {
     "refuses unresolved artifact path %j",
     (artifactDirectory) => {
       expect(() => registrationLocations({ ...options, artifactDirectory })).toThrow();
+    },
+  );
+
+  it.each([...Array.from({ length: 32 }, (_, code) => code), 0x7f])(
+    "rejects control code %j in each registration path",
+    (code) => {
+      const control = String.fromCharCode(code);
+      for (const field of ["artifactDirectory", "projectDirectory", "nodeCommand"] as const) {
+        const changed = { ...options, [field]: `/work/a${control}b/node` };
+        expect(() => registrationLocations(changed)).toThrow("explicit absolute path");
+      }
     },
   );
 

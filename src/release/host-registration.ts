@@ -96,6 +96,14 @@ export interface HostRegistrationOptions {
   readonly nodeCommand: string;
 }
 
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 function absolutePath(value: string, platform: "posix" | "win32", field: string): string {
   const syntax = platform === "win32" ? path.win32 : path.posix;
   if (
@@ -103,7 +111,7 @@ function absolutePath(value: string, platform: "posix" | "win32", field: string)
     value.length === 0 ||
     value.length > 8192 ||
     value.trim() !== value ||
-    /[\u0000-\u001f\u007f]/u.test(value) ||
+    hasControlCharacter(value) ||
     value.includes("${") ||
     /[<>]/u.test(value) ||
     /(?:^|[\\/])\.\.?(?:[\\/]|$)/u.test(value) ||
@@ -145,9 +153,8 @@ export function registrationLocations(options: HostRegistrationOptions) {
   // Node 20 ESM stops on the literal URL suffix, including names such as consumer_node_modules.
   const scopeNames = [syntax.basename(artifactDirectory), syntax.basename(moduleScopeDirectory)];
   if (
-    scopeNames.some(
-      (name) =>
-        (options.platform === "win32" ? name.toLowerCase() : name).endsWith("node_modules"),
+    scopeNames.some((name) =>
+      (options.platform === "win32" ? name.toLowerCase() : name).endsWith("node_modules"),
     )
   ) {
     throw new Error("host registration: the module scope must not stop at node_modules");
@@ -171,9 +178,15 @@ export function formatHostRegistration(options: HostRegistrationOptions) {
     GENERATOR_RENDER_API_KEY: "",
     NODE_OPTIONS: "",
   };
-  const claudeProjectJson = `${JSON.stringify({
-    mcpServers: { [SERVER]: { type: "stdio", command: location.nodeCommand, args: [entry], env } },
-  }, null, 2)}\n`;
+  const claudeProjectJson = `${JSON.stringify(
+    {
+      mcpServers: {
+        [SERVER]: { type: "stdio", command: location.nodeCommand, args: [entry], env },
+      },
+    },
+    null,
+    2,
+  )}\n`;
   const table = `[mcp_servers.${JSON.stringify(SERVER)}]`;
   const codexProjectToml = [
     table,

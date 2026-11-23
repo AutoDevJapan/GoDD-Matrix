@@ -100,7 +100,10 @@ async function readReleaseFiles(directory: string): Promise<Map<string, Uint8Arr
   }
   const result = new Map<string, Uint8Array>();
   for (const expected of FORMAL_MCP_FILES) {
-    result.set(expected.name, await readFixedFile(path.join(directory, expected.name), expected.bytes));
+    result.set(
+      expected.name,
+      await readFixedFile(path.join(directory, expected.name), expected.bytes),
+    );
   }
   return result;
 }
@@ -112,6 +115,9 @@ export async function runHostRegistrationCli(args: readonly string[]): Promise<s
   }
   const location = registrationLocations(options);
   const files = await readReleaseFiles(location.artifactDirectory);
-  const moduleScopeBytes = await readFixedFile(location.moduleScopeFile, FORMAL_MCP_MODULE_SCOPE.bytes);
+  const moduleScopeBytes = await readFixedFile(
+    location.moduleScopeFile,
+    FORMAL_MCP_MODULE_SCOPE.bytes,
+  );
   return `${JSON.stringify(planFormalHostRegistration(files, options, moduleScopeBytes), null, 2)}\n`;
 }
