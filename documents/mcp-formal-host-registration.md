@@ -82,10 +82,31 @@ That artifact keeps `scripts/plan-mcp-hosts.mjs`, its two compiled `dist/release
 `package.json`, the consumer module template and the license, plus `SOURCE.json` and `SHA256SUMS`.
 The root package metadata is the same fixed 18-byte module scope. Receive this helper only through
 the normal authenticated artifact operation in that host, check the server run/source tuple against
-`SOURCE.json`, then verify `SHA256SUMS` before use. These checks identify the helper; they do not
-verify a build signature or grant execution. Successful `tsc`, an artifact listing or this guide
-alone does not prove the helper was delivered. If the normal operation is unavailable, retain that
-missing prerequisite; do not substitute a build of the formal MCP server or retry a refused route.
+`SOURCE.json` only after the server and archive checks below. Before using the received planner,
+start from the reviewed repository, workflow and ref/PR. Record the producing run ID and attempt
+using normal GitHub Actions metadata and that attempt's job/step results. Match the expected checkout commit and
+tree to the reviewed source; for a PR, verify the synthetic merge checkout's base/PR-head relation,
+rather than treating the PR head alone as the checkout.
+Confirm that this same attempt's `quality` job (`品質ゲート (lint / typecheck / test / build)`) is
+`completed/success`, including successful `Stage compiled MCP registration planner` and
+`Retain compiled MCP registration planner` steps. Upload and `Build (tsc)` alone are insufficient
+because Web/browser checks run later. A newer attempt's success does not accept an older artifact.
+Within that run, select exactly one unexpired artifact with the complete name
+`godd-matrix-planner-<checkout-sha>-<attempt>`. Bind it to the producing upload and record its
+server artifact ID and ZIP SHA-256. Receive the ZIP for that same ID through the normal operation
+and compare its actual digest with the recorded server digest before inspecting its contents.
+Then require exactly `LICENSE`, `package.json`, `scripts/plan-mcp-hosts.mjs`,
+`dist/release/host-registration-cli.js`, `dist/release/host-registration.js`,
+`documents/mcp-formal-module-scope.package.json.template`, `SOURCE.json` and `SHA256SUMS`.
+Verify the same repository/workflow/run/attempt/checkout/source-head tuple in `SOURCE.json`,
+all seven entries of `SHA256SUMS`, and the fixed 18-byte module metadata.
+Hold use for pending/in-progress, failed, cancelled, skipped or unknown
+quality; a different run/attempt; an expired, missing or ambiguous name; or any artifact ID, ZIP
+digest, checkout/tree, SOURCE, member, checksum or scope mismatch. Matching terminal success and
+these receipt checks satisfy only quality and delivery prerequisites; execution qualification is
+independent. These checks do not verify a build signature or grant execution. If the normal
+operation is unavailable, retain that missing prerequisite; do not substitute a build of the formal
+MCP server or retry a refused route.
 
 The retained nine-file MCP server artifact contains no planner. Building this separate helper in
 the source checkout is distinct from rebuilding that artifact: keep the accepted nine files
