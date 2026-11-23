@@ -162,6 +162,11 @@ src/
 
 受け取った側の確認と登録 (どちらのホストも同じ `main.js` を指す):
 
+既正式9ファイルの `main.js` はESMで、`package.json` は同梱されていません。
+下のNode登録前に、[専用の親module scope](documents/mcp-formal-host-registration.md)の
+固定metadataを両hostで確認します。Nodeの自動判定や別のCWDだけには依存しません。
+ZIP・9ファイルのbytesは変えず、親metadataは別の消費側入力として記録します。
+
 ```bash
 unzip godd-matrix-mcp-<sha>.zip && cd godd-matrix-mcp
 sha256sum -c SHA256SUMS                                  # ファイルの改竄・欠落の検出
@@ -184,6 +189,10 @@ zip 名の `<sha>` は、その実行がビルドしたコミット (`GITHUB_SHA
 `--signer-workflow` / `--source-ref` / `--source-digest` で、署名した workflow とビルド元の ref・コミットまで
 固定して確認します。これらのフラグは gh のバージョンによっては無いので、`gh attestation verify --help` で
 確認してください ([gh attestation verify の手引き](https://cli.github.com/manual/gh_attestation_verify))。
+
+保持済みの正式配布物から、同じ `main.js` / snapshot を指す両hostの登録案を作る手順は
+[正式MCP配布物のhost登録](documents/mcp-formal-host-registration.md)を参照してください。
+この登録案は取得・署名検証・起動許可・実業務結果を代行しません。
 
 ### 開発用 (pin なし)
 
