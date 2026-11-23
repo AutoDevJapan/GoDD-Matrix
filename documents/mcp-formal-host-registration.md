@@ -69,9 +69,20 @@ A farther CommonJS ancestor is irrelevant once
 this exact nearest module scope is established. Each host may have its own absolute directories,
 but both must use these same metadata bytes and the same nine-file release.
 
-After the helper source has passed the normal review/build process, invoke it with that host's
-normally usable Node executable and the same accepted artifact. No dependency install or artifact
-build is required in the receiving host; the server is the bundled `main.js` with Node.js >=20.
+Use this command from the repository root of a normally obtained, reviewed checkout of the same
+planner revision after `pnpm build` has completed there, or from a normally supplied built planner
+that preserves this layout. `scripts/plan-mcp-hosts.mjs` imports
+`../dist/release/host-registration-cli.js` relative to the script, together with its compiled
+dependencies. A fresh source checkout without that build is not ready to run the planner.
+If the matching script or compiled files are missing, stop plan generation and report the missing
+planner prerequisite through the normal source/build or distribution route; do not continue with
+an incomplete helper. No separately distributed planner is asserted to be available here.
+
+The retained nine-file MCP server artifact contains no planner. Building this separate helper in
+the source checkout is distinct from rebuilding that artifact: keep the accepted nine files
+unchanged. Running the bundled server itself needs no dependency install or artifact rebuild in
+the receiving host and still requires Node.js >=20. Invoke the prepared planner with that host's
+normally usable Node executable and the same accepted artifact:
 
 ```bash
 node scripts/plan-mcp-hosts.mjs \
