@@ -235,7 +235,10 @@ ZIP 名の `<sha>`（上の例の `$sha`）は、その実行がビルドした�
      同名登録が HTTP なら、その登録にある HTTP 専用のキー（`url`、`bearer_token_env_var` など）と子テーブル（`http_headers`、`oauth` など）を取り除き、接続設定を生成案の `command`・`args`・`cwd`・`env` に入れ替えます。ツールの承認や利用制限など、両方式に共通する設定は引き継ぎます。
    - **Claude Code** はプロジェクト直下の `.mcp.json` の `mcpServers` に、表示した JSON の `mcpServers` から `godd-matrix-formal` の項目だけを取り込みます。同名の項目がすでに stdio なら、該当する値だけを更新します。HTTP など別方式なら、その項目の `url`・`headers` など旧方式の接続設定を取り除き、生成案の `"type": "stdio"`・`command`・`args`・`env` に入れ替えます。ファイルを新規作成する場合は、表示した JSON 全体を使えます。
 
-   設定元は、実際に登録したプロジェクトと設定スコープで確認します。この手順での Codex の登録先は、そのプロジェクトの `.codex/config.toml` です。通常表示では環境変数の値が伏字になるため、プロジェクトのルートで次の3項目だけを取り出し、設定案と照合します（Bash と `jq`）。
+   Codex に取り込む前に、実際に使う作業ディレクトリ・プロファイルで[有効になる設定レイヤー](https://learn.chatgpt.com/docs/config-file/config-basic#configuration-precedence)を確認します。
+   ユーザー設定（`$CODEX_HOME/config.toml`、既定は `~/.codex/config.toml`）、選択したプロファイル（`$CODEX_HOME/<名前>.config.toml`）、信頼済みプロジェクトのルートから作業ディレクトリまでの `.codex/config.toml` をたどります。適用中のシステム・管理設定や起動時の `-c` 指定も含め、`mcp_servers.godd-matrix-formal` に `url` や `http_headers` などの HTTP 専用キーがあるかをキー名で調べ、定義元を特定します。
+   同名テーブルはキーごとに統合されるため、ユーザー設定の `url` とプロジェクトの `command` が両方残ると、設定を読み込めません。編集権限があり、他のプロジェクトの利用を壊さずに変更できる元定義だけを stdio に移行します。共有・管理設定に変更できない旧定義があれば、衝突が解決するまでこの登録を起動しません。
+   解消後は同じ作業ディレクトリで次の3項目を設定案と照合します（Bash と `jq`）。利用時に `--profile` や `-c` を指定している場合は、下の `codex` と `mcp` の間にも同じ指定を入れます。
 
    ```bash
    (
