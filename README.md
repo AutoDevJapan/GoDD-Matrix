@@ -160,25 +160,23 @@ src/
 - 3 ツール (`compose` / `decide_axes` / `select_cells`) とも、結果の `snapshot` に検証済みの出所
   (commit と index / taxonomy / jsic の sha256) を載せる。pin なしの従来構成では `snapshot` キー自体を付けない。
 
-受け取った側の確認と登録 (どちらのホストも同じ `main.js` を指す):
+#### 受け取った側の確認と登録
 
-既正式9ファイルの `main.js` はESMで、`package.json` は同梱されていません。
-下のNode登録前に、[専用の親module scope](documents/mcp-formal-host-registration.md)の
-固定metadataを両hostで確認します。Nodeの自動判定や別のCWDだけには依存しません。
-ZIP・9ファイルのbytesは変えず、親metadataは別の消費側入力として記録します。
+Codex と Claude Code には、[正式版の Actions 実行](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843)で配布する同じサーバーを登録します。
+ZIP を保存したディレクトリで、ZIP の SHA-256、ビルド来歴、展開したファイルのチェックサムを順に確認してください。以下は `gh`、`sha256sum`、`unzip` が使える Bash の例です。
 
 ```bash
-unzip godd-matrix-mcp-<sha>.zip && cd godd-matrix-mcp
-sha256sum -c SHA256SUMS                                  # ファイルの改竄・欠落の検出
-# ビルド来歴: 署名した workflow と、ビルド元の ref・コミットまで固定して確認する (正式配布物の場合)
-gh attestation verify ../godd-matrix-mcp-<sha>.zip --repo AutoDevJapan/GoDD-Matrix \
-  --signer-workflow AutoDevJapan/GoDD-Matrix/.github/workflows/mcp-artifact.yml \
-  --source-ref refs/heads/main --source-digest <sha>
-codex mcp add godd-matrix -- node "$PWD/main.js"         # Codex
-claude mcp add godd-matrix -- node "$PWD/main.js"        # Claude Code
+sha=ece931cb71c191ab1b977629e3fdac1846bb07d1
+archive="godd-matrix-mcp-${sha}.zip"
+printf '%s  %s\n' 14fd21b3e610b0cf7b307eb7746dd9d4ae99c4fb7744722f6c9296f096bb20e3 "$archive" | sha256sum -c - &&
+  gh attestation verify "$archive" --repo AutoDevJapan/GoDD-Matrix \
+    --signer-workflow AutoDevJapan/GoDD-Matrix/.github/workflows/mcp-artifact.yml \
+    --source-ref refs/heads/main --source-digest "$sha" &&
+  mkdir matrix-consumer && unzip "$archive" -d matrix-consumer &&
+  (cd matrix-consumer/godd-matrix-mcp && sha256sum -c SHA256SUMS)
 ```
 
-zip 名の `<sha>` は、その実行がビルドしたコミット (`GITHUB_SHA`) です。実行の種類で、確認に使う値が変わります。
+ZIP 名の `<sha>`（上の例の `$sha`）は、その実行がビルドしたコミット (`GITHUB_SHA`) です。実行の種類で、確認に使う値が変わります。
 
 | 実行 | `--source-ref` | `<sha>` | 扱い |
 | --- | --- | --- | --- |
@@ -190,9 +188,72 @@ zip 名の `<sha>` は、その実行がビルドしたコミット (`GITHUB_SHA
 固定して確認します。これらのフラグは gh のバージョンによっては無いので、`gh attestation verify --help` で
 確認してください ([gh attestation verify の手引き](https://cli.github.com/manual/gh_attestation_verify))。
 
-保持済みの正式配布物から、同じ `main.js` / snapshot を指す両hostの登録案を作る手順は
-[正式MCP配布物のhost登録](documents/mcp-formal-host-registration.md)を参照してください。
-この登録案は取得・署名検証・起動許可・実業務結果を代行しません。
+登録用プランナーは [CI の実行一覧](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/ci.yml)から、レビュー済みの `main` コミットを選んで取得します。そのコミットの `src/release/host-registration.ts` で、`FORMAL_MCP_RELEASE` の配布元と ZIP の SHA-256、`FORMAL_MCP_FILES` の9ファイルのサイズとハッシュが、受領したサーバーのものと一致することを確かめてください。
+[プランナーの受領手順](documents/mcp-formal-host-registration.md)に従い、同じ run ID・attempt の品質ジョブが `completed/success` で、プランナーの準備とアップロードも成功していることを確認します。
+保持期間内の `godd-matrix-planner-<checkout-sha>-<attempt>` が1件だけあることを確かめ、その ID で取得した ZIP の SHA-256 を Actions の digest と照合します。次に `SOURCE.json` のコミット・run・attempt、8ファイルの構成、7件のチェックサムを確認します。
+
+このサーバー ZIP の Actions 保持期限は 2026-12-04 01:44:06 UTC、同じ9ファイルを対象とした[プランナーの配布例](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/45218109910/artifacts/14838598556)の保持期限は 2026-12-07 16:35:31 UTC です。サーバー ZIP の保持期限後も、期限内に受け取って署名とハッシュを検証した同一の ZIP を使えます。
+
+1. プランナーに同梱の `documents/mcp-formal-module-scope.package.json.template` を、上で作った `matrix-consumer` の直下に `package.json` としてコピーします。末尾の LF を含む18バイトを保つと、Node.js は直下の `godd-matrix-mcp/main.js` を ES モジュールとして読み込めます。
+2. プランナーを展開したディレクトリで、次の例の3つのパスを実際の絶対パスに置き換えて実行します。指定するのは、そのホストで使う Node.js 20 以上の実行ファイル、`main.js` があるディレクトリ、Matrix を使うプロジェクトのルートです。配布例のプランナーを使う場合は、サーバーのディレクトリの末尾に区切り文字を付けません。
+
+   **macOS・Linux（Bash、表示に `jq` を使用）**
+
+   ```bash
+   NODE_BIN='/usr/local/bin/node'
+   ARTIFACT_DIR='/home/user/matrix-consumer/godd-matrix-mcp'
+   PROJECT_DIR='/home/user/my-project'
+   (
+     plan=$("$NODE_BIN" scripts/plan-mcp-hosts.mjs --node "$NODE_BIN" --platform posix \
+       --artifact-dir "$ARTIFACT_DIR" --project-dir "$PROJECT_DIR") &&
+       jq -ej '.codexProjectToml | strings' <<<"$plan" &&
+       jq -e '.claudeProjectJson | fromjson | objects' <<<"$plan"
+   )
+   ```
+
+   **Windows（PowerShell）**
+
+   ```powershell
+   $NodeBin = 'C:\Program Files\nodejs\node.exe'
+   $ArtifactDir = 'C:\matrix-consumer\godd-matrix-mcp'
+   $ProjectDir = 'C:\work\my-project'
+   $savedEncoding = [Console]::OutputEncoding
+   try {
+     [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+     $raw = & $NodeBin .\scripts\plan-mcp-hosts.mjs --node $NodeBin --platform win32 --artifact-dir $ArtifactDir --project-dir $ProjectDir
+     if ($LASTEXITCODE -ne 0) { throw 'プランナーの出力を確認できませんでした。' }
+     $plan = ($raw -join "`n") | ConvertFrom-Json -ErrorAction Stop
+     $claude = $plan.claudeProjectJson | ConvertFrom-Json -ErrorAction Stop
+     $plan.codexProjectToml                 # Codex 用の TOML
+     $claude | ConvertTo-Json -Depth 10     # Claude Code 用の JSON
+   } finally { [Console]::OutputEncoding = $savedEncoding }
+   ```
+
+3. プランナーはサーバーの9ファイルと親の `package.json` を照合し、2つの設定を文字列として1つの JSON にまとめます。上の例では外側の JSON を解析し、`codexProjectToml` はデコードした TOML 本文として、`claudeProjectJson` はさらに JSON として解析して表示します。設定には、この表示結果を使います。
+
+   - **Codex** では、表示した TOML を信頼済みプロジェクトの `.codex/config.toml` に取り込みます。ファイルがなければこの本文で作成します。`[mcp_servers."godd-matrix-formal"]` と `[mcp_servers."godd-matrix-formal".env]` は各1つだけにし、既存テーブルには該当キーを照合して必要な値だけを反映します。
+     同名登録が HTTP なら、その登録にある HTTP 専用のキー（`url`、`bearer_token_env_var` など）と子テーブル（`http_headers`、`oauth` など）を取り除き、接続設定を生成案の `command`・`args`・`cwd`・`env` に入れ替えます。ツールの承認や利用制限など、両方式に共通する設定は引き継ぎます。
+   - **Claude Code** はプロジェクト直下の `.mcp.json` の `mcpServers` に、表示した JSON の `mcpServers` から `godd-matrix-formal` の項目だけを取り込みます。同名の項目がすでに stdio なら、該当する値だけを更新します。HTTP など別方式なら、その項目の `url`・`headers` など旧方式の接続設定を取り除き、生成案の `"type": "stdio"`・`command`・`args`・`env` に入れ替えます。ファイルを新規作成する場合は、表示した JSON 全体を使えます。
+
+   Codex に取り込む前に、実際に使う作業ディレクトリ・プロファイルで[有効になる設定レイヤー](https://learn.chatgpt.com/docs/config-file/config-basic#configuration-precedence)を確認します。
+   ユーザー設定（`$CODEX_HOME/config.toml`、既定は `~/.codex/config.toml`）、選択したプロファイル（`$CODEX_HOME/<名前>.config.toml`）、信頼済みプロジェクトのルートから作業ディレクトリまでの `.codex/config.toml` をたどります。適用中のシステム・管理設定や起動時の `-c` 指定も含め、`mcp_servers.godd-matrix-formal` に `url` や `http_headers` などの HTTP 専用キーがあるかをキー名で調べ、定義元を特定します。
+   同名テーブルはキーごとに統合されるため、ユーザー設定の `url` とプロジェクトの `command` が両方残ると、設定を読み込めません。編集権限があり、他のプロジェクトの利用を壊さずに変更できる元定義だけを stdio に移行します。共有・管理設定に変更できない旧定義があれば、衝突が解決するまでこの登録を起動しません。
+   解消後は同じ作業ディレクトリで次の3項目を設定案と照合します（Bash と `jq`）。利用時に `--profile` や `-c` を指定している場合は、下の `codex` と `mcp` の間にも同じ指定を入れます。
+
+   ```bash
+   (
+     set -o pipefail
+     codex mcp get godd-matrix-formal --json |
+       jq -e 'select(.enabled == true) | .transport
+              | select(.type == "stdio" and .env.GODD_DS_SNAPSHOT != null)
+              | {command, args, GODD_DS_SNAPSHOT: .env.GODD_DS_SNAPSHOT}'
+   )
+   ```
+
+   Claude Code では、プロジェクト直下の `.mcp.json` と[同名登録の優先順位](https://code.claude.com/docs/en/mcp#scope-hierarchy-and-precedence)を確認し、有効なスコープの `godd-matrix-formal` にある `command`、`args`、`env.GODD_DS_SNAPSHOT` を個別に設定案と照合します。接続状態は `/mcp` でこのサーバーを選んで確認します。他のサーバーや既定の承認・権限はそのまま保持します。
+
+正式版の登録名は両方とも `godd-matrix-formal` です。`godd-matrix` をすでに登録している場合も、既存の設定を残したまま追加できます。
+この設定では同じ `main.js` と固定版の snapshot・索引を使い、DESIGN.md の取得先を固定コミットに合わせます。Generator の URL・API キーと `NODE_OPTIONS` はサーバーの起動時に空にします。
 
 ### 開発用 (pin なし)
 

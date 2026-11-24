@@ -1,4 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseRegistrationArgs, runHostRegistrationCli } from "./host-registration-cli.js";
 import {
@@ -39,6 +41,76 @@ describe("formal host registration is a text plan, not admission", () => {
     expect(registrationLocations(options).moduleScopeFile).toBe(
       "/work/accepted release/package.json",
     );
+  });
+
+  it.each(["posix", "win32"] as const)("normalizes the %s artifact directory", (platform) => {
+    const syntax = path[platform];
+    const root = platform === "win32" ? "D:\\" : "/";
+    const base = {
+      platform,
+      artifactDirectory: syntax.join(root, "accepted release", "godd-matrix-mcp"),
+      projectDirectory: syntax.join(root, "project"),
+      nodeCommand: syntax.join(root, "runtime", platform === "win32" ? "node.exe" : "node"),
+    };
+    for (const suffix of [syntax.sep, syntax.sep.repeat(2)]) {
+      const input = { ...base, artifactDirectory: base.artifactDirectory + suffix };
+      expect(registrationLocations(input).artifactDirectory).toBe(base.artifactDirectory);
+      expect(formatHostRegistration(input)).toEqual(formatHostRegistration(base));
+    }
+    const traversal = `${base.artifactDirectory}${syntax.sep}..${syntax.sep}`;
+    expect(() => registrationLocations({ ...base, artifactDirectory: traversal })).toThrow(
+      "explicit absolute path",
+    );
+    for (const suffix of ["", syntax.sep]) {
+      const padded = `${base.artifactDirectory} ${suffix}`;
+      expect(() => registrationLocations({ ...base, artifactDirectory: padded })).toThrow(
+        "explicit absolute path",
+      );
+    }
+    expect(() => registrationLocations({ ...base, artifactDirectory: root })).toThrow(
+      "separate parent module scope",
+    );
+  });
+
+  it("keeps a literal backslash at the end of a POSIX directory name", () => {
+    const artifactDirectory = `${options.artifactDirectory}\\`;
+    expect(registrationLocations({ ...options, artifactDirectory }).artifactDirectory).toBe(
+      artifactDirectory,
+    );
+  });
+
+  it("checks contents with a final separator and rejects directory aliases", async () => {
+    const root = await mkdtemp(path.join(await realpath(tmpdir()), "matrix-registration-"));
+    try {
+      const parent = path.join(root, "consumer");
+      const release = path.join(parent, "godd-matrix-mcp");
+      await mkdir(release, { recursive: true });
+      const alias = path.join(root, "alias");
+      await symlink(parent, alias, process.platform === "win32" ? "junction" : "dir");
+      const run = (directory: string) =>
+        runHostRegistrationCli([
+          "--artifact-dir",
+          directory,
+          "--project-dir",
+          root,
+          "--node",
+          process.execPath,
+          "--platform",
+          process.platform === "win32" ? "win32" : "posix",
+        ]);
+      for (const suffix of ["", path.sep]) {
+        await expect(run(release + suffix)).rejects.toThrow(
+          "artifact must contain only the nine regular release files",
+        );
+        for (const directory of [alias, path.join(alias, "godd-matrix-mcp")]) {
+          await expect(run(directory + suffix)).rejects.toThrow(
+            "artifact must be a canonical regular directory",
+          );
+        }
+      }
+    } finally {
+      await rm(root, { recursive: true });
+    }
   });
 
   it("requires exact parent module metadata separately from the nine artifact members", () => {
