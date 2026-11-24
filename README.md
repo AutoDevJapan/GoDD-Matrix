@@ -203,11 +203,12 @@ ZIP 名の `<sha>`（上の例の `$sha`）は、その実行がビルドした�
    NODE_BIN='/usr/local/bin/node'
    ARTIFACT_DIR='/home/user/matrix-consumer/godd-matrix-mcp'
    PROJECT_DIR='/home/user/my-project'
-   if plan=$("$NODE_BIN" scripts/plan-mcp-hosts.mjs --node "$NODE_BIN" --platform posix \
-     --artifact-dir "$ARTIFACT_DIR" --project-dir "$PROJECT_DIR"); then
-     printf '%s\n' "$plan" | jq -j '.codexProjectToml'             # Codex 用の TOML
-     printf '%s\n' "$plan" | jq '.claudeProjectJson | fromjson'   # Claude Code 用の JSON
-   fi
+   (
+     plan=$("$NODE_BIN" scripts/plan-mcp-hosts.mjs --node "$NODE_BIN" --platform posix \
+       --artifact-dir "$ARTIFACT_DIR" --project-dir "$PROJECT_DIR") &&
+       jq -ej '.codexProjectToml | strings' <<<"$plan" &&
+       jq -e '.claudeProjectJson | fromjson | objects' <<<"$plan"
+   )
    ```
 
    **Windows（PowerShell）**
@@ -231,9 +232,22 @@ ZIP 名の `<sha>`（上の例の `$sha`）は、その実行がビルドした�
 3. プランナーはサーバーの9ファイルと親の `package.json` を照合し、2つの設定を文字列として1つの JSON にまとめます。上の例では外側の JSON を解析し、`codexProjectToml` はデコードした TOML 本文として、`claudeProjectJson` はさらに JSON として解析して表示します。設定には、この表示結果を使います。
 
    - **Codex** では、表示した TOML を信頼済みプロジェクトの `.codex/config.toml` に取り込みます。ファイルがなければこの本文で作成します。`[mcp_servers."godd-matrix-formal"]` と `[mcp_servers."godd-matrix-formal".env]` は各1つだけにし、既存テーブルには該当キーを照合して必要な値だけを反映します。
-   - **Claude Code** はプロジェクト直下の `.mcp.json` の `mcpServers` に、表示した JSON の `mcpServers` から `godd-matrix-formal` の項目だけを取り込みます。同名の項目があれば、その中の `command`・`args`・`env` などを照合して必要な値だけを更新します。ファイルを新規作成する場合は、表示した JSON 全体を使えます。
+     同名登録が HTTP なら、その登録にある HTTP 専用のキー（`url`、`bearer_token_env_var` など）と子テーブル（`http_headers`、`oauth` など）を取り除き、接続設定を生成案の `command`・`args`・`cwd`・`env` に入れ替えます。ツールの承認や利用制限など、両方式に共通する設定は引き継ぎます。
+   - **Claude Code** はプロジェクト直下の `.mcp.json` の `mcpServers` に、表示した JSON の `mcpServers` から `godd-matrix-formal` の項目だけを取り込みます。同名の項目がすでに stdio なら、該当する値だけを更新します。HTTP など別方式なら、その項目の `url`・`headers` など旧方式の接続設定を取り除き、生成案の `"type": "stdio"`・`command`・`args`・`env` に入れ替えます。ファイルを新規作成する場合は、表示した JSON 全体を使えます。
 
-   プロジェクトのルートで `codex mcp get godd-matrix-formal` または `claude mcp get godd-matrix-formal` を使い、実際に選ばれる設定元と `command`、`args`、`GODD_DS_SNAPSHOT` が設定案どおりか確かめます。Claude Code では上位スコープの同名項目が優先されるため、値が異なる場合は利用前にその登録元を確認します。他のサーバーや既定の承認・権限はそのまま保持します。
+   設定元は、実際に登録したプロジェクトと設定スコープで確認します。この手順での Codex の登録先は、そのプロジェクトの `.codex/config.toml` です。通常表示では環境変数の値が伏字になるため、プロジェクトのルートで次の3項目だけを取り出し、設定案と照合します（Bash と `jq`）。
+
+   ```bash
+   (
+     set -o pipefail
+     codex mcp get godd-matrix-formal --json |
+       jq -e 'select(.enabled == true) | .transport
+              | select(.type == "stdio" and .env.GODD_DS_SNAPSHOT != null)
+              | {command, args, GODD_DS_SNAPSHOT: .env.GODD_DS_SNAPSHOT}'
+   )
+   ```
+
+   Claude Code では、プロジェクト直下の `.mcp.json` と[同名登録の優先順位](https://code.claude.com/docs/en/mcp#scope-hierarchy-and-precedence)を確認し、有効なスコープの `godd-matrix-formal` にある `command`、`args`、`env.GODD_DS_SNAPSHOT` を個別に設定案と照合します。接続状態は `/mcp` でこのサーバーを選んで確認します。他のサーバーや既定の承認・権限はそのまま保持します。
 
 正式版の登録名は両方とも `godd-matrix-formal` です。`godd-matrix` をすでに登録している場合も、既存の設定を残したまま追加できます。
 この設定では同じ `main.js` と固定版の snapshot・索引を使い、DESIGN.md の取得先を固定コミットに合わせます。Generator の URL・API キーと `NODE_OPTIONS` はサーバーの起動時に空にします。
