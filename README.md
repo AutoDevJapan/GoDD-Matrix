@@ -195,18 +195,45 @@ ZIP 名の `<sha>`（上の例の `$sha`）は、その実行がビルドした�
 このサーバー ZIP の Actions 保持期限は 2026-12-04 01:44:06 UTC、同じ9ファイルを対象とした[プランナーの配布例](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/45218109910/artifacts/14838598556)の保持期限は 2026-12-07 16:35:31 UTC です。サーバー ZIP の保持期限後も、期限内に受け取って署名とハッシュを検証した同一の ZIP を使えます。
 
 1. プランナーに同梱の `documents/mcp-formal-module-scope.package.json.template` を、上で作った `matrix-consumer` の直下に `package.json` としてコピーします。末尾の LF を含む18バイトを保つと、Node.js は直下の `godd-matrix-mcp/main.js` を ES モジュールとして読み込めます。
-2. プランナーを展開したディレクトリで、次の3つの変数をそのホストの絶対パスに設定して実行します。
-   `NODE_BIN` は Node.js 20 以上の実行ファイル、`ARTIFACT_DIR` は展開した `godd-matrix-mcp` ディレクトリ、`PROJECT_DIR` は利用するプロジェクトのルートです。
+2. プランナーを展開したディレクトリで、次の例の3つのパスを実際の絶対パスに置き換えて実行します。指定するのは、そのホストで使う Node.js 20 以上の実行ファイル、`main.js` があるディレクトリ、Matrix を使うプロジェクトのルートです。配布例のプランナーを使う場合は、サーバーのディレクトリの末尾に区切り文字を付けません。
+
+   **macOS・Linux（Bash、表示に `jq` を使用）**
 
    ```bash
-   "$NODE_BIN" scripts/plan-mcp-hosts.mjs --node "$NODE_BIN" --platform posix \
-     --artifact-dir "$ARTIFACT_DIR" --project-dir "$PROJECT_DIR"
+   NODE_BIN='/usr/local/bin/node'
+   ARTIFACT_DIR='/home/user/matrix-consumer/godd-matrix-mcp'
+   PROJECT_DIR='/home/user/my-project'
+   if plan=$("$NODE_BIN" scripts/plan-mcp-hosts.mjs --node "$NODE_BIN" --platform posix \
+     --artifact-dir "$ARTIFACT_DIR" --project-dir "$PROJECT_DIR"); then
+     printf '%s\n' "$plan" | jq -j '.codexProjectToml'             # Codex 用の TOML
+     printf '%s\n' "$plan" | jq '.claudeProjectJson | fromjson'   # Claude Code 用の JSON
+   fi
    ```
 
-   配布例の版を使う場合は、`ARTIFACT_DIR` の末尾に区切り文字を付けずに指定してください。
-   Windows では `--platform win32` とドライブ名を含む絶対パスを使います。
+   **Windows（PowerShell）**
 
-3. プランナーはサーバーの9ファイルと親の `package.json` を照合し、設定案を JSON で出力します。Codex では `codexProjectToml` の設定を信頼済みプロジェクトの `.codex/config.toml` に追加します。Claude Code では `claudeProjectJson` の `mcpServers` から `godd-matrix-formal` の項目を取り出し、プロジェクト直下の `.mcp.json` の `mcpServers` に追加します。
+   ```powershell
+   $NodeBin = 'C:\Program Files\nodejs\node.exe'
+   $ArtifactDir = 'C:\matrix-consumer\godd-matrix-mcp'
+   $ProjectDir = 'C:\work\my-project'
+   $savedEncoding = [Console]::OutputEncoding
+   try {
+     [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+     $raw = & $NodeBin .\scripts\plan-mcp-hosts.mjs --node $NodeBin --platform win32 --artifact-dir $ArtifactDir --project-dir $ProjectDir
+     if ($LASTEXITCODE -ne 0) { throw 'プランナーの出力を確認できませんでした。' }
+     $plan = ($raw -join "`n") | ConvertFrom-Json -ErrorAction Stop
+     $claude = $plan.claudeProjectJson | ConvertFrom-Json -ErrorAction Stop
+     $plan.codexProjectToml                 # Codex 用の TOML
+     $claude | ConvertTo-Json -Depth 10     # Claude Code 用の JSON
+   } finally { [Console]::OutputEncoding = $savedEncoding }
+   ```
+
+3. プランナーはサーバーの9ファイルと親の `package.json` を照合し、2つの設定を文字列として1つの JSON にまとめます。上の例では外側の JSON を解析し、`codexProjectToml` はデコードした TOML 本文として、`claudeProjectJson` はさらに JSON として解析して表示します。設定には、この表示結果を使います。
+
+   - **Codex** では、表示した TOML を信頼済みプロジェクトの `.codex/config.toml` に取り込みます。ファイルがなければこの本文で作成します。`[mcp_servers."godd-matrix-formal"]` と `[mcp_servers."godd-matrix-formal".env]` は各1つだけにし、既存テーブルには該当キーを照合して必要な値だけを反映します。
+   - **Claude Code** はプロジェクト直下の `.mcp.json` の `mcpServers` に、表示した JSON の `mcpServers` から `godd-matrix-formal` の項目だけを取り込みます。同名の項目があれば、その中の `command`・`args`・`env` などを照合して必要な値だけを更新します。ファイルを新規作成する場合は、表示した JSON 全体を使えます。
+
+   プロジェクトのルートで `codex mcp get godd-matrix-formal` または `claude mcp get godd-matrix-formal` を使い、実際に選ばれる設定元と `command`、`args`、`GODD_DS_SNAPSHOT` が設定案どおりか確かめます。Claude Code では上位スコープの同名項目が優先されるため、値が異なる場合は利用前にその登録元を確認します。他のサーバーや既定の承認・権限はそのまま保持します。
 
 正式版の登録名は両方とも `godd-matrix-formal` です。`godd-matrix` をすでに登録している場合も、既存の設定を残したまま追加できます。
 この設定では同じ `main.js` と固定版の snapshot・索引を使い、DESIGN.md の取得先を固定コミットに合わせます。Generator の URL・API キーと `NODE_OPTIONS` はサーバーの起動時に空にします。
