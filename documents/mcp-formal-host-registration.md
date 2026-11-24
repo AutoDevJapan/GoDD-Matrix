@@ -10,13 +10,36 @@ with a PR artifact or rebuilding it silently.
 
 ## Obtain and verify the distribution
 
-Use the existing authenticated GitHub artifact download operation with repository read access;
-a cloud Git repository connection does not prove that its proxy supports Actions downloads.
-The retained artifact is linked from
-[the formal run](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843).
+Sign in to GitHub with read access to this repository. A Cloud checkout alone does not establish
+access to Actions artifacts. For this version, save the [original server ZIP](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/artifacts/14593605352) intact.
+
+If you already have a verified planner that supports `--release-info`, run its wrapper from the
+planner directory with the receiving host's Node.js 20+ executable. For example, in Bash:
+
+```bash
+"$NODE_BIN" scripts/plan-mcp-hosts.mjs --release-info
+```
+
+Set `NODE_BIN` to the absolute path of Node before running this command. It prints the release
+record embedded in the planner, plus the GitHub artifact URL and archive name. It needs no server
+files or project configuration. Older planners, including the `c262a3a5` build, have the same
+release record in their reviewed `src/release/host-registration.ts` source.
+
+Use the [MCP artifact workflow](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/mcp-artifact.yml)
+to check the actual `main` manual run, attempt and successful outcome against that record. Confirm
+the artifact is still available and matches the ID and digest. The printed expiry is the one
+recorded at release time. If the artifact has expired or was deleted, a first-time recipient needs
+a successor formal run and its matching reviewed planner.
+
 If that normal operation fails, preserve its stage and response. Do not copy credentials between
 hosts, create a token, retry a rejected endpoint through another route, or substitute source builds.
 An already normally delivered, qualified copy may be used without another download.
+
+For a successor, maintainers use the existing manual workflow on reviewed `main`. After the run
+succeeds, use the upload step's artifact ID to check the retained ZIP and its attestation. Review
+`FORMAL_MCP_RELEASE` and `FORMAL_MCP_FILES` against that run before distributing a matching
+planner and updating the download example. A new run or attempt has its own
+provenance even if the ZIP digest matches an earlier build.
 
 Before registration, keep the archive identity and the normal provenance verification attached
 to that exact source/ref/workflow. SHA256SUMS checks alone are not build-signature verification.

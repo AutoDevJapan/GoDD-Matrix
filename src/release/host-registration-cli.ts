@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   FORMAL_MCP_FILES,
   FORMAL_MCP_MODULE_SCOPE,
+  FORMAL_MCP_RELEASE,
   type HostRegistrationOptions,
   planFormalHostRegistration,
   registrationLocations,
@@ -109,6 +110,20 @@ async function readReleaseFiles(directory: string): Promise<Map<string, Uint8Arr
 }
 
 export async function runHostRegistrationCli(args: readonly string[]): Promise<string> {
+  if (args.length === 1 && args[0] === "--release-info") {
+    const release = FORMAL_MCP_RELEASE;
+    const runUrl = `https://github.com/${release.repository}/actions/runs/${release.runId}`;
+    return `${JSON.stringify(
+      {
+        schema: "godd-matrix-formal-release-info-v1",
+        release,
+        artifactUrl: `${runUrl}/artifacts/${release.artifactId}`,
+        archiveName: `godd-matrix-mcp-${release.commit}.zip`,
+      },
+      null,
+      2,
+    )}\n`;
+  }
   const options = parseRegistrationArgs(args);
   if (options.platform !== (process.platform === "win32" ? "win32" : "posix")) {
     throw new Error("host registration: path syntax must match the consuming host");

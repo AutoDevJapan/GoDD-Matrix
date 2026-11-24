@@ -162,8 +162,19 @@ src/
 
 #### 受け取った側の確認と登録
 
-Codex と Claude Code には、[正式版の Actions 実行](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843)で配布する同じサーバーを登録します。
-ZIP を保存したディレクトリで、ZIP の SHA-256、ビルド来歴、展開したファイルのチェックサムを順に確認してください。以下は `gh`、`sha256sum`、`unzip` が使える Bash の例です。
+この版のサーバーは [run `44655701843`、attempt `1` の ZIP（artifact `14593605352`）](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/artifacts/14593605352)です。初めて取得する場合は GitHub にサインインし、リポジトリの読み取り権限があるアカウントで ZIP のまま保存します。Codex と Claude Code で同じ ZIP を使います。
+別の版を使うときは、先に[プランナーの受領手順](documents/mcp-formal-host-registration.md)に従ってプランナーを取得してください。`--release-info` 対応版では、展開先で次のどちらかを実行すると、その版のサーバーの `artifactUrl`、run・attempt・コミット、ZIP 名・サイズ・SHA-256、記録時の保持期限を表示します。あらかじめ `NODE_BIN`（Bash）または `$NodeBin`（PowerShell）に、そのホストで使う Node.js 20 以上の実行ファイルの絶対パスを設定します。
+
+```bash
+"$NODE_BIN" scripts/plan-mcp-hosts.mjs --release-info
+```
+
+```powershell
+& $NodeBin .\scripts\plan-mcp-hosts.mjs --release-info
+```
+
+[MCP artifact の実行一覧](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/mcp-artifact.yml)で記載の `main` の手動実行が成功し、同じ ID・名前・digest の ZIP が保持期間内にあることを確認してください。`--release-info` を持たない旧プランナーでも、対応するソースの `FORMAL_MCP_RELEASE` で配布元の識別子と ZIP のハッシュを確認できます。
+ZIP を保存したディレクトリで、ZIP の SHA-256、ビルド来歴、展開したファイルのチェックサムを順に確認してください。以下は上記の artifact `14593605352` を `gh`、`sha256sum`、`unzip` で検証する Bash の例です。後継版は、その版を指定するレビュー済みプランナーのコミットと SHA-256 を使います。
 
 ```bash
 sha=ece931cb71c191ab1b977629e3fdac1846bb07d1
@@ -193,6 +204,7 @@ ZIP 名の `<sha>`（上の例の `$sha`）は、その実行がビルドした�
 保持期間内の `godd-matrix-planner-<checkout-sha>-<attempt>` が1件だけあることを確かめ、その ID で取得した ZIP の SHA-256 を Actions の digest と照合します。次に `SOURCE.json` のコミット・run・attempt、8ファイルの構成、7件のチェックサムを確認します。
 
 このサーバー ZIP の Actions 保持期限は 2026-12-04 01:44:06 UTC、同じ9ファイルを対象とした[プランナーの配布例](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/45218109910/artifacts/14838598556)の保持期限は 2026-12-07 16:35:31 UTC です。サーバー ZIP の保持期限後も、期限内に受け取って署名とハッシュを検証した同一の ZIP を使えます。
+初めて取得する時点でサーバー ZIP が失効・削除されていれば、その ID からは取得できません。後継の正式版を使うには、その版の取得元とハッシュを指定したレビュー済みプランナーと、対応する `main` の手動実行が必要です。両方が案内されるまでは新規登録を保留してください。
 
 1. プランナーに同梱の `documents/mcp-formal-module-scope.package.json.template` を、上で作った `matrix-consumer` の直下に `package.json` としてコピーします。末尾の LF を含む18バイトを保つと、Node.js は直下の `godd-matrix-mcp/main.js` を ES モジュールとして読み込めます。
 2. プランナーを展開したディレクトリで、次の例の3つのパスを実際の絶対パスに置き換えて実行します。指定するのは、そのホストで使う Node.js 20 以上の実行ファイル、`main.js` があるディレクトリ、Matrix を使うプロジェクトのルートです。配布例のプランナーを使う場合は、サーバーのディレクトリの末尾に区切り文字を付けません。

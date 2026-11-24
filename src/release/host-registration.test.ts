@@ -22,6 +22,38 @@ const options = {
 const moduleScopeBytes = Buffer.from(FORMAL_MCP_MODULE_SCOPE.text, "utf8");
 
 describe("formal host registration is a text plan, not admission", () => {
+  it("identifies the pinned server before receiving it", async () => {
+    const output = await runHostRegistrationCli(["--release-info"]);
+    const { repository, runId, artifactId, commit } = FORMAL_MCP_RELEASE;
+    expect(JSON.parse(output)).toEqual({
+      schema: "godd-matrix-formal-release-info-v1",
+      release: FORMAL_MCP_RELEASE,
+      artifactUrl: `https://github.com/${repository}/actions/runs/${runId}/artifacts/${artifactId}`,
+      archiveName: `godd-matrix-mcp-${commit}.zip`,
+    });
+    expect(output.endsWith("\n")).toBe(true);
+  });
+
+  it("rejects release-info mixed with registration options or repeated", async () => {
+    const registration = [
+      "--node",
+      options.nodeCommand,
+      "--artifact-dir",
+      options.artifactDirectory,
+      "--project-dir",
+      options.projectDirectory,
+      "--platform",
+      options.platform,
+    ];
+    for (const args of [
+      ["--release-info", "--release-info"],
+      ["--release-info", ...registration],
+      [...registration, "--release-info"],
+    ]) {
+      await expect(runHostRegistrationCli(args)).rejects.toThrow("specify each required option");
+    }
+  });
+
   it("points both configs at one absolute entry with explicit snapshot and no Generator", () => {
     const plan = formatHostRegistration(options);
     const claude = JSON.parse(plan.claudeProjectJson).mcpServers["godd-matrix-formal"];
