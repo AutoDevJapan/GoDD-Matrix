@@ -128,11 +128,13 @@ export function registrationLocations(options: HostRegistrationOptions) {
     throw new Error("host registration: unsupported path syntax");
   }
   const syntax = options.platform === "win32" ? path.win32 : path.posix;
-  const artifactDirectory = absolutePath(
-    options.artifactDirectory,
-    options.platform,
-    "artifactDirectory",
+  // Drop trailing separators before lstat and the exact realpath comparison.
+  const artifactDirectory = syntax.resolve(
+    absolutePath(options.artifactDirectory, options.platform, "artifactDirectory"),
   );
+  if (artifactDirectory !== artifactDirectory.trimEnd()) {
+    throw new Error("host registration: artifactDirectory must be an explicit absolute path");
+  }
   const projectDirectory = absolutePath(
     options.projectDirectory,
     options.platform,
