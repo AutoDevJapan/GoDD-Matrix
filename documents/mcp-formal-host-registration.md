@@ -22,8 +22,11 @@ from the planner directory with the receiving host's Node.js 20+ executable. For
 "$NODE_BIN" scripts/plan-mcp-hosts.mjs --release-info
 ```
 
-Set `NODE_BIN` to the absolute path of Node before running this command. The `c262a3a5` planner
-does not support `--release-info`; read [`FORMAL_MCP_RELEASE` in its reviewed source](https://github.com/AutoDevJapan/GoDD-Matrix/blob/c262a3a599f8bc1aa493349132a5c22e4089210b/src/release/host-registration.ts#L5-L18) instead.
+Set `NODE_BIN` to the absolute path of Node before running this command. If the planner does not
+support `--release-info`, skip the command. Use `checkout_sha` from that planner ZIP's verified
+`SOURCE.json` to open `src/release/host-registration.ts` at that commit. Use its
+`FORMAL_MCP_RELEASE` as `release` below. For example, [planner artifact 14838598556](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/45218109910/artifacts/14838598556)
+identifies [the constant at `ebde7cdf`](https://github.com/AutoDevJapan/GoDD-Matrix/blob/ebde7cdf142043323f989a8fbdfb97f9be26bdb8/src/release/host-registration.ts#L5-L18) through its own `checkout_sha`.
 
 1. In the [MCP artifact workflow](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/mcp-artifact.yml),
    open `release.runId` at `release.attempt`. Confirm that `main`'s manual run succeeded at
@@ -31,7 +34,8 @@ does not support `--release-info`; read [`FORMAL_MCP_RELEASE` in its reviewed so
    log to `release.artifactId`. Hold registration if that match cannot be established.
 2. For that ID, match the available artifact's name, size and digest to `archiveName`,
    `release.archiveBytes` and `release.archiveSha256`, then download it via `artifactUrl`.
-   With `c262a3a5`, use the Actions link for the pinned ID and the ZIP name for its server commit.
+   For a planner without this option, use the Actions link for the constant's `runId` and `artifactId`.
+   Its server `commit` gives the ZIP name `godd-matrix-mcp-<commit>.zip`.
    Check the saved ZIP's length and SHA-256, then its attestation for `release.workflow`,
    `release.sourceRef` and `release.commit` (`--source-digest`), followed by the extracted checksums.
    `release.expiresAt` is the retention deadline recorded at build time.

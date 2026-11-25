@@ -165,7 +165,7 @@ src/
 リポジトリを読み取れる GitHub アカウントでサインインし、[品質 CI](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/ci.yml)からレビュー済みの `main` コミットのプランナーを選びます。同じ run・attempt の品質ジョブが `completed/success` で、準備とアップロードの両ステップが成功したことを確認してください。
 保持期間内の `godd-matrix-planner-<checkout-sha>-<attempt>` が1件だけあることを確かめ、同じジョブの `Retain compiled MCP registration planner` のログに出た ID で取得します。プランナー ZIP の SHA-256 を Actions の digest と照合します。展開後の8ファイル、`SHA256SUMS` の7件、18バイトのモジュール設定を確認し、`SOURCE.json` の `repository`・`checkout_sha`・`source_head`・`run_id`・`attempt`・`workflow` をプランナー自身の製造ジョブと照合します。[プランナーの受領手順](documents/mcp-formal-host-registration.md#verify-the-planner-zip)
 
-次に、このプランナーが指定する**サーバー**を確認します。`--release-info` 対応版ではプランナーの展開先で次のどちらかを実行します。`NODE_BIN`（Bash）または `$NodeBin`（PowerShell）には、そのホストで使う Node.js 20 以上の実行ファイルの絶対パスを設定します。旧 `c262a3a5` にはこのオプションがないため、同版の[ソースの `FORMAL_MCP_RELEASE`](https://github.com/AutoDevJapan/GoDD-Matrix/blob/c262a3a599f8bc1aa493349132a5c22e4089210b/src/release/host-registration.ts#L5-L18)からサーバーの値を読み取ってください。
+次に、このプランナーが指定する**サーバー**を確認します。`--release-info` 対応版ではプランナーの展開先で次のどちらかを実行します。`NODE_BIN`（Bash）または `$NodeBin`（PowerShell）には、そのホストで使う Node.js 20 以上の実行ファイルの絶対パスを設定します。照会に未対応の版ではコマンドを省き、受け取ったプランナー ZIP の検証済み `SOURCE.json` の `checkout_sha` が指すコミットで `src/release/host-registration.ts` を開きます。そこにある `FORMAL_MCP_RELEASE` を以下の `release` として使います。
 
 ```bash
 "$NODE_BIN" scripts/plan-mcp-hosts.mjs --release-info
@@ -176,11 +176,11 @@ src/
 ```
 
 [MCP artifact の実行一覧](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/mcp-artifact.yml)で `release.runId` の `release.attempt` を開き、`release.commit` をビルドした `main` の手動実行が成功したことを確認します。その attempt の製造ジョブで、成功した `Retain archive` のログに出た `Artifact ID` が `release.artifactId` と一致することを確かめてください。ログから ID を確認できない場合や、一致しない場合は登録を保留します。
-`release.expiresAt` は製造時の記録です。同じ ID が今も保持期間内にあり、Actions の ZIP 名・サイズ・digest が `archiveName`・`release.archiveBytes`・`release.archiveSha256` と一致したら、`artifactUrl` から保存します。旧 `c262a3a5` ではソースで確認した ID のリンクから `godd-matrix-mcp-<サーバーのコミット>.zip` を保存します。
+`release.expiresAt` は製造時の記録です。同じ ID が今も保持期間内にあり、Actions の ZIP 名・サイズ・digest が `archiveName`・`release.archiveBytes`・`release.archiveSha256` と一致したら、`artifactUrl` から保存します。照会に未対応の版では、同じ定数の `runId`・`artifactId` で Actions のリンクを特定し、サーバーの `commit` から ZIP 名 `godd-matrix-mcp-<commit>.zip` を確認します。
 
 現行版の例では [run `44655701843` の attempt 1](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/attempts/1) の[製造ジョブ](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/job/136021268289)が [artifact `14593605352`](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/artifacts/14593605352) を記録しています。後継版には、その版で照合したログ、URL、値を使ってください。PR の試験 ZIP は digest が一致しても正式版の代わりには使えません。
 
-以下は ZIP を保存したディレクトリでの Bash の検証例です。`server_zip` には `archiveName`（旧版は照合したサーバー ZIP 名）を設定します。残りの3変数には、使うサーバーの `release.archiveBytes`、`release.archiveSha256`、`release.commit` を順に設定してください。旧 `c262a3a5` ではソースの `FORMAL_MCP_RELEASE` の同名フィールドを使います。
+以下は ZIP を保存したディレクトリでの Bash の検証例です。`server_zip` には `archiveName`（旧版は照合したサーバー ZIP 名）を設定します。残りの3変数には、使うサーバーの `release.archiveBytes`、`release.archiveSha256`、`release.commit` を順に設定してください。照会に未対応の版では、そのプランナーの `checkout_sha` で確認した定数の同名フィールドを使います。
 
 ```bash
 (
@@ -211,7 +211,7 @@ ZIP 名の `<sha>` はサーバーをビルドしたコミットです。展開�
 固定して確認します。これらのフラグは gh のバージョンによっては無いので、`gh attestation verify --help` で
 確認してください ([gh attestation verify の手引き](https://cli.github.com/manual/gh_attestation_verify))。
 
-このサーバー ZIP の Actions 保持期限は 2026-12-04 01:44:06 UTC、同じ9ファイルを対象とした[プランナーの配布例](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/45218109910/artifacts/14838598556)の保持期限は 2026-12-07 16:35:31 UTC です。サーバー ZIP の保持期限後も、期限内に受け取って署名とハッシュを検証した同一の ZIP を使えます。
+このサーバー ZIP の Actions 保持期限は 2026-12-04 01:44:06 UTC、[プランナーの配布例（artifact `14838598556`）](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/45218109910/artifacts/14838598556)の保持期限は 2026-12-07 16:35:31 UTC です。この ZIP の `checkout_sha` が指す [`ebde7cdf` の `FORMAL_MCP_RELEASE`](https://github.com/AutoDevJapan/GoDD-Matrix/blob/ebde7cdf142043323f989a8fbdfb97f9be26bdb8/src/release/host-registration.ts#L5-L18) が同じ9ファイルのサーバーを指定しています。サーバー ZIP の保持期限後も、期限内に受け取って署名とハッシュを検証した同一の ZIP を使えます。
 初めて取得する時点でサーバー ZIP が失効・削除されていれば、その ID からは取得できません。後継の正式版を使うには、その版の取得元とハッシュを指定したレビュー済みプランナーと、対応する `main` の手動実行が必要です。保守者は後継版の正式 run で対象 attempt を開き、成功した `Retain archive` のログに出た ID をプランナーの `release.artifactId` と照合してから取得先を案内します。両方が案内されるまでは新規登録を保留してください。
 
 1. プランナーに同梱の `documents/mcp-formal-module-scope.package.json.template` を、上で作った `matrix-consumer` の直下に `package.json` としてコピーします。末尾の LF を含む18バイトを保つと、Node.js は直下の `godd-matrix-mcp/main.js` を ES モジュールとして読み込めます。
