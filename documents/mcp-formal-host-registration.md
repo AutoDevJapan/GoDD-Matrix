@@ -2,7 +2,7 @@
 
 This companion emits registration text for the same retained distribution in both hosts. It does
 not download an artifact, modify configuration, start Node or a host, or issue runtime permission.
-The source is fixed to Matrix commit `ece931cb71c191ab1b977629e3fdac1846bb07d1`,
+For the current server example, the source is Matrix commit `ece931cb71c191ab1b977629e3fdac1846bb07d1`,
 main workflow run `44655701843`, attempt 1, artifact `14593605352`. Its archive is 3,941,903 bytes with
 SHA-256 `14fd21b3e610b0cf7b307eb7746dd9d4ae99c4fb7744722f6c9296f096bb20e3`.
 Actions retention currently ends on `2026-12-04T01:44:06Z`; expiry does not authorize replacing it
@@ -10,36 +10,47 @@ with a PR artifact or rebuilding it silently.
 
 ## Obtain and verify the distribution
 
-Sign in to GitHub with read access to this repository. A Cloud checkout alone does not establish
-access to Actions artifacts. For this version, save the [original server ZIP](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/artifacts/14593605352) intact.
+Sign in to GitHub with repository read access and [verify the planner ZIP](#verify-the-planner-zip)
+first. Match the ZIP digest and `SOURCE.json` to that planner's successful quality job, upload
+and attempt. Verify the seven checksums against its files. A Cloud checkout alone does not
+establish access to Actions artifacts.
 
-If you already have a verified planner that supports `--release-info`, run its wrapper from the
-planner directory with the receiving host's Node.js 20+ executable. For example, in Bash:
+Then use the verified planner to identify the server. If it supports `--release-info`, run its wrapper
+from the planner directory with the receiving host's Node.js 20+ executable. For example, in Bash:
 
 ```bash
 "$NODE_BIN" scripts/plan-mcp-hosts.mjs --release-info
 ```
 
-Set `NODE_BIN` to the absolute path of Node before running this command. It prints the release
-record embedded in the planner, plus the GitHub artifact URL and archive name. It needs no server
-files or project configuration. Older planners, including the `c262a3a5` build, have the same
-release record in their reviewed `src/release/host-registration.ts` source.
+Set `NODE_BIN` to the absolute path of Node before running this command. The `c262a3a5` planner
+does not support `--release-info`; read [`FORMAL_MCP_RELEASE` in its reviewed source](https://github.com/AutoDevJapan/GoDD-Matrix/blob/c262a3a599f8bc1aa493349132a5c22e4089210b/src/release/host-registration.ts#L5-L18) instead.
 
-Use the [MCP artifact workflow](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/mcp-artifact.yml)
-to check the actual `main` manual run, attempt and successful outcome against that record. Confirm
-the artifact is still available and matches the ID and digest. The printed expiry is the one
-recorded at release time. If the artifact has expired or was deleted, a first-time recipient needs
+1. In the [MCP artifact workflow](https://github.com/AutoDevJapan/GoDD-Matrix/actions/workflows/mcp-artifact.yml),
+   open `release.runId` at `release.attempt`. Confirm that `main`'s manual run succeeded at
+   `release.commit`. Match the `Artifact ID` in that attempt's successful `Retain archive` step
+   log to `release.artifactId`. Hold registration if that match cannot be established.
+2. For that ID, match the available artifact's name, size and digest to `archiveName`,
+   `release.archiveBytes` and `release.archiveSha256`, then download it via `artifactUrl`.
+   With `c262a3a5`, use the Actions link for the pinned ID and the ZIP name for its server commit.
+   Check the saved ZIP's length and SHA-256, then its attestation for `release.workflow`,
+   `release.sourceRef` and `release.commit` (`--source-digest`), followed by the extracted checksums.
+   `release.expiresAt` is the retention deadline recorded at build time.
+
+For this server, [run 44655701843, attempt 1](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/attempts/1)
+contains [job 136021268289](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/job/136021268289),
+whose upload log identifies [artifact 14593605352](https://github.com/AutoDevJapan/GoDD-Matrix/actions/runs/44655701843/artifacts/14593605352).
+For a successor, use its own log, URL and server values. A PR ZIP with the same digest does not
+establish this origin. If the formal artifact has expired or was deleted, a first-time recipient needs
 a successor formal run and its matching reviewed planner.
 
 If that normal operation fails, preserve its stage and response. Do not copy credentials between
 hosts, create a token, retry a rejected endpoint through another route, or substitute source builds.
 An already normally delivered, qualified copy may be used without another download.
 
-For a successor, maintainers use the existing manual workflow on reviewed `main`. After the run
-succeeds, use the upload step's artifact ID to check the retained ZIP and its attestation. Review
-`FORMAL_MCP_RELEASE` and `FORMAL_MCP_FILES` against that run before distributing a matching
-planner and updating the download example. A new run or attempt has its own
-provenance even if the ZIP digest matches an earlier build.
+For a successor, maintainers take the new ID from the successful **Retain archive** step log
+in the chosen manual run **and attempt** on reviewed `main`. Check the retained ZIP and its
+attestation, review `FORMAL_MCP_RELEASE` and the nine `FORMAL_MCP_FILES` pins, then compare the
+matching planner's `release.artifactId` with that logged ID before updating the download example.
 
 Before registration, keep the archive identity and the normal provenance verification attached
 to that exact source/ref/workflow. SHA256SUMS checks alone are not build-signature verification.
@@ -99,14 +110,17 @@ that preserves this layout. `scripts/plan-mcp-hosts.mjs` imports
 dependencies. A fresh source checkout without that build is not ready to run the planner.
 If the matching script or compiled files are missing, stop plan generation and report the missing
 planner prerequisite through the normal source/build or distribution route; do not continue with
-an incomplete helper. The existing quality workflow retains a separate
-`godd-matrix-planner-<checkout-sha>-<attempt>` artifact after its successful `Build (tsc)` step.
+an incomplete helper.
+
+### Verify the planner ZIP
+
+The existing quality workflow retains `godd-matrix-planner-<checkout-sha>-<attempt>` after its
+successful `Build (tsc)` step.
 That artifact keeps `scripts/plan-mcp-hosts.mjs`, its two compiled `dist/release` modules, a root
 `package.json`, the consumer module template and the license, plus `SOURCE.json` and `SHA256SUMS`.
-The root package metadata is the same fixed 18-byte module scope. Receive this helper only through
-the normal authenticated artifact operation in that host, check the server run/source tuple against
-`SOURCE.json` only after the server and archive checks below. Before using the received planner,
-start from the reviewed repository, workflow and ref/PR. Record the producing run ID and attempt
+The root package metadata is the same fixed 18-byte module scope. Receive this helper through
+the normal authenticated artifact operation in that host. Start from the reviewed planner
+repository, workflow and ref/PR. Record its producing run ID and attempt
 using normal GitHub Actions metadata and that attempt's job/step results. Match the expected checkout commit and
 tree to the reviewed source; for a PR, verify the synthetic merge checkout's base/PR-head relation,
 rather than treating the PR head alone as the checkout.
@@ -115,14 +129,15 @@ Confirm that this same attempt's `quality` job (`品質ゲート (lint / typeche
 `Retain compiled MCP registration planner` steps. Upload and `Build (tsc)` alone are insufficient
 because Web/browser checks run later. A newer attempt's success does not accept an older artifact.
 Within that run, select exactly one unexpired artifact with the complete name
-`godd-matrix-planner-<checkout-sha>-<attempt>`. Bind it to the producing upload and record its
-server artifact ID and ZIP SHA-256. Receive the ZIP for that same ID through the normal operation
-and compare its actual digest with the recorded server digest before inspecting its contents.
+`godd-matrix-planner-<checkout-sha>-<attempt>`. Match its ID to the log of that attempt's
+`Retain compiled MCP registration planner` step, then download the planner ZIP for that ID.
+Compare the saved bytes' SHA-256 to the Actions digest before inspecting the archive.
 Then require exactly `LICENSE`, `package.json`, `scripts/plan-mcp-hosts.mjs`,
 `dist/release/host-registration-cli.js`, `dist/release/host-registration.js`,
 `documents/mcp-formal-module-scope.package.json.template`, `SOURCE.json` and `SHA256SUMS`.
-Verify the same repository/workflow/run/attempt/checkout/source-head tuple in `SOURCE.json`,
-all seven entries of `SHA256SUMS`, and the fixed 18-byte module metadata.
+Match `repository`, `workflow`, `run_id`, `attempt`, `checkout_sha` and `source_head` in
+`SOURCE.json` to that planner build. Verify all seven entries of `SHA256SUMS` and the fixed
+18-byte module metadata.
 Hold use for pending/in-progress, failed, cancelled, skipped or unknown
 quality; a different run/attempt; an expired, missing or ambiguous name; or any artifact ID, ZIP
 digest, checkout/tree, SOURCE, member, checksum or scope mismatch. Matching terminal success and
@@ -130,6 +145,8 @@ these receipt checks satisfy only quality and delivery prerequisites; execution 
 independent. These checks do not verify a build signature or grant execution. If the normal
 operation is unavailable, retain that missing prerequisite; do not substitute a build of the formal
 MCP server or retry a refused route.
+
+### Run the verified planner
 
 The retained nine-file MCP server artifact contains no planner. Building this separate helper in
 the source checkout is distinct from rebuilding that artifact: keep the accepted nine files
